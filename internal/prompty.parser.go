@@ -9,6 +9,7 @@ import (
 // Parser produces an AST from a token stream
 type Parser struct {
 	tokens     []Token
+	source     string // Original source for raw text extraction
 	pos        int
 	logger     *zap.Logger
 	inRawBlock bool // Track if we're inside a raw block
@@ -16,16 +17,33 @@ type Parser struct {
 
 // NewParser creates a new parser for the given token stream
 func NewParser(tokens []Token, logger *zap.Logger) *Parser {
+	return NewParserWithSource(tokens, StringValueEmpty, logger)
+}
+
+// NewParserWithSource creates a new parser with source for raw text capture
+func NewParserWithSource(tokens []Token, source string, logger *zap.Logger) *Parser {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 	logger.Debug(LogMsgParserCreated, zap.Int(LogFieldTokens, len(tokens)))
 	return &Parser{
 		tokens:     tokens,
+		source:     source,
 		pos:        0,
 		logger:     logger,
 		inRawBlock: false,
 	}
+}
+
+// extractRawSource extracts the original source text between two positions
+func (p *Parser) extractRawSource(startOffset, endOffset int) string {
+	if p.source == StringValueEmpty {
+		return StringValueEmpty
+	}
+	if startOffset < 0 || endOffset > len(p.source) || startOffset >= endOffset {
+		return StringValueEmpty
+	}
+	return p.source[startOffset:endOffset]
 }
 
 // Parse produces the AST root node from the token stream
@@ -110,12 +128,16 @@ func (p *Parser) parseTag() (Node, error) {
 	switch endTok.Type {
 	case TokenTypeSelfClose:
 		p.advance() // consume SELF_CLOSE
-		return NewSelfClosingTag(tagName, attrs, pos), nil
+		tag := NewSelfClosingTag(tagName, attrs, pos)
+		// Capture raw source for keepRaw error strategy
+		endOffset := endTok.Position.Offset + LenSelfClose
+		tag.RawSource = p.extractRawSource(pos.Offset, endOffset)
+		return tag, nil
 
 	case TokenTypeCloseTag:
 		p.advance() // consume CLOSE_TAG
 		// This is a block tag - parse content and closing
-		return p.parseBlockTag(tagName, attrs, pos)
+		return p.parseBlockTag(tagName, attrs, pos, openTok)
 
 	default:
 		return nil, p.newUnexpectedTokenError(endTok)
@@ -123,15 +145,20 @@ func (p *Parser) parseTag() (Node, error) {
 }
 
 // parseBlockTag parses the content and closing of a block tag
-func (p *Parser) parseBlockTag(tagName string, attrs Attributes, pos Position) (Node, error) {
+func (p *Parser) parseBlockTag(tagName string, attrs Attributes, pos Position, openTok Token) (Node, error) {
 	// Special handling for raw blocks
 	if tagName == TagNameRaw {
-		return p.parseRawBlock(pos)
+		return p.parseRawBlock(pos, openTok)
 	}
 
 	// Special handling for conditionals
 	if tagName == TagNameIf {
 		return p.parseConditional(attrs, pos)
+	}
+
+	// Special handling for comments - discard content entirely
+	if tagName == TagNameComment {
+		return p.parseCommentBlock(pos, openTok)
 	}
 
 	// Parse children
@@ -168,7 +195,11 @@ func (p *Parser) parseBlockTag(tagName string, attrs Attributes, pos Position) (
 	}
 	p.advance()
 
-	return NewBlockTag(tagName, attrs, children, pos), nil
+	tag := NewBlockTag(tagName, attrs, children, pos)
+	// Capture raw source for keepRaw error strategy (full block from open to close)
+	endOffset := closeTok.Position.Offset + LenCloseDelim
+	tag.RawSource = p.extractRawSource(pos.Offset, endOffset)
+	return tag, nil
 }
 
 // parseConditional parses an if/elseif/else conditional block
@@ -318,7 +349,7 @@ func (p *Parser) newConditionError(message string, pos Position) error {
 }
 
 // parseRawBlock parses a raw block - preserving content literally
-func (p *Parser) parseRawBlock(pos Position) (*TagNode, error) {
+func (p *Parser) parseRawBlock(pos Position, openTok Token) (*TagNode, error) {
 	// Check for nested raw blocks
 	if p.inRawBlock {
 		return nil, p.newNestedRawBlockError(pos)
@@ -393,7 +424,52 @@ func (p *Parser) parseRawBlock(pos Position) (*TagNode, error) {
 	}
 	p.advance() // CLOSE_TAG
 
-	return NewRawBlockTag(rawContent, pos), nil
+	tag := NewRawBlockTag(rawContent, pos)
+	// Capture raw source for keepRaw error strategy
+	endOffset := closeTok.Position.Offset + LenCloseDelim
+	tag.RawSource = p.extractRawSource(pos.Offset, endOffset)
+	return tag, nil
+}
+
+// parseCommentBlock parses a comment block - content is discarded
+func (p *Parser) parseCommentBlock(pos Position, openTok Token) (Node, error) {
+	// Skip all tokens until we find the closing {~/prompty.comment~}
+	for !p.isAtEnd() {
+		tok := p.current()
+
+		// Check for the closing comment tag
+		if tok.Type == TokenTypeBlockClose {
+			// Peek at the next token to see if it's prompty.comment
+			if p.pos+1 < len(p.tokens) && p.tokens[p.pos+1].Type == TokenTypeTagName && p.tokens[p.pos+1].Value == TagNameComment {
+				// This is our closing tag
+				break
+			}
+		}
+
+		// Skip everything - comments are discarded
+		p.advance()
+	}
+
+	// Consume the closing sequence: BLOCK_CLOSE, TAG_NAME (prompty.comment), CLOSE_TAG
+	if !p.isBlockClose() {
+		return nil, p.newMismatchedTagError(TagNameComment, "")
+	}
+	p.advance() // BLOCK_CLOSE
+
+	closeNameTok := p.current()
+	if closeNameTok.Type != TokenTypeTagName || closeNameTok.Value != TagNameComment {
+		return nil, p.newMismatchedTagError(TagNameComment, closeNameTok.Value)
+	}
+	p.advance() // TAG_NAME
+
+	closeTok := p.current()
+	if closeTok.Type != TokenTypeCloseTag {
+		return nil, p.newExpectedTokenError(TokenTypeCloseTag, closeTok)
+	}
+	p.advance() // CLOSE_TAG
+
+	// Return nil - comment nodes produce no output
+	return nil, nil
 }
 
 // collectTagAsText collects tag tokens and returns them as literal text (for raw blocks)

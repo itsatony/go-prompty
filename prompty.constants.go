@@ -137,4 +137,72 @@ const (
 const (
 	MetaKeyParentDepth = "_parentDepth" // Used to pass depth between nested template executions
 	MetaKeyValueData   = "_value"       // Used to pass non-map values in with attribute
+	MetaKeyRawSource   = "_rawSource"   // Original tag source for keepRaw strategy
+	MetaKeyStrategy    = "strategy"     // Applied error strategy for logging
 )
+
+// ParseErrorStrategy parses a string into an ErrorStrategy.
+// Returns ErrorStrategyThrow for unknown values.
+func ParseErrorStrategy(s string) ErrorStrategy {
+	switch s {
+	case ErrorStrategyNameDefault:
+		return ErrorStrategyDefault
+	case ErrorStrategyNameRemove:
+		return ErrorStrategyRemove
+	case ErrorStrategyNameKeepRaw:
+		return ErrorStrategyKeepRaw
+	case ErrorStrategyNameLog:
+		return ErrorStrategyLog
+	case ErrorStrategyNameThrow:
+		return ErrorStrategyThrow
+	default:
+		return ErrorStrategyThrow
+	}
+}
+
+// IsValidErrorStrategy checks if a string is a valid error strategy name.
+func IsValidErrorStrategy(s string) bool {
+	switch s {
+	case ErrorStrategyNameThrow, ErrorStrategyNameDefault,
+		ErrorStrategyNameRemove, ErrorStrategyNameKeepRaw, ErrorStrategyNameLog:
+		return true
+	default:
+		return false
+	}
+}
+
+// ValidationSeverity indicates the severity of a validation issue.
+type ValidationSeverity int
+
+const (
+	// SeverityError indicates a critical issue that prevents execution
+	SeverityError ValidationSeverity = iota
+	// SeverityWarning indicates a potential issue that may cause problems
+	SeverityWarning
+	// SeverityInfo indicates informational feedback
+	SeverityInfo
+)
+
+// Validation severity string names
+const (
+	SeverityNameError   = "error"
+	SeverityNameWarning = "warning"
+	SeverityNameInfo    = "info"
+)
+
+// String returns the string representation of the validation severity
+func (s ValidationSeverity) String() string {
+	switch s {
+	case SeverityError:
+		return SeverityNameError
+	case SeverityWarning:
+		return SeverityNameWarning
+	case SeverityInfo:
+		return SeverityNameInfo
+	default:
+		return SeverityNameError
+	}
+}
+
+// ErrorStrategyNotSet is a sentinel value indicating no strategy override
+const ErrorStrategyNotSet ErrorStrategy = -1

@@ -50,6 +50,16 @@ const (
 	ErrMsgMissingTemplateAttr   = "missing required 'template' attribute"
 	ErrMsgEngineNotAvailable    = "engine not available for nested template resolution"
 	ErrMsgReservedTemplateName  = "template name uses reserved prompty.* namespace"
+
+	// Error strategy messages (Phase 3)
+	ErrMsgInvalidErrorStrategy = "invalid error strategy"
+	ErrMsgErrorHandledByStrat  = "error handled by strategy"
+
+	// Validation messages (Phase 3)
+	ErrMsgValidationFailed      = "template validation failed"
+	ErrMsgUnknownTagInTemplate  = "unknown tag in template"
+	ErrMsgInvalidOnErrorAttr    = "invalid onerror attribute value"
+	ErrMsgMissingIncludeTarget  = "included template not found"
 )
 
 // Error code constants for categorization

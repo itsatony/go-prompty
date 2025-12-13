@@ -185,8 +185,15 @@ func (c *Context) Data() map[string]any {
 	return result
 }
 
-// ErrorStrategy returns the current error handling strategy.
-func (c *Context) ErrorStrategy() ErrorStrategy {
+// ErrorStrategy returns the current error handling strategy as an int.
+// This allows the Context to satisfy the internal.ErrorStrategyAccessor interface.
+func (c *Context) ErrorStrategy() int {
+	return int(c.errorStrat)
+}
+
+// ErrorStrategyValue returns the current error handling strategy.
+// Use this when you need the typed ErrorStrategy value.
+func (c *Context) ErrorStrategyValue() ErrorStrategy {
 	return c.errorStrat
 }
 

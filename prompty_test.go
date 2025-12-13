@@ -1206,3 +1206,501 @@ func TestE2E_Conditional_ParseOnceExecuteMany(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Hidden", result2)
 }
+
+// =============================================================================
+// Phase 3 Tests: Error Strategies
+// =============================================================================
+
+func TestE2E_ErrorStrategy_Throw(t *testing.T) {
+	// Default behavior - errors are thrown
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		"Hello, {~prompty.var name=\"missing\" /~}!",
+		nil,
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing")
+}
+
+func TestE2E_ErrorStrategy_Default_GlobalStrategy(t *testing.T) {
+	// Using global ErrorStrategyDefault returns default attribute value
+	engine := prompty.MustNew(prompty.WithErrorStrategy(prompty.ErrorStrategyDefault))
+
+	result, err := engine.Execute(context.Background(),
+		"Hello, {~prompty.var name=\"missing\" default=\"Guest\" /~}!",
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello, Guest!", result)
+}
+
+func TestE2E_ErrorStrategy_Default_NoDefaultAttr(t *testing.T) {
+	// ErrorStrategyDefault without a default attribute returns empty string
+	engine := prompty.MustNew(prompty.WithErrorStrategy(prompty.ErrorStrategyDefault))
+
+	result, err := engine.Execute(context.Background(),
+		"Hello, {~prompty.var name=\"missing\" /~}!",
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello, !", result)
+}
+
+func TestE2E_ErrorStrategy_Remove(t *testing.T) {
+	// ErrorStrategyRemove removes the tag entirely
+	engine := prompty.MustNew(prompty.WithErrorStrategy(prompty.ErrorStrategyRemove))
+
+	result, err := engine.Execute(context.Background(),
+		"Hello, {~prompty.var name=\"missing\" /~}World!",
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello, World!", result)
+}
+
+func TestE2E_ErrorStrategy_KeepRaw(t *testing.T) {
+	// ErrorStrategyKeepRaw keeps the original tag text
+	engine := prompty.MustNew(prompty.WithErrorStrategy(prompty.ErrorStrategyKeepRaw))
+
+	result, err := engine.Execute(context.Background(),
+		"Hello, {~prompty.var name=\"missing\" /~}!",
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello, {~prompty.var name=\"missing\" /~}!", result)
+}
+
+func TestE2E_ErrorStrategy_Log(t *testing.T) {
+	// ErrorStrategyLog logs the error and continues with empty string
+	engine := prompty.MustNew(prompty.WithErrorStrategy(prompty.ErrorStrategyLog))
+
+	result, err := engine.Execute(context.Background(),
+		"Hello, {~prompty.var name=\"missing\" /~}World!",
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello, World!", result)
+}
+
+func TestE2E_ErrorStrategy_PerTagOverride(t *testing.T) {
+	// Per-tag onerror attribute overrides global strategy
+	engine := prompty.MustNew(prompty.WithErrorStrategy(prompty.ErrorStrategyThrow))
+
+	// Global strategy is throw, but tag specifies keepraw
+	result, err := engine.Execute(context.Background(),
+		"Hello, {~prompty.var name=\"missing\" onerror=\"keepraw\" /~}!",
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello, {~prompty.var name=\"missing\" onerror=\"keepraw\" /~}!", result)
+}
+
+func TestE2E_ErrorStrategy_PerTagRemove(t *testing.T) {
+	// Per-tag onerror="remove" removes the tag
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		"Hello, {~prompty.var name=\"missing\" onerror=\"remove\" /~}World!",
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello, World!", result)
+}
+
+func TestE2E_ErrorStrategy_PerTagDefault(t *testing.T) {
+	// Per-tag onerror="default" uses default attribute
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		"Hello, {~prompty.var name=\"missing\" default=\"Friend\" onerror=\"default\" /~}!",
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello, Friend!", result)
+}
+
+func TestE2E_ErrorStrategy_UnknownTag_WithStrategy(t *testing.T) {
+	// Error strategies also apply to unknown tags
+	engine := prompty.MustNew(prompty.WithErrorStrategy(prompty.ErrorStrategyRemove))
+
+	result, err := engine.Execute(context.Background(),
+		"Hello, {~unknown.tag /~}World!",
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello, World!", result)
+}
+
+func TestE2E_ErrorStrategy_UnknownTag_KeepRaw(t *testing.T) {
+	// KeepRaw strategy with unknown tag preserves the original
+	engine := prompty.MustNew(prompty.WithErrorStrategy(prompty.ErrorStrategyKeepRaw))
+
+	result, err := engine.Execute(context.Background(),
+		"Hello, {~unknown.tag attr=\"value\" /~}!",
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello, {~unknown.tag attr=\"value\" /~}!", result)
+}
+
+func TestE2E_ErrorStrategy_MixedTags(t *testing.T) {
+	// Some tags succeed, some fail with error strategy
+	engine := prompty.MustNew(prompty.WithErrorStrategy(prompty.ErrorStrategyRemove))
+
+	result, err := engine.Execute(context.Background(),
+		"Hello, {~prompty.var name=\"user\" /~}! {~prompty.var name=\"missing\" /~}",
+		map[string]any{"user": "Alice"},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello, Alice! ", result)
+}
+
+// =============================================================================
+// Phase 3 Tests: Comment Tags
+// =============================================================================
+
+func TestE2E_Comment_BasicComment(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		"Hello{~prompty.comment~}This is a comment{~/prompty.comment~}World",
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "HelloWorld", result)
+}
+
+func TestE2E_Comment_EmptyComment(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		"Hello{~prompty.comment~}{~/prompty.comment~}World",
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "HelloWorld", result)
+}
+
+func TestE2E_Comment_MultilineComment(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`Hello{~prompty.comment~}
+This is a
+multiline
+comment
+{~/prompty.comment~}World`,
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "HelloWorld", result)
+}
+
+func TestE2E_Comment_WithVariables(t *testing.T) {
+	// Comments should not affect variable resolution
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		"Hello, {~prompty.var name=\"user\" /~}!{~prompty.comment~}DEBUG: user={~prompty.var name=\"user\" /~}{~/prompty.comment~}",
+		map[string]any{"user": "Alice"},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello, Alice!", result)
+}
+
+func TestE2E_Comment_MultipleComments(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		"{~prompty.comment~}Start{~/prompty.comment~}Hello{~prompty.comment~}Middle{~/prompty.comment~}World{~prompty.comment~}End{~/prompty.comment~}",
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "HelloWorld", result)
+}
+
+func TestE2E_Comment_ContainsPromptyTags(t *testing.T) {
+	// Tags inside comments should be stripped, not executed
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		"Hello{~prompty.comment~}{~prompty.var name=\"missing\" /~}{~/prompty.comment~}World",
+		nil,
+	)
+
+	require.NoError(t, err)
+	// The comment is removed entirely, including any tags inside
+	assert.Equal(t, "HelloWorld", result)
+}
+
+func TestE2E_Comment_PreservesWhitespace(t *testing.T) {
+	// Whitespace outside comments should be preserved
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		"Hello {~prompty.comment~}comment{~/prompty.comment~} World",
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello  World", result)
+}
+
+// =============================================================================
+// Phase 3 Tests: Error Strategy Constants
+// =============================================================================
+
+func TestErrorStrategy_String(t *testing.T) {
+	tests := []struct {
+		strategy prompty.ErrorStrategy
+		expected string
+	}{
+		{prompty.ErrorStrategyThrow, "throw"},
+		{prompty.ErrorStrategyDefault, "default"},
+		{prompty.ErrorStrategyRemove, "remove"},
+		{prompty.ErrorStrategyKeepRaw, "keepraw"},
+		{prompty.ErrorStrategyLog, "log"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.strategy.String())
+		})
+	}
+}
+
+func TestParseErrorStrategy(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected prompty.ErrorStrategy
+	}{
+		{"throw", prompty.ErrorStrategyThrow},
+		{"default", prompty.ErrorStrategyDefault},
+		{"remove", prompty.ErrorStrategyRemove},
+		{"keepraw", prompty.ErrorStrategyKeepRaw},
+		{"log", prompty.ErrorStrategyLog},
+		{"unknown", prompty.ErrorStrategyThrow}, // Unknown defaults to throw
+		{"", prompty.ErrorStrategyThrow},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := prompty.ParseErrorStrategy(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsValidErrorStrategy(t *testing.T) {
+	validStrategies := []string{"throw", "default", "remove", "keepraw", "log"}
+	invalidStrategies := []string{"unknown", "", "THROW", "Throw", "invalid"}
+
+	for _, s := range validStrategies {
+		t.Run(s+"_valid", func(t *testing.T) {
+			assert.True(t, prompty.IsValidErrorStrategy(s))
+		})
+	}
+
+	for _, s := range invalidStrategies {
+		t.Run(s+"_invalid", func(t *testing.T) {
+			assert.False(t, prompty.IsValidErrorStrategy(s))
+		})
+	}
+}
+
+// =============================================================================
+// Phase 3 Tests: Validation API
+// =============================================================================
+
+func TestE2E_Validation_ValidTemplate(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Validate("Hello, {~prompty.var name=\"user\" /~}!")
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsValid())
+	assert.False(t, result.HasErrors())
+	assert.False(t, result.HasWarnings())
+	assert.Empty(t, result.Issues())
+}
+
+func TestE2E_Validation_PlainText(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Validate("Just plain text, no tags")
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsValid())
+	assert.Empty(t, result.Issues())
+}
+
+func TestE2E_Validation_UnknownTag(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Validate("Hello, {~unknown.tag /~}!")
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	// Unknown tag should be a warning, not an error
+	assert.True(t, result.IsValid()) // Still valid (just warning)
+	assert.False(t, result.HasErrors())
+	assert.True(t, result.HasWarnings())
+	assert.Len(t, result.Warnings(), 1)
+	assert.Contains(t, result.Warnings()[0].Message, "unknown tag")
+}
+
+func TestE2E_Validation_InvalidOnErrorAttribute(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Validate(`{~prompty.var name="user" onerror="invalid_value" /~}`)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsValid())
+	assert.True(t, result.HasErrors())
+	assert.Len(t, result.Errors(), 1)
+	assert.Contains(t, result.Errors()[0].Message, "onerror")
+}
+
+func TestE2E_Validation_MissingRequiredAttribute(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// prompty.var requires a 'name' attribute
+	result, err := engine.Validate(`{~prompty.var /~}`)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsValid())
+	assert.True(t, result.HasErrors())
+	assert.Len(t, result.Errors(), 1)
+	assert.Contains(t, result.Errors()[0].Message, "name")
+}
+
+func TestE2E_Validation_ParseError(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Unclosed tag should cause a parse error
+	result, err := engine.Validate(`{~prompty.var name="user"`)
+
+	require.NoError(t, err) // Validate returns result, not error
+	require.NotNil(t, result)
+	assert.False(t, result.IsValid())
+	assert.True(t, result.HasErrors())
+	assert.Contains(t, result.Errors()[0].Message, "parsing")
+}
+
+func TestE2E_Validation_MissingIncludeTarget(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Include a template that isn't registered
+	result, err := engine.Validate(`{~prompty.include template="nonexistent" /~}`)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	// Missing template should be a warning (template might be registered later)
+	assert.True(t, result.IsValid())
+	assert.True(t, result.HasWarnings())
+	assert.Len(t, result.Warnings(), 1)
+	assert.Contains(t, result.Warnings()[0].Message, "not found")
+}
+
+func TestE2E_Validation_RegisteredIncludeTarget(t *testing.T) {
+	engine := prompty.MustNew()
+	engine.MustRegisterTemplate("footer", "Copyright 2024")
+
+	result, err := engine.Validate(`{~prompty.include template="footer" /~}`)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsValid())
+	assert.Empty(t, result.Issues())
+}
+
+func TestE2E_Validation_MultipleIssues(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Multiple issues: unknown tag + invalid onerror
+	result, err := engine.Validate(`
+		{~unknown.tag /~}
+		{~prompty.var onerror="bad" /~}
+	`)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsValid())
+	assert.True(t, result.HasErrors())
+	assert.True(t, result.HasWarnings())
+	// 1 warning (unknown tag) + 2 errors (invalid onerror + missing name)
+	assert.GreaterOrEqual(t, len(result.Issues()), 2)
+}
+
+func TestE2E_Validation_NestedConditional(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Validate(`
+		{~prompty.if eval="show"~}
+			{~prompty.var name="message" /~}
+		{~prompty.else~}
+			{~prompty.var name="fallback" /~}
+		{~/prompty.if~}
+	`)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsValid())
+	assert.Empty(t, result.Issues())
+}
+
+func TestE2E_Validation_CommentBlock(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Validate(`Hello{~prompty.comment~}This is a comment{~/prompty.comment~}World`)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsValid())
+	assert.Empty(t, result.Issues())
+}
+
+func TestValidationResult_IssueFiltering(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Create a template with both errors and warnings
+	result, err := engine.Validate(`
+		{~unknown.tag /~}
+		{~prompty.var onerror="invalid" /~}
+	`)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Test filtering
+	allIssues := result.Issues()
+	errorsOnly := result.Errors()
+	warningsOnly := result.Warnings()
+
+	assert.GreaterOrEqual(t, len(allIssues), 2)
+	assert.GreaterOrEqual(t, len(errorsOnly), 1)
+	assert.GreaterOrEqual(t, len(warningsOnly), 1)
+	assert.Equal(t, len(allIssues), len(errorsOnly)+len(warningsOnly))
+}

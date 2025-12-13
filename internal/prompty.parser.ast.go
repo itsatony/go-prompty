@@ -83,6 +83,7 @@ type TagNode struct {
 	Children   []Node     // Child nodes (nil for self-closing)
 	SelfClose  bool       // True for self-closing tags
 	RawContent string     // For raw blocks, the unparsed content
+	RawSource  string     // Original tag source for keepRaw error strategy
 }
 
 // Type returns NodeTypeTag or NodeTypeRaw depending on the tag

@@ -138,6 +138,7 @@ const (
 	TagNameIf      = "prompty.if"
 	TagNameElseIf  = "prompty.elseif"
 	TagNameElse    = "prompty.else"
+	TagNameComment = "prompty.comment" // Phase 3
 )
 
 // Attribute name constants
@@ -147,7 +148,8 @@ const (
 	AttrTemplate = "template"
 	AttrWith     = "with"
 	AttrIsolate  = "isolate"
-	AttrEval     = "eval" // Condition expression for if/elseif
+	AttrEval     = "eval"    // Condition expression for if/elseif
+	AttrOnError  = "onerror" // Per-tag error strategy override
 )
 
 // Boolean attribute values
@@ -209,4 +211,72 @@ const (
 	FmtCommaSep     = ", "
 	FmtKeyValueSep  = "="
 	FmtEmptyBraces  = "{}"
+)
+
+// ErrorStrategy mirrors prompty.ErrorStrategy for internal use
+type ErrorStrategy int
+
+// Error strategy constants (mirrors prompty.ErrorStrategy)
+const (
+	ErrorStrategyThrow ErrorStrategy = iota
+	ErrorStrategyDefault
+	ErrorStrategyRemove
+	ErrorStrategyKeepRaw
+	ErrorStrategyLog
+)
+
+// ErrorStrategyNotSet is a sentinel value indicating no strategy override
+const ErrorStrategyNotSet ErrorStrategy = -1
+
+// Error strategy name constants for parsing
+const (
+	ErrorStrategyNameThrow   = "throw"
+	ErrorStrategyNameDefault = "default"
+	ErrorStrategyNameRemove  = "remove"
+	ErrorStrategyNameKeepRaw = "keepraw"
+	ErrorStrategyNameLog     = "log"
+)
+
+// ParseErrorStrategy parses a string into an ErrorStrategy.
+func ParseErrorStrategy(s string) ErrorStrategy {
+	switch s {
+	case ErrorStrategyNameDefault:
+		return ErrorStrategyDefault
+	case ErrorStrategyNameRemove:
+		return ErrorStrategyRemove
+	case ErrorStrategyNameKeepRaw:
+		return ErrorStrategyKeepRaw
+	case ErrorStrategyNameLog:
+		return ErrorStrategyLog
+	case ErrorStrategyNameThrow:
+		return ErrorStrategyThrow
+	default:
+		return ErrorStrategyThrow
+	}
+}
+
+// String returns the string representation of the error strategy.
+func (s ErrorStrategy) String() string {
+	switch s {
+	case ErrorStrategyThrow:
+		return ErrorStrategyNameThrow
+	case ErrorStrategyDefault:
+		return ErrorStrategyNameDefault
+	case ErrorStrategyRemove:
+		return ErrorStrategyNameRemove
+	case ErrorStrategyKeepRaw:
+		return ErrorStrategyNameKeepRaw
+	case ErrorStrategyLog:
+		return ErrorStrategyNameLog
+	default:
+		return ErrorStrategyNameThrow
+	}
+}
+
+// Log messages for error strategy handling
+const (
+	LogMsgErrorStrategyApplied = "error strategy applied"
+	LogMsgErrorLogged          = "error logged and execution continued"
+	LogFieldStrategy           = "strategy"
+	LogFieldErrorMsg           = "error_message"
 )

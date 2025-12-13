@@ -31,7 +31,7 @@ func TestContext_NewContext(t *testing.T) {
 func TestContext_NewContextWithStrategy(t *testing.T) {
 	ctx := NewContextWithStrategy(nil, ErrorStrategyDefault)
 	require.NotNil(t, ctx)
-	assert.Equal(t, ErrorStrategyDefault, ctx.ErrorStrategy())
+	assert.Equal(t, ErrorStrategyDefault, ctx.ErrorStrategyValue())
 }
 
 func TestContext_Get(t *testing.T) {
@@ -256,7 +256,7 @@ func TestContext_Child(t *testing.T) {
 		parent := NewContextWithStrategy(nil, ErrorStrategyDefault)
 		child := parent.Child(nil)
 
-		assert.Equal(t, ErrorStrategyDefault, child.ErrorStrategy())
+		assert.Equal(t, ErrorStrategyDefault, child.ErrorStrategyValue())
 	})
 }
 

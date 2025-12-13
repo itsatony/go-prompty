@@ -75,8 +75,8 @@ func (e *Engine) Parse(source string) (*Template, error) {
 		return nil, NewParseError(ErrMsgParseFailed, Position{}, err)
 	}
 
-	// Parse
-	parser := internal.NewParser(tokens, e.logger)
+	// Parse with source for raw text extraction (keepRaw strategy)
+	parser := internal.NewParserWithSource(tokens, source, e.logger)
 	ast, err := parser.Parse()
 	if err != nil {
 		return nil, NewParseError(ErrMsgParseFailed, Position{}, err)

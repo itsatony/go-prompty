@@ -141,13 +141,13 @@ func (e *Executor) executeTag(ctx context.Context, tag *TagNode, execCtx Context
 	// Look up resolver
 	resolver, ok := e.registry.Get(tag.Name)
 	if !ok {
-		return "", NewExecutorError(ErrMsgUnknownTag, tag.Name, tag.Pos())
+		return e.handleTagError(tag, execCtx, NewExecutorError(ErrMsgUnknownTag, tag.Name, tag.Pos()))
 	}
 
 	// Execute resolver
 	result, err := resolver.Resolve(ctx, execCtx, tag.Attributes)
 	if err != nil {
-		return "", NewExecutorErrorWithCause(ErrMsgResolverFailed, tag.Name, tag.Pos(), err)
+		return e.handleTagError(tag, execCtx, NewExecutorErrorWithCause(ErrMsgResolverFailed, tag.Name, tag.Pos(), err))
 	}
 
 	// For block tags with children, process children
@@ -162,6 +162,71 @@ func (e *Executor) executeTag(ctx context.Context, tag *TagNode, execCtx Context
 
 	e.logger.Debug(LogMsgResolverComplete, zap.String(LogFieldTag, tag.Name))
 	return result, nil
+}
+
+// handleTagError applies the appropriate error strategy for a tag execution failure.
+func (e *Executor) handleTagError(tag *TagNode, execCtx ContextAccessor, err error) (string, error) {
+	// Determine the error strategy to use
+	strategy := e.getErrorStrategy(tag, execCtx)
+
+	e.logger.Debug(LogMsgErrorStrategyApplied,
+		zap.String(LogFieldTag, tag.Name),
+		zap.String(LogFieldStrategy, ErrorStrategy(strategy).String()),
+		zap.String(LogFieldErrorMsg, err.Error()))
+
+	switch ErrorStrategy(strategy) {
+	case ErrorStrategyThrow:
+		// Default behavior - propagate the error
+		return "", err
+
+	case ErrorStrategyDefault:
+		// Use the default attribute value if available
+		if defaultVal, hasDefault := tag.Attributes.Get(AttrDefault); hasDefault {
+			return defaultVal, nil
+		}
+		// No default specified - return empty string
+		return "", nil
+
+	case ErrorStrategyRemove:
+		// Remove the tag entirely - return empty string
+		return "", nil
+
+	case ErrorStrategyKeepRaw:
+		// Keep the original tag source
+		if tag.RawSource != "" {
+			return tag.RawSource, nil
+		}
+		// Fallback to empty if no raw source captured
+		return "", nil
+
+	case ErrorStrategyLog:
+		// Log the error and continue with empty string
+		e.logger.Warn(LogMsgErrorLogged,
+			zap.String(LogFieldTag, tag.Name),
+			zap.Error(err))
+		return "", nil
+
+	default:
+		// Unknown strategy - fall back to throw
+		return "", err
+	}
+}
+
+// getErrorStrategy determines which error strategy to use for a tag.
+// Priority: per-tag onerror attribute > context default > throw
+func (e *Executor) getErrorStrategy(tag *TagNode, execCtx ContextAccessor) int {
+	// Check for per-tag onerror attribute
+	if onErrorStr, hasOnError := tag.Attributes.Get(AttrOnError); hasOnError {
+		return int(ParseErrorStrategy(onErrorStr))
+	}
+
+	// Check if context provides error strategy
+	if stratCtx, ok := execCtx.(ErrorStrategyAccessor); ok {
+		return stratCtx.ErrorStrategy()
+	}
+
+	// Default to throw
+	return int(ErrorStrategyThrow)
 }
 
 // ExecutorError represents an executor error with context.

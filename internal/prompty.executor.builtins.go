@@ -27,6 +27,15 @@ type TemplateContextAccessor interface {
 	Depth() int
 }
 
+// ErrorStrategyAccessor extends ContextAccessor with error strategy support.
+// The executor uses this interface to determine how to handle resolver failures.
+type ErrorStrategyAccessor interface {
+	ContextAccessor
+	// ErrorStrategy returns the current error handling strategy.
+	// Returns an int to avoid import cycles (maps to ErrorStrategy constants).
+	ErrorStrategy() int
+}
+
 // VarResolver handles the prompty.var built-in tag.
 // It retrieves variable values from the execution context.
 type VarResolver struct{}
