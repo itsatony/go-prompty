@@ -14,6 +14,7 @@ const (
 const (
 	TagNameVar     = "prompty.var"
 	TagNameRaw     = "prompty.raw"
+	TagNameInclude = "prompty.include" // Nested template inclusion
 	TagNameIf      = "prompty.if"      // Phase 2
 	TagNameElseIf  = "prompty.elseif"  // Phase 2
 	TagNameElse    = "prompty.else"    // Phase 2
@@ -24,20 +25,34 @@ const (
 	TagNameCase    = "prompty.case"    // Phase 5
 )
 
+// Reserved namespace prefix for built-in tags
+const (
+	ReservedNamespacePrefix = "prompty."
+)
+
 // Attribute name constants
 const (
-	AttrName    = "name"
-	AttrDefault = "default"
-	AttrEval    = "eval"
-	AttrOnError = "onerror"
-	AttrFormat  = "format"
-	AttrEscape  = "escape"
-	AttrItem    = "item"
-	AttrIndex   = "index"
-	AttrIn      = "in"
-	AttrLimit   = "limit"
-	AttrValue   = "value"
-	AttrText    = "text"
+	AttrName     = "name"
+	AttrDefault  = "default"
+	AttrEval     = "eval"
+	AttrOnError  = "onerror"
+	AttrFormat   = "format"
+	AttrEscape   = "escape"
+	AttrItem     = "item"
+	AttrIndex    = "index"
+	AttrIn       = "in"
+	AttrLimit    = "limit"
+	AttrValue    = "value"
+	AttrText     = "text"
+	AttrTemplate = "template" // Template name for include
+	AttrWith     = "with"     // Context path for include
+	AttrIsolate  = "isolate"  // Isolated context flag for include
+)
+
+// Boolean attribute values
+const (
+	AttrValueTrue  = "true"
+	AttrValueFalse = "false"
 )
 
 // ErrorStrategy defines how to handle errors during execution
@@ -95,21 +110,31 @@ const (
 
 // Metadata keys for cuserr.WithMetadata
 const (
-	MetaKeyLine      = "line"
-	MetaKeyColumn    = "column"
-	MetaKeyOffset    = "offset"
-	MetaKeyTag       = "tag"
-	MetaKeyResolver  = "resolver"
-	MetaKeyVariable  = "variable"
-	MetaKeyAttribute = "attribute"
-	MetaKeyExpected  = "expected"
-	MetaKeyActual    = "actual"
-	MetaKeyPath      = "path"
-	MetaKeyValue     = "value"
+	MetaKeyLine         = "line"
+	MetaKeyColumn       = "column"
+	MetaKeyOffset       = "offset"
+	MetaKeyTag          = "tag"
+	MetaKeyResolver     = "resolver"
+	MetaKeyVariable     = "variable"
+	MetaKeyAttribute    = "attribute"
+	MetaKeyExpected     = "expected"
+	MetaKeyActual       = "actual"
+	MetaKeyPath         = "path"
+	MetaKeyValue        = "value"
+	MetaKeyTemplateName = "template_name"
+	MetaKeyCurrentDepth = "current_depth"
+	MetaKeyMaxDepth     = "max_depth"
 )
 
 // Escape sequence constants
 const (
 	EscapeOpenDelim  = "\\{~"
 	LiteralOpenDelim = "{~"
+)
+
+// Internal meta keys for nested template data passing
+// These are used internally and prefixed with underscore to avoid collision
+const (
+	MetaKeyParentDepth = "_parentDepth" // Used to pass depth between nested template executions
+	MetaKeyValueData   = "_value"       // Used to pass non-map values in with attribute
 )

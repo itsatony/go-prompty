@@ -403,3 +403,290 @@ func (r *uppercaseResolver) Validate(attrs prompty.Attributes) error {
 	}
 	return nil
 }
+
+// ============================================================================
+// Nested Template Tests
+// ============================================================================
+
+func TestE2E_NestedTemplate_RegisterTemplate(t *testing.T) {
+	engine := prompty.MustNew()
+
+	err := engine.RegisterTemplate("footer", "Copyright 2024")
+	require.NoError(t, err)
+
+	assert.True(t, engine.HasTemplate("footer"))
+	assert.Equal(t, 1, engine.TemplateCount())
+}
+
+func TestE2E_NestedTemplate_RegisterDuplicate(t *testing.T) {
+	engine := prompty.MustNew()
+
+	err := engine.RegisterTemplate("footer", "Copyright 2024")
+	require.NoError(t, err)
+
+	// Second registration should fail
+	err = engine.RegisterTemplate("footer", "Different content")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already registered")
+}
+
+func TestE2E_NestedTemplate_RegisterReservedName(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Names starting with "prompty." are reserved
+	err := engine.RegisterTemplate("prompty.custom", "Content")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "reserved")
+}
+
+func TestE2E_NestedTemplate_RegisterEmptyName(t *testing.T) {
+	engine := prompty.MustNew()
+
+	err := engine.RegisterTemplate("", "Content")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty")
+}
+
+func TestE2E_NestedTemplate_UnregisterTemplate(t *testing.T) {
+	engine := prompty.MustNew()
+
+	engine.MustRegisterTemplate("footer", "Copyright 2024")
+	assert.True(t, engine.HasTemplate("footer"))
+
+	removed := engine.UnregisterTemplate("footer")
+	assert.True(t, removed)
+	assert.False(t, engine.HasTemplate("footer"))
+
+	// Second unregister should return false
+	removed = engine.UnregisterTemplate("footer")
+	assert.False(t, removed)
+}
+
+func TestE2E_NestedTemplate_GetTemplate(t *testing.T) {
+	engine := prompty.MustNew()
+
+	engine.MustRegisterTemplate("footer", "Copyright 2024")
+
+	tmpl, ok := engine.GetTemplate("footer")
+	require.True(t, ok)
+	assert.NotNil(t, tmpl)
+	assert.Equal(t, "Copyright 2024", tmpl.Source())
+
+	// Non-existent template
+	_, ok = engine.GetTemplate("nonexistent")
+	assert.False(t, ok)
+}
+
+func TestE2E_NestedTemplate_HasTemplate(t *testing.T) {
+	engine := prompty.MustNew()
+
+	assert.False(t, engine.HasTemplate("footer"))
+
+	engine.MustRegisterTemplate("footer", "Copyright 2024")
+	assert.True(t, engine.HasTemplate("footer"))
+}
+
+func TestE2E_NestedTemplate_ListTemplates(t *testing.T) {
+	engine := prompty.MustNew()
+
+	assert.Empty(t, engine.ListTemplates())
+
+	engine.MustRegisterTemplate("footer", "Footer")
+	engine.MustRegisterTemplate("header", "Header")
+	engine.MustRegisterTemplate("sidebar", "Sidebar")
+
+	templates := engine.ListTemplates()
+	assert.Equal(t, []string{"footer", "header", "sidebar"}, templates)
+}
+
+func TestE2E_NestedTemplate_BasicInclude(t *testing.T) {
+	engine := prompty.MustNew()
+
+	engine.MustRegisterTemplate("footer", "Copyright 2024")
+
+	result, err := engine.Execute(context.Background(),
+		`Content goes here. {~prompty.include template="footer" /~}`,
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Content goes here. Copyright 2024", result)
+}
+
+func TestE2E_NestedTemplate_WithVariables(t *testing.T) {
+	engine := prompty.MustNew()
+
+	engine.MustRegisterTemplate("greeting", "Hello, {~prompty.var name=\"user\" /~}!")
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.include template="greeting" /~}`,
+		map[string]any{"user": "Alice"},
+	)
+
+	// Note: Since we're not passing parent context data to child,
+	// this should use empty context. We need to pass via attributes.
+	require.Error(t, err) // Variable not found in isolated context
+}
+
+func TestE2E_NestedTemplate_ContextOverride(t *testing.T) {
+	engine := prompty.MustNew()
+
+	engine.MustRegisterTemplate("greeting", "Hello, {~prompty.var name=\"user\" default=\"Guest\" /~}!")
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.include template="greeting" user="Bob" /~}`,
+		map[string]any{"user": "Alice"},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello, Bob!", result) // Should use override from attribute
+}
+
+func TestE2E_NestedTemplate_NotFound(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.include template="nonexistent" /~}`,
+		nil,
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestE2E_NestedTemplate_MissingTemplateAttr(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.include /~}`,
+		nil,
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "template")
+}
+
+func TestE2E_NestedTemplate_MaxDepthExceeded(t *testing.T) {
+	// Use a small max depth for testing
+	engine := prompty.MustNew(prompty.WithMaxDepth(3))
+
+	// Register a template that includes itself
+	engine.MustRegisterTemplate("recursive", `X{~prompty.include template="recursive" /~}`)
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.include template="recursive" /~}`,
+		nil,
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "depth")
+}
+
+func TestE2E_NestedTemplate_MultiLevelNesting(t *testing.T) {
+	engine := prompty.MustNew()
+
+	engine.MustRegisterTemplate("level3", "Level3")
+	engine.MustRegisterTemplate("level2", `L2[{~prompty.include template="level3" /~}]`)
+	engine.MustRegisterTemplate("level1", `L1[{~prompty.include template="level2" /~}]`)
+
+	result, err := engine.Execute(context.Background(),
+		`Start[{~prompty.include template="level1" /~}]End`,
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Start[L1[L2[Level3]]]End", result)
+}
+
+func TestE2E_NestedTemplate_SameTemplateMultipleTimes(t *testing.T) {
+	engine := prompty.MustNew()
+
+	engine.MustRegisterTemplate("sep", " | ")
+
+	result, err := engine.Execute(context.Background(),
+		`A{~prompty.include template="sep" /~}B{~prompty.include template="sep" /~}C`,
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "A | B | C", result)
+}
+
+func TestE2E_NestedTemplate_TemplateWithRawBlocks(t *testing.T) {
+	engine := prompty.MustNew()
+
+	engine.MustRegisterTemplate("jinja", "{~prompty.raw~}{{ jinja_var }}{~/prompty.raw~}")
+
+	result, err := engine.Execute(context.Background(),
+		`Template: {~prompty.include template="jinja" /~}`,
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Template: {{ jinja_var }}", result)
+}
+
+func TestE2E_NestedTemplate_TemplateWithVariables(t *testing.T) {
+	engine := prompty.MustNew()
+
+	engine.MustRegisterTemplate("user-card", `Name: {~prompty.var name="name" default="Unknown" /~}`)
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.include template="user-card" name="Alice" /~}`,
+		nil,
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Name: Alice", result)
+}
+
+func TestE2E_NestedTemplate_ConcurrentExecution(t *testing.T) {
+	engine := prompty.MustNew()
+
+	engine.MustRegisterTemplate("greeting", "Hello!")
+
+	// Execute concurrently
+	done := make(chan bool, 10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			result, err := engine.Execute(context.Background(),
+				`{~prompty.include template="greeting" /~}`,
+				nil,
+			)
+			assert.NoError(t, err)
+			assert.Equal(t, "Hello!", result)
+			done <- true
+		}()
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+}
+
+func TestE2E_NestedTemplate_ConcurrentRegistration(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Register templates concurrently
+	done := make(chan bool, 10)
+	for i := 0; i < 10; i++ {
+		go func(idx int) {
+			name := "template" + string(rune('0'+idx))
+			err := engine.RegisterTemplate(name, "Content "+name)
+			// First registration should succeed, duplicates will fail
+			// We just care that it doesn't panic or corrupt state
+			_ = err
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+
+	// Verify state is consistent
+	count := engine.TemplateCount()
+	assert.Equal(t, 10, count)
+}

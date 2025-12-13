@@ -15,6 +15,18 @@ type ContextAccessor interface {
 	Has(path string) bool
 }
 
+// TemplateContextAccessor extends ContextAccessor with template execution capabilities.
+// Resolvers that need to execute nested templates should check if their context
+// implements this interface.
+type TemplateContextAccessor interface {
+	ContextAccessor
+	// Engine returns the template executor for nested template resolution.
+	// Returns nil if no engine is available.
+	Engine() interface{}
+	// Depth returns the current nesting depth for template includes.
+	Depth() int
+}
+
 // VarResolver handles the prompty.var built-in tag.
 // It retrieves variable values from the execution context.
 type VarResolver struct{}
@@ -118,6 +130,7 @@ func (r *RawResolver) Validate(attrs Attributes) error {
 func RegisterBuiltins(registry *Registry) {
 	registry.MustRegister(NewVarResolver())
 	registry.MustRegister(NewRawResolver())
+	registry.MustRegister(NewIncludeResolver())
 }
 
 // BuiltinError represents an error from a built-in resolver.
@@ -145,10 +158,4 @@ const (
 	ErrMsgMissingNameAttr     = "missing required 'name' attribute"
 	ErrMsgVariableNotFoundFmt = "variable not found: %s"
 	ErrMsgRawResolverCalled   = "raw resolver should not be called directly"
-)
-
-// Attribute name constants for built-ins
-const (
-	AttrName    = "name"
-	AttrDefault = "default"
 )

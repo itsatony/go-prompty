@@ -2,18 +2,23 @@ package prompty
 
 import (
 	"context"
+	"sort"
+	"strings"
+	"sync"
 
 	"github.com/itsatony/go-prompty/internal"
 	"go.uber.org/zap"
 )
 
 // Engine is the main entry point for the prompty templating system.
-// It manages parsing, execution, and resolver registration.
+// It manages parsing, execution, resolver registration, and template storage.
 type Engine struct {
-	registry *internal.Registry
-	config   *engineConfig
-	executor *internal.Executor
-	logger   *zap.Logger
+	registry  *internal.Registry
+	templates map[string]*Template // Named templates for inclusion
+	tmplMu    sync.RWMutex         // Protects templates map
+	config    *engineConfig
+	executor  *internal.Executor
+	logger    *zap.Logger
 }
 
 // New creates a new prompty Engine with the given options.
@@ -37,10 +42,11 @@ func New(opts ...Option) (*Engine, error) {
 	executor := internal.NewExecutor(registry, executorConfig, logger)
 
 	return &Engine{
-		registry: registry,
-		config:   config,
-		executor: executor,
-		logger:   logger,
+		registry:  registry,
+		templates: make(map[string]*Template),
+		config:    config,
+		executor:  executor,
+		logger:    logger,
 	}, nil
 }
 
@@ -76,7 +82,7 @@ func (e *Engine) Parse(source string) (*Template, error) {
 		return nil, NewParseError(ErrMsgParseFailed, Position{}, err)
 	}
 
-	return newTemplate(source, ast, e.executor, e.config), nil
+	return newTemplate(source, ast, e.executor, e.config, e), nil
 }
 
 // Execute is a convenience method that parses and executes in one step.
@@ -101,6 +107,138 @@ func (e *Engine) MustRegister(r Resolver) {
 	if err := e.Register(r); err != nil {
 		panic(err)
 	}
+}
+
+// RegisterTemplate registers a named template for later inclusion via prompty.include.
+// Template names cannot be empty or use the reserved "prompty." namespace prefix.
+// Returns an error if a template with the same name already exists.
+func (e *Engine) RegisterTemplate(name string, source string) error {
+	// Validate template name
+	if name == "" {
+		return NewEmptyTemplateNameError()
+	}
+	if strings.HasPrefix(name, ReservedNamespacePrefix) {
+		return NewReservedTemplateNameError(name)
+	}
+
+	// Check for existing template
+	e.tmplMu.Lock()
+	defer e.tmplMu.Unlock()
+
+	if _, exists := e.templates[name]; exists {
+		return NewTemplateExistsError(name)
+	}
+
+	// Parse the template
+	tmpl, err := e.Parse(source)
+	if err != nil {
+		return err
+	}
+
+	e.templates[name] = tmpl
+	return nil
+}
+
+// MustRegisterTemplate registers a template and panics on error.
+func (e *Engine) MustRegisterTemplate(name string, source string) {
+	if err := e.RegisterTemplate(name, source); err != nil {
+		panic(err)
+	}
+}
+
+// UnregisterTemplate removes a registered template by name.
+// Returns true if the template existed and was removed, false otherwise.
+func (e *Engine) UnregisterTemplate(name string) bool {
+	e.tmplMu.Lock()
+	defer e.tmplMu.Unlock()
+
+	if _, exists := e.templates[name]; exists {
+		delete(e.templates, name)
+		return true
+	}
+	return false
+}
+
+// GetTemplate retrieves a registered template by name.
+// Returns the template and true if found, or nil and false if not.
+func (e *Engine) GetTemplate(name string) (*Template, bool) {
+	e.tmplMu.RLock()
+	defer e.tmplMu.RUnlock()
+
+	tmpl, ok := e.templates[name]
+	return tmpl, ok
+}
+
+// HasTemplate checks if a template is registered with the given name.
+func (e *Engine) HasTemplate(name string) bool {
+	e.tmplMu.RLock()
+	defer e.tmplMu.RUnlock()
+
+	_, ok := e.templates[name]
+	return ok
+}
+
+// ListTemplates returns all registered template names in sorted order.
+func (e *Engine) ListTemplates() []string {
+	e.tmplMu.RLock()
+	defer e.tmplMu.RUnlock()
+
+	names := make([]string, 0, len(e.templates))
+	for name := range e.templates {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// TemplateCount returns the number of registered templates.
+func (e *Engine) TemplateCount() int {
+	e.tmplMu.RLock()
+	defer e.tmplMu.RUnlock()
+
+	return len(e.templates)
+}
+
+// ExecuteTemplate executes a registered template by name with the given data.
+// This implements the TemplateExecutor interface for nested template support.
+// It handles depth tracking for nested template inclusion.
+// Note: This method creates a copy of the data map to avoid mutating caller's data.
+func (e *Engine) ExecuteTemplate(ctx context.Context, name string, data map[string]any) (string, error) {
+	tmpl, ok := e.GetTemplate(name)
+	if !ok {
+		return "", NewTemplateNotFoundError(name)
+	}
+
+	// Extract parent depth if provided and create clean data copy
+	parentDepth := 0
+	var cleanData map[string]any
+	if data != nil {
+		// Extract depth before copying
+		if pd, ok := data[MetaKeyParentDepth]; ok {
+			if depth, ok := pd.(int); ok {
+				parentDepth = depth
+			}
+		}
+		// Create a copy without the meta key to avoid mutating caller's data
+		cleanData = make(map[string]any, len(data))
+		for k, v := range data {
+			if k != MetaKeyParentDepth {
+				cleanData[k] = v
+			}
+		}
+	}
+
+	// Create context with incremented depth
+	execCtx := NewContextWithStrategy(cleanData, e.config.errorStrategy)
+	execCtx = execCtx.WithEngine(e).WithDepth(parentDepth + 1)
+
+	return tmpl.ExecuteWithContext(ctx, execCtx)
+}
+
+// MaxDepth returns the configured maximum nesting depth.
+// This implements the TemplateExecutor interface for nested template support.
+func (e *Engine) MaxDepth() int {
+	return e.config.maxDepth
 }
 
 // resolverAdapter adapts the public Resolver interface to internal.InternalResolver

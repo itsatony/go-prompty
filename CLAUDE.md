@@ -145,6 +145,12 @@ if errors.Is(err, cuserr.ErrNotFound) { /* ... */ }
 VARIABLE:
 {~prompty.var name="user.name" default="Guest" /~}
 
+INCLUDE (nested templates):
+{~prompty.include template="header" /~}
+{~prompty.include template="greeting" user="Alice" /~}
+{~prompty.include template="item" with="currentItem" /~}
+{~prompty.include template="footer" isolate="true" /~}
+
 CONDITIONAL:
 {~prompty.if eval="user.isAdmin"~}
   Admin content
@@ -175,6 +181,36 @@ EXPRESSIONS:
 len(items) > 0 && contains(roles, "admin")
 upper(trim(user.name))
 ```
+
+### Nested Templates
+
+Templates can reference other registered templates via `prompty.include`. Templates are registered with the engine:
+
+```go
+engine := prompty.MustNew()
+
+// Register reusable templates
+engine.MustRegisterTemplate("header", "Welcome to {~prompty.var name=\"siteName\" default=\"MyApp\" /~}")
+engine.MustRegisterTemplate("footer", "Copyright 2024")
+
+// Use in templates
+result, _ := engine.Execute(ctx, `
+{~prompty.include template="header" siteName="My App" /~}
+Content here...
+{~prompty.include template="footer" /~}
+`, nil)
+```
+
+**Include Attributes:**
+- `template` (required): Name of the registered template
+- `with`: Context path - use value at path as root context
+- `isolate`: "true" to not inherit parent context
+- Other attributes become context variables in child template
+
+**Template Name Rules:**
+- Cannot be empty
+- Cannot start with `prompty.` (reserved namespace)
+- First-come-wins for duplicate registrations
 
 ## Execution Safety
 

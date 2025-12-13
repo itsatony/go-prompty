@@ -241,10 +241,11 @@ func TestRegisterBuiltins(t *testing.T) {
 
 	RegisterBuiltins(registry)
 
-	// Verify both built-ins are registered
+	// Verify all built-ins are registered
 	assert.True(t, registry.Has(TagNameVar))
 	assert.True(t, registry.Has(TagNameRaw))
-	assert.Equal(t, 2, registry.Count())
+	assert.True(t, registry.Has(TagNameInclude))
+	assert.Equal(t, 3, registry.Count())
 
 	// Verify we can get them
 	varResolver, ok := registry.Get(TagNameVar)
@@ -254,6 +255,10 @@ func TestRegisterBuiltins(t *testing.T) {
 	rawResolver, ok := registry.Get(TagNameRaw)
 	require.True(t, ok)
 	assert.Equal(t, TagNameRaw, rawResolver.TagName())
+
+	includeResolver, ok := registry.Get(TagNameInclude)
+	require.True(t, ok)
+	assert.Equal(t, TagNameInclude, includeResolver.TagName())
 }
 
 func TestBuiltinError_Error(t *testing.T) {

@@ -111,12 +111,57 @@ const (
 
 // Log field names
 const (
-	LogFieldSource   = "source_length"
-	LogFieldTokens   = "token_count"
-	LogFieldNodes    = "node_count"
-	LogFieldTag      = "tag"
-	LogFieldResolver = "resolver"
-	LogFieldDuration = "duration"
-	LogFieldLine     = "line"
-	LogFieldColumn   = "column"
+	LogFieldSource       = "source_length"
+	LogFieldTokens       = "token_count"
+	LogFieldNodes        = "node_count"
+	LogFieldTag          = "tag"
+	LogFieldResolver     = "resolver"
+	LogFieldDuration     = "duration"
+	LogFieldLine         = "line"
+	LogFieldColumn       = "column"
+	LogFieldTemplateName = "template_name"
+	LogFieldDepth        = "depth"
+)
+
+// Built-in tag names (mirror public constants for internal use)
+const (
+	TagNameVar     = "prompty.var"
+	TagNameRaw     = "prompty.raw"
+	TagNameInclude = "prompty.include"
+)
+
+// Attribute name constants for include resolver
+const (
+	AttrName     = "name"
+	AttrDefault  = "default"
+	AttrTemplate = "template"
+	AttrWith     = "with"
+	AttrIsolate  = "isolate"
+)
+
+// Boolean attribute values
+const (
+	AttrValueTrue  = "true"
+	AttrValueFalse = "false"
+)
+
+// Error message constants for include resolver
+const (
+	ErrMsgMissingTemplateAttr = "missing required 'template' attribute"
+	ErrMsgEngineNotAvailable  = "engine not available in context"
+	ErrMsgTemplateNotFoundFmt = "template not found: %s"
+	ErrMsgDepthExceeded       = "maximum template inclusion depth exceeded"
+)
+
+// Meta key constants for internal data passing
+const (
+	MetaKeyParentDepth = "_parentDepth"
+	MetaKeyValue       = "_value"
+)
+
+// Log messages for template operations
+const (
+	LogMsgTemplateRegistered = "template registered"
+	LogMsgTemplateIncluded   = "template included"
+	LogMsgIncludeDepthCheck  = "checking include depth"
 )

@@ -1,9 +1,21 @@
 package prompty
 
 import (
+	"context"
 	"strings"
 	"sync"
 )
+
+// TemplateExecutor is the interface for executing nested templates.
+// This allows resolvers to execute registered templates without full engine coupling.
+type TemplateExecutor interface {
+	// ExecuteTemplate executes a registered template by name with the given data.
+	ExecuteTemplate(ctx context.Context, name string, data map[string]any) (string, error)
+	// HasTemplate checks if a template is registered with the given name.
+	HasTemplate(name string) bool
+	// MaxDepth returns the configured maximum nesting depth.
+	MaxDepth() int
+}
 
 // Context provides access to template variables and execution state.
 // It supports dot-notation path resolution (e.g., "user.profile.name")
@@ -13,6 +25,8 @@ type Context struct {
 	parent     *Context
 	mu         sync.RWMutex
 	errorStrat ErrorStrategy
+	engine     TemplateExecutor // Optional engine reference for nested templates
+	depth      int              // Current nesting depth for include operations
 }
 
 // NewContext creates a new execution context with the given data.
@@ -140,6 +154,7 @@ func (c *Context) Has(path string) bool {
 
 // Child creates a child context with additional data.
 // The child inherits from the parent and can override values.
+// Engine reference and depth are propagated to child contexts.
 func (c *Context) Child(data map[string]any) *Context {
 	if data == nil {
 		data = make(map[string]any)
@@ -148,6 +163,8 @@ func (c *Context) Child(data map[string]any) *Context {
 		data:       data,
 		parent:     c,
 		errorStrat: c.errorStrat,
+		engine:     c.engine,
+		depth:      c.depth,
 	}
 }
 
@@ -171,6 +188,66 @@ func (c *Context) Data() map[string]any {
 // ErrorStrategy returns the current error handling strategy.
 func (c *Context) ErrorStrategy() ErrorStrategy {
 	return c.errorStrat
+}
+
+// Engine returns the template executor if available, nil otherwise.
+// This allows resolvers to execute nested templates.
+// Returns interface{} to avoid import cycle issues with internal package.
+func (c *Context) Engine() interface{} {
+	return c.engine
+}
+
+// Depth returns the current nesting depth for template includes.
+func (c *Context) Depth() int {
+	return c.depth
+}
+
+// WithEngine returns a new context with the given engine reference.
+// This is typically called by the engine when starting template execution.
+// The returned context has a deep copy of the data map for thread safety.
+func (c *Context) WithEngine(engine TemplateExecutor) *Context {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Deep copy the data map to avoid race conditions
+	// when parent and child contexts are accessed concurrently
+	dataCopy := make(map[string]any, len(c.data))
+	for k, v := range c.data {
+		dataCopy[k] = v
+	}
+
+	newCtx := &Context{
+		data:       dataCopy,
+		parent:     c.parent,
+		errorStrat: c.errorStrat,
+		engine:     engine,
+		depth:      c.depth,
+	}
+	return newCtx
+}
+
+// WithDepth returns a new context with the given depth.
+// This is used when executing nested templates to track inclusion depth.
+// The returned context has a deep copy of the data map for thread safety.
+func (c *Context) WithDepth(depth int) *Context {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Deep copy the data map to avoid race conditions
+	// when parent and child contexts are accessed concurrently
+	dataCopy := make(map[string]any, len(c.data))
+	for k, v := range c.data {
+		dataCopy[k] = v
+	}
+
+	newCtx := &Context{
+		data:       dataCopy,
+		parent:     c.parent,
+		errorStrat: c.errorStrat,
+		engine:     c.engine,
+		depth:      depth,
+	}
+	return newCtx
 }
 
 // Path separator for dot-notation

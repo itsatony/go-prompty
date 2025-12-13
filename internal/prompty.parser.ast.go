@@ -220,9 +220,3 @@ func (a Attributes) String() string {
 	}
 	return "{" + strings.Join(pairs, ", ") + "}"
 }
-
-// Tag name constants for built-in tags (re-exported from constants for convenience)
-const (
-	TagNameVar = "prompty.var"
-	TagNameRaw = "prompty.raw"
-)

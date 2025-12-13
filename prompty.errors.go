@@ -40,6 +40,16 @@ const (
 
 	// Type conversion errors
 	ErrMsgTypeConversion = "type conversion failed"
+
+	// Template errors (nested template inclusion)
+	ErrMsgTemplateNotFound      = "template not found"
+	ErrMsgTemplateAlreadyExists = "template already registered"
+	ErrMsgTemplateDepthExceeded = "template inclusion depth exceeded"
+	ErrMsgInvalidTemplateName   = "invalid template name"
+	ErrMsgEmptyTemplateName     = "template name cannot be empty"
+	ErrMsgMissingTemplateAttr   = "missing required 'template' attribute"
+	ErrMsgEngineNotAvailable    = "engine not available for nested template resolution"
+	ErrMsgReservedTemplateName  = "template name uses reserved prompty.* namespace"
 )
 
 // Error code constants for categorization
@@ -48,6 +58,7 @@ const (
 	ErrCodeExec       = "PROMPTY_EXEC"
 	ErrCodeValidation = "PROMPTY_VALIDATION"
 	ErrCodeRegistry   = "PROMPTY_REGISTRY"
+	ErrCodeTemplate   = "PROMPTY_TEMPLATE"
 )
 
 // Position represents a location in the source template
@@ -170,4 +181,40 @@ func NewTypeConversionError(fromType, toType string, value interface{}) error {
 		WithMetadata("from_type", fromType).
 		WithMetadata("to_type", toType).
 		WithMetadata(MetaKeyValue, fmt.Sprintf("%v", value))
+}
+
+// NewTemplateNotFoundError creates an error for missing templates
+func NewTemplateNotFoundError(name string) error {
+	return cuserr.NewNotFoundError(MetaKeyTemplateName, ErrMsgTemplateNotFound).
+		WithMetadata(MetaKeyTemplateName, name)
+}
+
+// NewTemplateExistsError creates an error for duplicate template registration
+func NewTemplateExistsError(name string) error {
+	return cuserr.NewValidationError(ErrCodeTemplate, ErrMsgTemplateAlreadyExists).
+		WithMetadata(MetaKeyTemplateName, name)
+}
+
+// NewTemplateDepthError creates an error when max inclusion depth is exceeded
+func NewTemplateDepthError(depth, max int) error {
+	return cuserr.NewValidationError(ErrCodeTemplate, ErrMsgTemplateDepthExceeded).
+		WithMetadata(MetaKeyCurrentDepth, strconv.Itoa(depth)).
+		WithMetadata(MetaKeyMaxDepth, strconv.Itoa(max))
+}
+
+// NewReservedTemplateNameError creates an error for reserved namespace usage
+func NewReservedTemplateNameError(name string) error {
+	return cuserr.NewValidationError(ErrCodeTemplate, ErrMsgReservedTemplateName).
+		WithMetadata(MetaKeyTemplateName, name)
+}
+
+// NewEmptyTemplateNameError creates an error for empty template names
+func NewEmptyTemplateNameError() error {
+	return cuserr.NewValidationError(ErrCodeTemplate, ErrMsgEmptyTemplateName)
+}
+
+// NewEngineNotAvailableError creates an error when engine is not in context
+func NewEngineNotAvailableError() error {
+	return cuserr.NewInternalError(ErrCodeTemplate, nil).
+		WithMetadata(MetaKeyTag, TagNameInclude)
 }
