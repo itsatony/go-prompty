@@ -69,6 +69,20 @@ const (
 	ErrMsgForNotIterable    = "value is not iterable"
 	ErrMsgForLimitExceeded  = "loop iteration limit exceeded"
 	ErrMsgForNotClosed      = "for block not closed"
+
+	// Switch/case messages (Phase 5)
+	ErrMsgSwitchMissingEval      = "missing required 'eval' attribute for switch"
+	ErrMsgSwitchMissingValue     = "case requires 'value' or 'eval' attribute"
+	ErrMsgSwitchNotClosed        = "switch block not closed"
+	ErrMsgSwitchCaseNotClosed    = "case block not closed"
+	ErrMsgSwitchDefaultNotLast   = "default case must be last in switch"
+	ErrMsgSwitchDuplicateDefault = "only one default case allowed in switch"
+	ErrMsgSwitchInvalidCaseTag   = "unexpected tag inside switch block"
+
+	// Custom function messages (Phase 5)
+	ErrMsgFuncNilFunc       = "function cannot be nil"
+	ErrMsgFuncEmptyName     = "function name cannot be empty"
+	ErrMsgFuncAlreadyExists = "function already registered"
 )
 
 // Error code constants for categorization
@@ -78,6 +92,7 @@ const (
 	ErrCodeValidation = "PROMPTY_VALIDATION"
 	ErrCodeRegistry   = "PROMPTY_REGISTRY"
 	ErrCodeTemplate   = "PROMPTY_TEMPLATE"
+	ErrCodeFunc       = "PROMPTY_FUNC"
 )
 
 // Position represents a location in the source template
@@ -236,4 +251,13 @@ func NewEmptyTemplateNameError() error {
 func NewEngineNotAvailableError() error {
 	return cuserr.NewInternalError(ErrCodeTemplate, nil).
 		WithMetadata(MetaKeyTag, TagNameInclude)
+}
+
+// NewFuncRegistrationError creates an error for function registration failures
+func NewFuncRegistrationError(msg, funcName string) error {
+	err := cuserr.NewValidationError(ErrCodeFunc, msg)
+	if funcName != "" {
+		err = err.WithMetadata(MetaKeyFuncName, funcName)
+	}
+	return err
 }

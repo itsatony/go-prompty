@@ -12,17 +12,18 @@ const (
 
 // Built-in tag names - all use prompty. namespace prefix
 const (
-	TagNameVar     = "prompty.var"
-	TagNameRaw     = "prompty.raw"
-	TagNameInclude = "prompty.include" // Nested template inclusion
-	TagNameIf      = "prompty.if"      // Phase 2
-	TagNameElseIf  = "prompty.elseif"  // Phase 2
-	TagNameElse    = "prompty.else"    // Phase 2
-	TagNameFor     = "prompty.for"     // Phase 4
-	TagNameComment = "prompty.comment" // Phase 3
-	TagNameDefault = "prompty.default" // Phase 3
-	TagNameSwitch  = "prompty.switch"  // Phase 5
-	TagNameCase    = "prompty.case"    // Phase 5
+	TagNameVar         = "prompty.var"
+	TagNameRaw         = "prompty.raw"
+	TagNameInclude     = "prompty.include"     // Nested template inclusion
+	TagNameIf          = "prompty.if"          // Phase 2
+	TagNameElseIf      = "prompty.elseif"      // Phase 2
+	TagNameElse        = "prompty.else"        // Phase 2
+	TagNameFor         = "prompty.for"         // Phase 4
+	TagNameComment     = "prompty.comment"     // Phase 3
+	TagNameDefault     = "prompty.default"     // Phase 3
+	TagNameSwitch      = "prompty.switch"      // Phase 5
+	TagNameCase        = "prompty.case"        // Phase 5
+	TagNameCaseDefault = "prompty.casedefault" // Phase 5 - default case in switch
 )
 
 // Reserved namespace prefix for built-in tags
@@ -124,6 +125,7 @@ const (
 	MetaKeyTemplateName = "template_name"
 	MetaKeyCurrentDepth = "current_depth"
 	MetaKeyMaxDepth     = "max_depth"
+	MetaKeyFuncName     = "func_name"
 )
 
 // Escape sequence constants

@@ -27,7 +27,8 @@ const (
 	NodeTypeTag
 	NodeTypeRaw
 	NodeTypeConditional
-	NodeTypeFor // Phase 4: Loop node
+	NodeTypeFor    // Phase 4: Loop node
+	NodeTypeSwitch // Phase 5: Switch/case node
 )
 
 // Node type string names for debugging
@@ -38,6 +39,7 @@ const (
 	NodeTypeNameRaw         = "RAW"
 	NodeTypeNameConditional = "CONDITIONAL"
 	NodeTypeNameFor         = "FOR"
+	NodeTypeNameSwitch      = "SWITCH"
 )
 
 // String returns the string representation of the node type
@@ -55,6 +57,8 @@ func (n NodeType) String() string {
 		return NodeTypeNameConditional
 	case NodeTypeFor:
 		return NodeTypeNameFor
+	case NodeTypeSwitch:
+		return NodeTypeNameSwitch
 	default:
 		return NodeTypeNameRoot
 	}
@@ -136,14 +140,17 @@ const (
 
 // Built-in tag names (mirror public constants for internal use)
 const (
-	TagNameVar     = "prompty.var"
-	TagNameRaw     = "prompty.raw"
-	TagNameInclude = "prompty.include"
-	TagNameIf      = "prompty.if"
-	TagNameElseIf  = "prompty.elseif"
-	TagNameElse    = "prompty.else"
-	TagNameComment = "prompty.comment" // Phase 3
-	TagNameFor     = "prompty.for"     // Phase 4
+	TagNameVar         = "prompty.var"
+	TagNameRaw         = "prompty.raw"
+	TagNameInclude     = "prompty.include"
+	TagNameIf          = "prompty.if"
+	TagNameElseIf      = "prompty.elseif"
+	TagNameElse        = "prompty.else"
+	TagNameComment     = "prompty.comment"     // Phase 3
+	TagNameFor         = "prompty.for"         // Phase 4
+	TagNameSwitch      = "prompty.switch"      // Phase 5
+	TagNameCase        = "prompty.case"        // Phase 5
+	TagNameCaseDefault = "prompty.casedefault" // Phase 5
 )
 
 // Attribute name constants
@@ -159,6 +166,7 @@ const (
 	AttrIndex    = "index"   // Loop index variable name (Phase 4)
 	AttrIn       = "in"      // Loop collection path (Phase 4)
 	AttrLimit    = "limit"   // Loop iteration limit (Phase 4)
+	AttrValue    = "value"   // Case value for switch/case (Phase 5)
 )
 
 // Boolean attribute values
@@ -329,4 +337,30 @@ const (
 const (
 	ForMapKeyField   = "key"
 	ForMapValueField = "value"
+)
+
+// Error messages for switch/case (Phase 5)
+const (
+	ErrMsgSwitchMissingEval      = "missing required 'eval' attribute for switch"
+	ErrMsgSwitchMissingValue     = "case requires 'value' or 'eval' attribute"
+	ErrMsgSwitchNotClosed        = "switch block not closed"
+	ErrMsgSwitchCaseNotClosed    = "case block not closed"
+	ErrMsgSwitchDefaultNotLast   = "default case must be last in switch"
+	ErrMsgSwitchDuplicateDefault = "only one default case allowed in switch"
+	ErrMsgSwitchInvalidCaseTag   = "unexpected tag inside switch block"
+)
+
+// Log messages for switch/case operations (Phase 5)
+const (
+	LogMsgSwitchEval    = "evaluating switch expression"
+	LogMsgSwitchCase    = "evaluating switch case"
+	LogMsgCaseMatch     = "switch case matched"
+	LogMsgCaseDefault   = "switch default case selected"
+	LogMsgSwitchNoMatch = "no switch case matched"
+)
+
+// Log field names for switch/case (Phase 5)
+const (
+	LogFieldCaseValue = "case_value"
+	LogFieldCaseEval  = "case_eval"
 )

@@ -135,6 +135,9 @@ func (e *Engine) validateNode(node internal.Node, result *ValidationResult) {
 
 	case *internal.ForNode:
 		e.validateForNode(n, result)
+
+	case *internal.SwitchNode:
+		e.validateSwitchNode(n, result)
 	}
 }
 
@@ -240,6 +243,40 @@ func (e *Engine) validateForNode(forNode *internal.ForNode, result *ValidationRe
 
 	// Validate children recursively
 	e.validateNodes(forNode.Children, result)
+}
+
+// validateSwitchNode validates a switch/case node.
+func (e *Engine) validateSwitchNode(switchNode *internal.SwitchNode, result *ValidationResult) {
+	// Check required expression
+	if switchNode.Expression == "" {
+		result.issues = append(result.issues, ValidationIssue{
+			Severity: SeverityError,
+			Message:  ErrMsgSwitchMissingEval,
+			Position: e.internalPosToPublic(switchNode.Pos()),
+			TagName:  TagNameSwitch,
+		})
+	}
+
+	// Validate each case
+	for _, caseNode := range switchNode.Cases {
+		// Check that case has either value or eval
+		if caseNode.Value == "" && caseNode.Eval == "" {
+			result.issues = append(result.issues, ValidationIssue{
+				Severity: SeverityError,
+				Message:  ErrMsgSwitchMissingValue,
+				Position: e.internalPosToPublic(caseNode.Pos),
+				TagName:  TagNameCase,
+			})
+		}
+
+		// Validate case children recursively
+		e.validateNodes(caseNode.Children, result)
+	}
+
+	// Validate default case if present
+	if switchNode.Default != nil {
+		e.validateNodes(switchNode.Default.Children, result)
+	}
 }
 
 // internalPosToPublic converts internal Position to public Position.

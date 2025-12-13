@@ -2121,3 +2121,552 @@ func TestE2E_ForLoop_ComplexTemplate(t *testing.T) {
 	expected := `<ul><li>0. Alice - Active</li><li>1. Bob - Inactive</li><li>2. Carol - Active</li></ul>`
 	assert.Equal(t, expected, result)
 }
+
+// ============================================================================
+// Phase 5: Switch/Case Tests
+// ============================================================================
+
+func TestE2E_Switch_BasicStringValue(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="status"~}{~prompty.case value="active"~}Active User{~/prompty.case~}{~prompty.case value="inactive"~}Inactive User{~/prompty.case~}{~/prompty.switch~}`,
+		map[string]any{"status": "active"},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Active User", result)
+}
+
+func TestE2E_Switch_SecondCaseMatch(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="status"~}{~prompty.case value="active"~}Active{~/prompty.case~}{~prompty.case value="inactive"~}Inactive{~/prompty.case~}{~/prompty.switch~}`,
+		map[string]any{"status": "inactive"},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Inactive", result)
+}
+
+func TestE2E_Switch_WithDefault(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="status"~}{~prompty.case value="active"~}Active{~/prompty.case~}{~prompty.casedefault~}Unknown{~/prompty.casedefault~}{~/prompty.switch~}`,
+		map[string]any{"status": "other"},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Unknown", result)
+}
+
+func TestE2E_Switch_DefaultNotUsedWhenMatch(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="status"~}{~prompty.case value="active"~}Active{~/prompty.case~}{~prompty.casedefault~}Default{~/prompty.casedefault~}{~/prompty.switch~}`,
+		map[string]any{"status": "active"},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Active", result)
+}
+
+func TestE2E_Switch_NoMatchNoDefault(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`Before{~prompty.switch eval="status"~}{~prompty.case value="active"~}Active{~/prompty.case~}{~/prompty.switch~}After`,
+		map[string]any{"status": "unknown"},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "BeforeAfter", result)
+}
+
+func TestE2E_Switch_IntegerValue(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="level"~}{~prompty.case value="1"~}Low{~/prompty.case~}{~prompty.case value="2"~}Medium{~/prompty.case~}{~prompty.case value="3"~}High{~/prompty.case~}{~/prompty.switch~}`,
+		map[string]any{"level": 2},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Medium", result)
+}
+
+func TestE2E_Switch_BooleanValue(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="enabled"~}{~prompty.case value="true"~}ON{~/prompty.case~}{~prompty.case value="false"~}OFF{~/prompty.case~}{~/prompty.switch~}`,
+		map[string]any{"enabled": true},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "ON", result)
+}
+
+func TestE2E_Switch_NestedPath(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="user.role"~}{~prompty.case value="admin"~}Admin View{~/prompty.case~}{~prompty.case value="user"~}User View{~/prompty.case~}{~/prompty.switch~}`,
+		map[string]any{
+			"user": map[string]any{"role": "admin"},
+		},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Admin View", result)
+}
+
+func TestE2E_Switch_CaseWithEval(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="score"~}{~prompty.case eval="score >= 90"~}A{~/prompty.case~}{~prompty.case eval="score >= 80"~}B{~/prompty.case~}{~prompty.case eval="score >= 70"~}C{~/prompty.case~}{~prompty.casedefault~}F{~/prompty.casedefault~}{~/prompty.switch~}`,
+		map[string]any{"score": 85},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "B", result)
+}
+
+func TestE2E_Switch_CaseWithEvalFirstMatch(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// First matching case wins (no fall-through)
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="x"~}{~prompty.case eval="x > 0"~}Positive{~/prompty.case~}{~prompty.case eval="x > 5"~}Very Positive{~/prompty.case~}{~/prompty.switch~}`,
+		map[string]any{"x": 10},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Positive", result)
+}
+
+func TestE2E_Switch_WithVariables(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="type"~}{~prompty.case value="greeting"~}Hello, {~prompty.var name="name" /~}!{~/prompty.case~}{~prompty.case value="farewell"~}Goodbye, {~prompty.var name="name" /~}!{~/prompty.case~}{~/prompty.switch~}`,
+		map[string]any{"type": "greeting", "name": "Alice"},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello, Alice!", result)
+}
+
+func TestE2E_Switch_WithConditional(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="status"~}{~prompty.case value="active"~}{~prompty.if eval="premium"~}Premium Active{~prompty.else~}Basic Active{~/prompty.if~}{~/prompty.case~}{~/prompty.switch~}`,
+		map[string]any{"status": "active", "premium": true},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Premium Active", result)
+}
+
+func TestE2E_Switch_MultipleCases(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="day"~}{~prompty.case value="mon"~}Monday{~/prompty.case~}{~prompty.case value="tue"~}Tuesday{~/prompty.case~}{~prompty.case value="wed"~}Wednesday{~/prompty.case~}{~prompty.case value="thu"~}Thursday{~/prompty.case~}{~prompty.case value="fri"~}Friday{~/prompty.case~}{~prompty.casedefault~}Weekend{~/prompty.casedefault~}{~/prompty.switch~}`,
+		map[string]any{"day": "wed"},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Wednesday", result)
+}
+
+func TestE2E_Switch_WithForLoop(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="n" in="numbers"~}{~prompty.switch eval="n"~}{~prompty.case value="1"~}one{~/prompty.case~}{~prompty.case value="2"~}two{~/prompty.case~}{~prompty.casedefault~}other{~/prompty.casedefault~}{~/prompty.switch~} {~/prompty.for~}`,
+		map[string]any{"numbers": []int{1, 2, 3}},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "one two other ", result)
+}
+
+func TestE2E_Switch_NestedSwitch(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="category"~}{~prompty.case value="color"~}{~prompty.switch eval="value"~}{~prompty.case value="red"~}Red Color{~/prompty.case~}{~prompty.case value="blue"~}Blue Color{~/prompty.case~}{~/prompty.switch~}{~/prompty.case~}{~prompty.casedefault~}Unknown{~/prompty.casedefault~}{~/prompty.switch~}`,
+		map[string]any{"category": "color", "value": "blue"},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Blue Color", result)
+}
+
+func TestE2E_Switch_ExpressionEvaluation(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// The switch expression can be any expression, not just a variable
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="len(items)"~}{~prompty.case value="0"~}Empty{~/prompty.case~}{~prompty.case value="1"~}Single{~/prompty.case~}{~prompty.casedefault~}Multiple{~/prompty.casedefault~}{~/prompty.switch~}`,
+		map[string]any{"items": []string{"a", "b", "c"}},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Multiple", result)
+}
+
+func TestE2E_Switch_ParseOnceExecuteMany(t *testing.T) {
+	engine := prompty.MustNew()
+
+	tmpl, err := engine.Parse(`{~prompty.switch eval="status"~}{~prompty.case value="a"~}A{~/prompty.case~}{~prompty.case value="b"~}B{~/prompty.case~}{~/prompty.switch~}`)
+	require.NoError(t, err)
+
+	result1, err := tmpl.Execute(context.Background(), map[string]any{"status": "a"})
+	require.NoError(t, err)
+	assert.Equal(t, "A", result1)
+
+	result2, err := tmpl.Execute(context.Background(), map[string]any{"status": "b"})
+	require.NoError(t, err)
+	assert.Equal(t, "B", result2)
+}
+
+func TestE2E_Switch_Error_MissingEval(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.switch~}{~prompty.case value="x"~}X{~/prompty.case~}{~/prompty.switch~}`,
+		map[string]any{},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "eval")
+}
+
+func TestE2E_Switch_Error_CaseMissingValueAndEval(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="status"~}{~prompty.case~}Content{~/prompty.case~}{~/prompty.switch~}`,
+		map[string]any{"status": "x"},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "value")
+}
+
+func TestE2E_Switch_Error_UnclosedSwitch(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="status"~}{~prompty.case value="x"~}X{~/prompty.case~}`,
+		map[string]any{"status": "x"},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not closed")
+}
+
+func TestE2E_Switch_Error_UnclosedCase(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="status"~}{~prompty.case value="x"~}X{~/prompty.switch~}`,
+		map[string]any{"status": "x"},
+	)
+
+	require.Error(t, err)
+}
+
+func TestE2E_Switch_Error_DefaultNotLast(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="status"~}{~prompty.casedefault~}Default{~/prompty.casedefault~}{~prompty.case value="x"~}X{~/prompty.case~}{~/prompty.switch~}`,
+		map[string]any{"status": "x"},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "last")
+}
+
+func TestE2E_Switch_Error_DuplicateDefault(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="status"~}{~prompty.casedefault~}Default1{~/prompty.casedefault~}{~prompty.casedefault~}Default2{~/prompty.casedefault~}{~/prompty.switch~}`,
+		map[string]any{"status": "x"},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "one default")
+}
+
+func TestE2E_Switch_Validation_Valid(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Validate(`{~prompty.switch eval="status"~}{~prompty.case value="a"~}A{~/prompty.case~}{~prompty.casedefault~}Default{~/prompty.casedefault~}{~/prompty.switch~}`)
+
+	require.NoError(t, err)
+	assert.True(t, result.IsValid())
+}
+
+func TestE2E_Switch_Validation_NestedContent(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Validate(`{~prompty.switch eval="type"~}
+		{~prompty.case value="user"~}
+			{~prompty.var name="user.name" /~}
+		{~/prompty.case~}
+		{~prompty.casedefault~}
+			Unknown
+		{~/prompty.casedefault~}
+	{~/prompty.switch~}`)
+
+	require.NoError(t, err)
+	assert.True(t, result.IsValid())
+}
+
+func TestE2E_Switch_ComplexTemplate(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `User: {~prompty.var name="user.name" /~}
+Status: {~prompty.switch eval="user.status"~}{~prompty.case value="active"~}Active{~/prompty.case~}{~prompty.case value="pending"~}Pending Approval{~/prompty.case~}{~prompty.case value="suspended"~}Suspended{~/prompty.case~}{~prompty.casedefault~}Unknown{~/prompty.casedefault~}{~/prompty.switch~}
+Role: {~prompty.switch eval="user.role"~}{~prompty.case value="admin"~}Administrator{~/prompty.case~}{~prompty.case value="mod"~}Moderator{~/prompty.case~}{~prompty.casedefault~}Member{~/prompty.casedefault~}{~/prompty.switch~}`
+
+	result, err := engine.Execute(context.Background(), template, map[string]any{
+		"user": map[string]any{
+			"name":   "Alice",
+			"status": "active",
+			"role":   "admin",
+		},
+	})
+
+	require.NoError(t, err)
+	expected := `User: Alice
+Status: Active
+Role: Administrator`
+	assert.Equal(t, expected, result)
+}
+
+// ============================================================================
+// Phase 5: Custom Function Tests
+// ============================================================================
+
+func TestE2E_CustomFunc_Register(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Register a simple double function
+	err := engine.RegisterFunc(&prompty.Func{
+		Name:    "double",
+		MinArgs: 1,
+		MaxArgs: 1,
+		Fn: func(args []any) (any, error) {
+			if n, ok := args[0].(int); ok {
+				return n * 2, nil
+			}
+			if n, ok := args[0].(float64); ok {
+				return n * 2, nil
+			}
+			return nil, errors.New("expected numeric argument")
+		},
+	})
+
+	require.NoError(t, err)
+	assert.True(t, engine.HasFunc("double"))
+}
+
+func TestE2E_CustomFunc_UseInConditional(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Register double function
+	engine.MustRegisterFunc(&prompty.Func{
+		Name:    "double",
+		MinArgs: 1,
+		MaxArgs: 1,
+		Fn: func(args []any) (any, error) {
+			if n, ok := args[0].(int); ok {
+				return n * 2, nil
+			}
+			return nil, errors.New("expected int")
+		},
+	})
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.if eval="double(x) > 10"~}Big{~prompty.else~}Small{~/prompty.if~}`,
+		map[string]any{"x": 6},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Big", result)
+}
+
+func TestE2E_CustomFunc_UseInSwitch(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Register a grading function
+	engine.MustRegisterFunc(&prompty.Func{
+		Name:    "grade",
+		MinArgs: 1,
+		MaxArgs: 1,
+		Fn: func(args []any) (any, error) {
+			var score int
+			switch v := args[0].(type) {
+			case int:
+				score = v
+			case float64:
+				score = int(v)
+			default:
+				return "F", nil
+			}
+			if score >= 90 {
+				return "A", nil
+			} else if score >= 80 {
+				return "B", nil
+			} else if score >= 70 {
+				return "C", nil
+			}
+			return "F", nil
+		},
+	})
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.switch eval="grade(score)"~}{~prompty.case value="A"~}Excellent{~/prompty.case~}{~prompty.case value="B"~}Good{~/prompty.case~}{~prompty.casedefault~}Needs Improvement{~/prompty.casedefault~}{~/prompty.switch~}`,
+		map[string]any{"score": 85},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Good", result)
+}
+
+func TestE2E_CustomFunc_Variadic(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Register a sum function with variadic args
+	engine.MustRegisterFunc(&prompty.Func{
+		Name:    "sum",
+		MinArgs: 1,
+		MaxArgs: -1, // Variadic
+		Fn: func(args []any) (any, error) {
+			total := 0
+			for _, arg := range args {
+				if n, ok := arg.(int); ok {
+					total += n
+				}
+			}
+			return total, nil
+		},
+	})
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.if eval="sum(a, b, c) > 10"~}Large{~prompty.else~}Small{~/prompty.if~}`,
+		map[string]any{"a": 3, "b": 4, "c": 5},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Large", result)
+}
+
+func TestE2E_CustomFunc_ListFuncs(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Built-in functions should already be registered
+	initialCount := engine.FuncCount()
+	assert.Greater(t, initialCount, 0)
+
+	// Register a custom function
+	engine.MustRegisterFunc(&prompty.Func{
+		Name:    "myCustomFunc",
+		MinArgs: 0,
+		MaxArgs: 0,
+		Fn:      func(args []any) (any, error) { return "custom", nil },
+	})
+
+	// Count should increase
+	assert.Equal(t, initialCount+1, engine.FuncCount())
+
+	// Function should be in list
+	funcs := engine.ListFuncs()
+	found := false
+	for _, name := range funcs {
+		if name == "myCustomFunc" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "custom function should be in list")
+}
+
+func TestE2E_CustomFunc_Error_NilFunc(t *testing.T) {
+	engine := prompty.MustNew()
+
+	err := engine.RegisterFunc(nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nil")
+}
+
+func TestE2E_CustomFunc_Error_EmptyName(t *testing.T) {
+	engine := prompty.MustNew()
+
+	err := engine.RegisterFunc(&prompty.Func{
+		Name:    "",
+		MinArgs: 0,
+		MaxArgs: 0,
+		Fn:      func(args []any) (any, error) { return nil, nil },
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty")
+}
+
+func TestE2E_CustomFunc_Error_Duplicate(t *testing.T) {
+	engine := prompty.MustNew()
+
+	f := &prompty.Func{
+		Name:    "myFunc",
+		MinArgs: 0,
+		MaxArgs: 0,
+		Fn:      func(args []any) (any, error) { return nil, nil },
+	}
+
+	// First registration should succeed
+	err := engine.RegisterFunc(f)
+	require.NoError(t, err)
+
+	// Second registration with same name should fail
+	err = engine.RegisterFunc(f)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already")
+}
+
+func TestE2E_CustomFunc_CombinedWithBuiltin(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Register a custom function
+	engine.MustRegisterFunc(&prompty.Func{
+		Name:    "triple",
+		MinArgs: 1,
+		MaxArgs: 1,
+		Fn: func(args []any) (any, error) {
+			if n, ok := args[0].(int); ok {
+				return n * 3, nil
+			}
+			return nil, errors.New("expected int")
+		},
+	})
+
+	// Use both built-in (len) and custom (triple) in same expression
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.if eval="len(items) > 0 && triple(x) > 10"~}Yes{~prompty.else~}No{~/prompty.if~}`,
+		map[string]any{"items": []string{"a", "b"}, "x": 5},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Yes", result)
+}

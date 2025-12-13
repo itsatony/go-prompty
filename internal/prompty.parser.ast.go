@@ -325,3 +325,62 @@ func NewForNode(itemVar, indexVar, source string, limit int, children []Node, po
 		Children: children,
 	}
 }
+
+// SwitchNode represents a switch/case block (Phase 5)
+type SwitchNode struct {
+	pos        Position
+	Expression string       // The expression to switch on
+	Cases      []SwitchCase // Case branches
+	Default    *SwitchCase  // Optional default case (nil if none)
+}
+
+// SwitchCase represents a single case in a switch
+type SwitchCase struct {
+	Value     string   // For value comparison (mutually exclusive with Eval)
+	Eval      string   // For expression evaluation (mutually exclusive with Value)
+	Children  []Node   // Content to render if matched
+	IsDefault bool     // True for the default case
+	Pos       Position // Position of this case
+}
+
+// Type returns NodeTypeSwitch
+func (n *SwitchNode) Type() NodeType {
+	return NodeTypeSwitch
+}
+
+// Pos returns the source position
+func (n *SwitchNode) Pos() Position {
+	return n.pos
+}
+
+// String returns a string representation
+func (n *SwitchNode) String() string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("SwitchNode{expr=%s, cases=%d", n.Expression, len(n.Cases)))
+	if n.Default != nil {
+		sb.WriteString(", hasDefault=true")
+	}
+	sb.WriteString(fmt.Sprintf(" @ %s}", n.pos))
+	return sb.String()
+}
+
+// NewSwitchNode creates a new switch node
+func NewSwitchNode(expr string, cases []SwitchCase, defaultCase *SwitchCase, pos Position) *SwitchNode {
+	return &SwitchNode{
+		pos:        pos,
+		Expression: expr,
+		Cases:      cases,
+		Default:    defaultCase,
+	}
+}
+
+// NewSwitchCase creates a new switch case
+func NewSwitchCase(value, eval string, children []Node, isDefault bool, pos Position) SwitchCase {
+	return SwitchCase{
+		Value:     value,
+		Eval:      eval,
+		Children:  children,
+		IsDefault: isDefault,
+		Pos:       pos,
+	}
+}

@@ -47,6 +47,31 @@ func NewExecutor(registry *Registry, config ExecutorConfig, logger *zap.Logger) 
 	}
 }
 
+// RegisterFunc registers a custom function for use in expressions.
+func (e *Executor) RegisterFunc(f *Func) error {
+	return e.funcs.Register(f)
+}
+
+// MustRegisterFunc registers a custom function and panics on error.
+func (e *Executor) MustRegisterFunc(f *Func) {
+	e.funcs.MustRegister(f)
+}
+
+// HasFunc checks if a function is registered with the given name.
+func (e *Executor) HasFunc(name string) bool {
+	return e.funcs.Has(name)
+}
+
+// ListFuncs returns all registered function names.
+func (e *Executor) ListFuncs() []string {
+	return e.funcs.List()
+}
+
+// FuncCount returns the number of registered functions.
+func (e *Executor) FuncCount() int {
+	return e.funcs.Count()
+}
+
 // Execute processes the AST and returns the rendered output.
 func (e *Executor) Execute(ctx context.Context, root *RootNode, execCtx ContextAccessor) (string, error) {
 	e.logger.Debug(LogMsgExecutorStart)
@@ -94,6 +119,9 @@ func (e *Executor) executeNode(ctx context.Context, node Node, execCtx ContextAc
 
 	case *ForNode:
 		return e.executeFor(ctx, n, execCtx, depth)
+
+	case *SwitchNode:
+		return e.executeSwitch(ctx, n, execCtx, depth)
 
 	default:
 		return "", NewExecutorError(ErrMsgUnknownNodeType, "", node.Pos())
@@ -199,6 +227,84 @@ func (e *Executor) executeFor(ctx context.Context, forNode *ForNode, execCtx Con
 
 	e.logger.Debug(LogMsgForEnd, zap.Int(LogFieldIteration, len(items)))
 	return sb.String(), nil
+}
+
+// executeSwitch processes a switch/case node and returns its output.
+func (e *Executor) executeSwitch(ctx context.Context, switchNode *SwitchNode, execCtx ContextAccessor, depth int) (string, error) {
+	e.logger.Debug(LogMsgSwitchEval,
+		zap.String(LogFieldExpression, switchNode.Expression))
+
+	// Evaluate the switch expression to get the value to compare against
+	switchValue, err := EvaluateExpression(switchNode.Expression, e.funcs, execCtx)
+	if err != nil {
+		return "", NewExecutorErrorWithCause(ErrMsgCondExprFailed, TagNameSwitch, switchNode.Pos(), err)
+	}
+
+	// Convert switch value to string for comparison
+	switchValueStr := toSwitchString(switchValue)
+
+	// Try each case in order
+	for _, caseNode := range switchNode.Cases {
+		e.logger.Debug(LogMsgSwitchCase,
+			zap.String(LogFieldCaseValue, caseNode.Value),
+			zap.String(LogFieldCaseEval, caseNode.Eval))
+
+		matched := false
+
+		if caseNode.Value != "" {
+			// Value comparison - compare switch value string to case value
+			matched = switchValueStr == caseNode.Value
+		} else if caseNode.Eval != "" {
+			// Boolean expression evaluation
+			result, evalErr := e.evaluateCondition(caseNode.Eval, execCtx)
+			if evalErr != nil {
+				return "", NewExecutorErrorWithCause(ErrMsgCondExprFailed, TagNameCase, caseNode.Pos, evalErr)
+			}
+			matched = result
+		}
+
+		if matched {
+			e.logger.Debug(LogMsgCaseMatch,
+				zap.String(LogFieldCaseValue, caseNode.Value),
+				zap.String(LogFieldCaseEval, caseNode.Eval))
+			return e.executeNodes(ctx, caseNode.Children, execCtx, depth+1)
+		}
+	}
+
+	// No case matched - check for default
+	if switchNode.Default != nil {
+		e.logger.Debug(LogMsgCaseDefault)
+		return e.executeNodes(ctx, switchNode.Default.Children, execCtx, depth+1)
+	}
+
+	// No match and no default - return empty string
+	e.logger.Debug(LogMsgSwitchNoMatch,
+		zap.String(LogFieldExpression, switchNode.Expression))
+	return "", nil
+}
+
+// toSwitchString converts a value to its string representation for switch comparison.
+func toSwitchString(val any) string {
+	if val == nil {
+		return ""
+	}
+	switch v := val.(type) {
+	case string:
+		return v
+	case bool:
+		if v {
+			return AttrValueTrue
+		}
+		return AttrValueFalse
+	case int:
+		return fmt.Sprintf("%d", v)
+	case int64:
+		return fmt.Sprintf("%d", v)
+	case float64:
+		return fmt.Sprintf("%g", v)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 // toIterableSlice converts a value to a slice of any for iteration.

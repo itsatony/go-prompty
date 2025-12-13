@@ -167,6 +167,11 @@ func (p *Parser) parseBlockTag(tagName string, attrs Attributes, pos Position, o
 		return p.parseFor(attrs, pos)
 	}
 
+	// Special handling for switch/case (Phase 5)
+	if tagName == TagNameSwitch {
+		return p.parseSwitch(attrs, pos)
+	}
+
 	// Parse children
 	children, err := p.parseNodes()
 	if err != nil {
@@ -435,6 +440,185 @@ func (p *Parser) parseForBody() ([]Node, error) {
 
 // newForError creates a for-loop specific error
 func (p *Parser) newForError(message string, pos Position) error {
+	return &ParserError{
+		Message:  message,
+		Position: pos,
+	}
+}
+
+// parseSwitch parses a switch/case block (Phase 5)
+func (p *Parser) parseSwitch(attrs Attributes, pos Position) (*SwitchNode, error) {
+	// Get required 'eval' attribute for the switch expression
+	expression, ok := attrs.Get(AttrEval)
+	if !ok || expression == "" {
+		return nil, p.newSwitchError(ErrMsgSwitchMissingEval, pos)
+	}
+
+	var cases []SwitchCase
+	var defaultCase *SwitchCase
+
+	// Parse cases until we hit the closing switch tag
+	for !p.isAtEnd() {
+		tok := p.current()
+
+		// Check for closing {~/prompty.switch~}
+		if tok.Type == TokenTypeBlockClose {
+			if p.pos+1 < len(p.tokens) && p.tokens[p.pos+1].Type == TokenTypeTagName {
+				nextName := p.tokens[p.pos+1].Value
+				if nextName == TagNameSwitch {
+					// Consume closing sequence
+					p.advance() // BLOCK_CLOSE
+					p.advance() // TAG_NAME (prompty.switch)
+
+					closeTok := p.current()
+					if closeTok.Type != TokenTypeCloseTag {
+						return nil, p.newExpectedTokenError(TokenTypeCloseTag, closeTok)
+					}
+					p.advance() // CLOSE_TAG
+
+					return NewSwitchNode(expression, cases, defaultCase, pos), nil
+				}
+			}
+		}
+
+		// Skip whitespace text nodes between cases
+		if tok.Type == TokenTypeText {
+			// Only allow whitespace text between cases
+			p.advance()
+			continue
+		}
+
+		// Expect an open tag for case or casedefault
+		if tok.Type != TokenTypeOpenTag {
+			return nil, p.newSwitchError(ErrMsgSwitchInvalidCaseTag, tok.Position)
+		}
+
+		// Parse the case/casedefault tag
+		caseNode, isDefault, err := p.parseSwitchCase()
+		if err != nil {
+			return nil, err
+		}
+
+		if isDefault {
+			// Check for duplicate default
+			if defaultCase != nil {
+				return nil, p.newSwitchError(ErrMsgSwitchDuplicateDefault, caseNode.Pos)
+			}
+			defaultCase = &caseNode
+		} else {
+			// Check that default wasn't already defined (must be last)
+			if defaultCase != nil {
+				return nil, p.newSwitchError(ErrMsgSwitchDefaultNotLast, caseNode.Pos)
+			}
+			cases = append(cases, caseNode)
+		}
+	}
+
+	// Reached EOF without finding closing switch tag
+	return nil, p.newSwitchError(ErrMsgSwitchNotClosed, pos)
+}
+
+// parseSwitchCase parses a single case or casedefault within a switch block
+// Returns: case node, isDefault flag, error
+func (p *Parser) parseSwitchCase() (SwitchCase, bool, error) {
+	openTok := p.advance() // consume OPEN_TAG
+	casePos := openTok.Position
+
+	// Get tag name
+	nameTok := p.current()
+	if nameTok.Type != TokenTypeTagName {
+		return SwitchCase{}, false, p.newExpectedTokenError(TokenTypeTagName, nameTok)
+	}
+	tagName := nameTok.Value
+	p.advance() // consume TAG_NAME
+
+	// Validate it's a case or casedefault tag
+	if tagName != TagNameCase && tagName != TagNameCaseDefault {
+		return SwitchCase{}, false, p.newSwitchError(ErrMsgSwitchInvalidCaseTag, casePos)
+	}
+
+	isDefault := tagName == TagNameCaseDefault
+
+	// Parse attributes
+	attrs, err := p.parseAttributes()
+	if err != nil {
+		return SwitchCase{}, false, err
+	}
+
+	// Validate attributes based on case type
+	var value, eval string
+	if !isDefault {
+		// Regular case needs either value or eval
+		value, _ = attrs.Get(AttrValue)
+		eval, _ = attrs.Get(AttrEval)
+		if value == "" && eval == "" {
+			return SwitchCase{}, false, p.newSwitchError(ErrMsgSwitchMissingValue, casePos)
+		}
+	}
+
+	// Consume the closing tag of the case opener
+	closeTok := p.current()
+	if closeTok.Type != TokenTypeCloseTag {
+		return SwitchCase{}, false, p.newExpectedTokenError(TokenTypeCloseTag, closeTok)
+	}
+	p.advance() // consume CLOSE_TAG
+
+	// Parse the case body until the closing tag
+	children, err := p.parseSwitchCaseBody(tagName)
+	if err != nil {
+		return SwitchCase{}, false, err
+	}
+
+	return NewSwitchCase(value, eval, children, isDefault, casePos), isDefault, nil
+}
+
+// parseSwitchCaseBody parses the body of a case until its closing tag
+func (p *Parser) parseSwitchCaseBody(closingTag string) ([]Node, error) {
+	var children []Node
+
+	for !p.isAtEnd() {
+		tok := p.current()
+
+		// Check for closing {~/prompty.case~} or {~/prompty.casedefault~}
+		if tok.Type == TokenTypeBlockClose {
+			if p.pos+1 < len(p.tokens) && p.tokens[p.pos+1].Type == TokenTypeTagName {
+				nextName := p.tokens[p.pos+1].Value
+				if nextName == closingTag {
+					// Consume closing sequence
+					p.advance() // BLOCK_CLOSE
+					p.advance() // TAG_NAME
+
+					closeTok := p.current()
+					if closeTok.Type != TokenTypeCloseTag {
+						return nil, p.newExpectedTokenError(TokenTypeCloseTag, closeTok)
+					}
+					p.advance() // CLOSE_TAG
+
+					return children, nil
+				}
+				// If we hit a different closing tag (like {~/prompty.switch~}), the case was never closed
+				if nextName == TagNameSwitch {
+					return nil, p.newSwitchError(ErrMsgSwitchCaseNotClosed, tok.Position)
+				}
+			}
+		}
+
+		// Parse a normal node
+		node, err := p.parseNode()
+		if err != nil {
+			return nil, err
+		}
+		if node != nil {
+			children = append(children, node)
+		}
+	}
+
+	// Reached EOF without finding closing tag
+	return nil, p.newSwitchError(ErrMsgSwitchCaseNotClosed, Position{})
+}
+
+// newSwitchError creates a switch-specific error
+func (p *Parser) newSwitchError(message string, pos Position) error {
 	return &ParserError{
 		Message:  message,
 		Position: pos,
