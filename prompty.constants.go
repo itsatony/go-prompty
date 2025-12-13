@@ -126,6 +126,9 @@ const (
 	MetaKeyCurrentDepth = "current_depth"
 	MetaKeyMaxDepth     = "max_depth"
 	MetaKeyFuncName     = "func_name"
+	MetaKeyReason       = "reason"
+	MetaKeyFromType     = "from_type"
+	MetaKeyToType       = "to_type"
 )
 
 // Escape sequence constants

@@ -50,7 +50,7 @@ func WithErrorStrategy(strategy ErrorStrategy) Option {
 
 // WithMaxDepth sets the maximum nesting depth for templates.
 // Use 0 for unlimited depth.
-// Default: 100
+// Default: 10
 func WithMaxDepth(depth int) Option {
 	return func(c *engineConfig) {
 		c.maxDepth = depth

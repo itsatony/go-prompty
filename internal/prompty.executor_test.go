@@ -333,3 +333,146 @@ func (r *testErrorResolver) Resolve(ctx context.Context, execCtx interface{}, at
 func (r *testErrorResolver) Validate(attrs Attributes) error {
 	return nil
 }
+
+// Tests for Executor function wrappers
+func TestExecutor_RegisterFunc(t *testing.T) {
+	registry := NewRegistry(nil)
+	executor := NewExecutor(registry, DefaultExecutorConfig(), nil)
+
+	fn := &Func{
+		Name:    "testfunc",
+		MinArgs: 0,
+		MaxArgs: 0,
+		Fn:      func(args []any) (any, error) { return "test", nil },
+	}
+
+	err := executor.RegisterFunc(fn)
+	require.NoError(t, err)
+	assert.True(t, executor.HasFunc("testfunc"))
+}
+
+func TestExecutor_RegisterFunc_Duplicate(t *testing.T) {
+	registry := NewRegistry(nil)
+	executor := NewExecutor(registry, DefaultExecutorConfig(), nil)
+
+	fn := &Func{
+		Name:    "testfunc",
+		MinArgs: 0,
+		MaxArgs: 0,
+		Fn:      func(args []any) (any, error) { return "test", nil },
+	}
+
+	err := executor.RegisterFunc(fn)
+	require.NoError(t, err)
+
+	// Second registration should fail
+	err = executor.RegisterFunc(fn)
+	require.Error(t, err)
+}
+
+func TestExecutor_MustRegisterFunc(t *testing.T) {
+	registry := NewRegistry(nil)
+	executor := NewExecutor(registry, DefaultExecutorConfig(), nil)
+
+	fn := &Func{
+		Name:    "testfunc",
+		MinArgs: 0,
+		MaxArgs: 0,
+		Fn:      func(args []any) (any, error) { return "test", nil },
+	}
+
+	assert.NotPanics(t, func() {
+		executor.MustRegisterFunc(fn)
+	})
+	assert.True(t, executor.HasFunc("testfunc"))
+}
+
+func TestExecutor_MustRegisterFunc_Panic(t *testing.T) {
+	registry := NewRegistry(nil)
+	executor := NewExecutor(registry, DefaultExecutorConfig(), nil)
+
+	fn := &Func{
+		Name:    "testfunc",
+		MinArgs: 0,
+		MaxArgs: 0,
+		Fn:      func(args []any) (any, error) { return "test", nil },
+	}
+
+	executor.MustRegisterFunc(fn)
+
+	assert.Panics(t, func() {
+		executor.MustRegisterFunc(fn) // duplicate
+	})
+}
+
+func TestExecutor_HasFunc(t *testing.T) {
+	registry := NewRegistry(nil)
+	executor := NewExecutor(registry, DefaultExecutorConfig(), nil)
+
+	assert.False(t, executor.HasFunc("nonexistent"))
+
+	fn := &Func{
+		Name:    "exists",
+		MinArgs: 0,
+		MaxArgs: 0,
+		Fn:      func(args []any) (any, error) { return nil, nil },
+	}
+	executor.MustRegisterFunc(fn)
+
+	assert.True(t, executor.HasFunc("exists"))
+}
+
+func TestExecutor_ListFuncs(t *testing.T) {
+	registry := NewRegistry(nil)
+	executor := NewExecutor(registry, DefaultExecutorConfig(), nil)
+
+	executor.MustRegisterFunc(&Func{Name: "customfunc1", MinArgs: 0, MaxArgs: 0, Fn: func(args []any) (any, error) { return nil, nil }})
+	executor.MustRegisterFunc(&Func{Name: "customfunc2", MinArgs: 0, MaxArgs: 0, Fn: func(args []any) (any, error) { return nil, nil }})
+
+	funcs := executor.ListFuncs()
+	// Should have built-in functions plus custom ones
+	assert.True(t, len(funcs) > 2, "should have multiple functions")
+	assert.Contains(t, funcs, "customfunc1")
+	assert.Contains(t, funcs, "customfunc2")
+	// Verify some built-in functions are present
+	assert.Contains(t, funcs, "len")
+	assert.Contains(t, funcs, "upper")
+}
+
+func TestExecutor_FuncCount(t *testing.T) {
+	registry := NewRegistry(nil)
+	executor := NewExecutor(registry, DefaultExecutorConfig(), nil)
+
+	// Executor starts with built-in functions registered
+	initialCount := executor.FuncCount()
+	assert.True(t, initialCount > 0, "should have built-in functions")
+
+	executor.MustRegisterFunc(&Func{Name: "customfunc1", MinArgs: 0, MaxArgs: 0, Fn: func(args []any) (any, error) { return nil, nil }})
+	assert.Equal(t, initialCount+1, executor.FuncCount())
+
+	executor.MustRegisterFunc(&Func{Name: "customfunc2", MinArgs: 0, MaxArgs: 0, Fn: func(args []any) (any, error) { return nil, nil }})
+	assert.Equal(t, initialCount+2, executor.FuncCount())
+}
+
+func TestExecutorError_Unwrap(t *testing.T) {
+	cause := errors.New("root cause")
+	execErr := &ExecutorError{
+		Message:  "execution failed",
+		TagName:  "test.tag",
+		Position: Position{Line: 1, Column: 1},
+		Cause:    cause,
+	}
+
+	assert.Equal(t, cause, execErr.Unwrap())
+}
+
+func TestExecutorError_UnwrapNil(t *testing.T) {
+	execErr := &ExecutorError{
+		Message:  "execution failed",
+		TagName:  "test.tag",
+		Position: Position{Line: 1, Column: 1},
+		Cause:    nil,
+	}
+
+	assert.Nil(t, execErr.Unwrap())
+}

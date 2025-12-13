@@ -650,3 +650,371 @@ func TestBuiltinFunc_Coalesce(t *testing.T) {
 		assert.Nil(t, result)
 	})
 }
+
+// Additional tests for improved coverage
+
+// Test getLength with various types
+func TestGetLength_AllTypes(t *testing.T) {
+	r := NewFuncRegistry()
+	RegisterBuiltinFuncs(r)
+
+	tests := []struct {
+		name     string
+		input    any
+		expected int
+	}{
+		{"nil", nil, 0},
+		{"string", "hello", 5},
+		{"[]any", []any{1, 2, 3}, 3},
+		{"[]string", []string{"a", "b"}, 2},
+		{"[]int", []int{1, 2, 3, 4}, 4},
+		{"[]float64", []float64{1.1, 2.2}, 2},
+		{"map[string]any", map[string]any{"a": 1}, 1},
+		{"map[string]string", map[string]string{"a": "b", "c": "d"}, 2},
+		{"[]bool via reflection", []bool{true, false, true}, 3},
+		{"[3]int array via reflection", [3]int{1, 2, 3}, 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := r.Call("len", []any{tt.input})
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetLength_Error(t *testing.T) {
+	r := NewFuncRegistry()
+	RegisterBuiltinFuncs(r)
+
+	// Test with unsupported type (int is not a collection)
+	_, err := r.Call("len", []any{42})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), ErrMsgFuncExpectedSlice)
+}
+
+// Test toSlice via first/last functions
+func TestToSlice_ViaFirst(t *testing.T) {
+	r := NewFuncRegistry()
+	RegisterBuiltinFuncs(r)
+
+	tests := []struct {
+		name     string
+		input    any
+		expected any
+	}{
+		{"[]any", []any{"a", "b", "c"}, "a"},
+		{"[]string", []string{"x", "y", "z"}, "x"},
+		{"[]int", []int{10, 20, 30}, 10},
+		{"[]float64", []float64{1.1, 2.2, 3.3}, 1.1},
+		{"[]bool via reflection", []bool{true, false}, true},
+		{"nil", nil, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := r.Call("first", []any{tt.input})
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestToSlice_Error(t *testing.T) {
+	r := NewFuncRegistry()
+	RegisterBuiltinFuncs(r)
+
+	// Test with non-slice type
+	_, err := r.Call("first", []any{"not a slice"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), ErrMsgFuncExpectedSlice)
+}
+
+// Test anyToString with more types
+func TestAnyToString_AllTypes(t *testing.T) {
+	r := NewFuncRegistry()
+	RegisterBuiltinFuncs(r)
+
+	tests := []struct {
+		name     string
+		input    any
+		expected string
+	}{
+		{"nil", nil, ""},
+		{"string", "hello", "hello"},
+		{"int", 42, "42"},
+		{"int64", int64(123456789), "123456789"},
+		{"float64", 3.14159, "3.14159"},
+		{"bool true", true, "true"},
+		{"bool false", false, "false"},
+		{"slice (fallback)", []int{1, 2, 3}, "[1 2 3]"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := r.Call("toString", []any{tt.input})
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// Test anyToInt with more types
+func TestAnyToInt_AllTypes(t *testing.T) {
+	r := NewFuncRegistry()
+	RegisterBuiltinFuncs(r)
+
+	tests := []struct {
+		name     string
+		input    any
+		expected int
+	}{
+		{"nil", nil, 0},
+		{"int", 42, 42},
+		{"int64", int64(100), 100},
+		{"float64", 3.9, 3},
+		{"string valid", "123", 123},
+		{"bool true", true, 1},
+		{"bool false", false, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := r.Call("toInt", []any{tt.input})
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestAnyToInt_Errors(t *testing.T) {
+	r := NewFuncRegistry()
+	RegisterBuiltinFuncs(r)
+
+	tests := []struct {
+		name  string
+		input any
+	}{
+		{"invalid string", "not a number"},
+		{"slice", []int{1, 2, 3}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := r.Call("toInt", []any{tt.input})
+			require.Error(t, err)
+		})
+	}
+}
+
+// Test anyToFloat with more types
+func TestAnyToFloat_AllTypes(t *testing.T) {
+	r := NewFuncRegistry()
+	RegisterBuiltinFuncs(r)
+
+	tests := []struct {
+		name     string
+		input    any
+		expected float64
+	}{
+		{"nil", nil, 0},
+		{"float64", 3.14, 3.14},
+		{"int", 42, 42.0},
+		{"int64", int64(100), 100.0},
+		{"string valid", "3.14", 3.14},
+		{"bool true", true, 1.0},
+		{"bool false", false, 0.0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := r.Call("toFloat", []any{tt.input})
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestAnyToFloat_Errors(t *testing.T) {
+	r := NewFuncRegistry()
+	RegisterBuiltinFuncs(r)
+
+	tests := []struct {
+		name  string
+		input any
+	}{
+		{"invalid string", "not a number"},
+		{"slice", []int{1, 2, 3}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := r.Call("toFloat", []any{tt.input})
+			require.Error(t, err)
+		})
+	}
+}
+
+// Test isTruthy via toBool with more types
+func TestIsTruthy_AllTypes(t *testing.T) {
+	r := NewFuncRegistry()
+	RegisterBuiltinFuncs(r)
+
+	tests := []struct {
+		name     string
+		input    any
+		expected bool
+	}{
+		{"nil", nil, false},
+		{"bool true", true, true},
+		{"bool false", false, false},
+		{"empty string", "", false},
+		{"non-empty string", "hello", true},
+		{"zero int", 0, false},
+		{"positive int", 1, true},
+		{"negative int", -1, true},
+		{"zero int64", int64(0), false},
+		{"positive int64", int64(1), true},
+		{"zero float64", 0.0, false},
+		{"positive float64", 0.1, true},
+		{"empty []any", []any{}, false},
+		{"non-empty []any", []any{1}, true},
+		{"empty []string", []string{}, false},
+		{"non-empty []string", []string{"a"}, true},
+		{"empty map", map[string]any{}, false},
+		{"non-empty map", map[string]any{"a": 1}, true},
+		{"empty []bool via reflection", []bool{}, false},
+		{"non-empty []bool via reflection", []bool{true}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := r.Call("toBool", []any{tt.input})
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// Test isEmpty with more types
+func TestIsEmpty_AllTypes(t *testing.T) {
+	r := NewFuncRegistry()
+	RegisterBuiltinFuncs(r)
+
+	tests := []struct {
+		name     string
+		input    any
+		expected bool
+	}{
+		{"nil", nil, true},
+		{"empty string", "", true},
+		{"non-empty string", "hello", false},
+		{"empty []any", []any{}, true},
+		{"non-empty []any", []any{1}, false},
+		{"empty []string", []string{}, true},
+		{"non-empty []string", []string{"a"}, false},
+		{"empty map", map[string]any{}, true},
+		{"non-empty map", map[string]any{"a": 1}, false},
+		{"empty []bool via reflection", []bool{}, true},
+		{"non-empty []bool via reflection", []bool{true}, false},
+		{"int (not empty)", 42, false}, // int is not considered empty
+		{"zero (not empty)", 0, false}, // zero int is still not "empty"
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := r.Call("isEmpty", []any{tt.input})
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// Test NodeType.String()
+func TestNodeType_String(t *testing.T) {
+	tests := []struct {
+		nodeType NodeType
+		expected string
+	}{
+		{NodeTypeRoot, NodeTypeNameRoot},
+		{NodeTypeText, NodeTypeNameText},
+		{NodeTypeTag, NodeTypeNameTag},
+		{NodeTypeRaw, NodeTypeNameRaw},
+		{NodeTypeConditional, NodeTypeNameConditional},
+		{NodeTypeFor, NodeTypeNameFor},
+		{NodeTypeSwitch, NodeTypeNameSwitch},
+		{NodeType(99), NodeTypeNameRoot}, // unknown type defaults to ROOT
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.nodeType.String())
+		})
+	}
+}
+
+// Test internal ErrorStrategy.String()
+func TestErrorStrategy_String(t *testing.T) {
+	tests := []struct {
+		strategy ErrorStrategy
+		expected string
+	}{
+		{ErrorStrategyThrow, ErrorStrategyNameThrow},
+		{ErrorStrategyDefault, ErrorStrategyNameDefault},
+		{ErrorStrategyRemove, ErrorStrategyNameRemove},
+		{ErrorStrategyKeepRaw, ErrorStrategyNameKeepRaw},
+		{ErrorStrategyLog, ErrorStrategyNameLog},
+		{ErrorStrategy(99), ErrorStrategyNameThrow}, // unknown defaults to throw
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.strategy.String())
+		})
+	}
+}
+
+// Test ParseErrorStrategy
+func TestParseErrorStrategy(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected ErrorStrategy
+	}{
+		{ErrorStrategyNameThrow, ErrorStrategyThrow},
+		{ErrorStrategyNameDefault, ErrorStrategyDefault},
+		{ErrorStrategyNameRemove, ErrorStrategyRemove},
+		{ErrorStrategyNameKeepRaw, ErrorStrategyKeepRaw},
+		{ErrorStrategyNameLog, ErrorStrategyLog},
+		{"unknown", ErrorStrategyThrow}, // unknown defaults to throw
+		{"", ErrorStrategyThrow},        // empty defaults to throw
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, ParseErrorStrategy(tt.input))
+		})
+	}
+}
+
+// Test toString helper function (the one that returns bool)
+func TestToString_Helper(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected string
+		ok       bool
+	}{
+		{"nil", nil, "", true},
+		{"string", "hello", "hello", true},
+		{"int (not supported)", 42, "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := toString(tt.input)
+			assert.Equal(t, tt.ok, ok)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

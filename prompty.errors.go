@@ -203,7 +203,7 @@ func NewInvalidAttributeError(attrName string, value string, reason string) erro
 	return cuserr.NewValidationError(ErrCodeValidation, ErrMsgInvalidAttribute).
 		WithMetadata(MetaKeyAttribute, attrName).
 		WithMetadata(MetaKeyValue, value).
-		WithMetadata("reason", reason)
+		WithMetadata(MetaKeyReason, reason)
 }
 
 // NewResolverError creates an error for resolver failures
@@ -215,8 +215,8 @@ func NewResolverError(resolverName string, cause error) error {
 // NewTypeConversionError creates a type conversion error
 func NewTypeConversionError(fromType, toType string, value interface{}) error {
 	return cuserr.NewValidationError(ErrCodeExec, ErrMsgTypeConversion).
-		WithMetadata("from_type", fromType).
-		WithMetadata("to_type", toType).
+		WithMetadata(MetaKeyFromType, fromType).
+		WithMetadata(MetaKeyToType, toType).
 		WithMetadata(MetaKeyValue, fmt.Sprintf("%v", value))
 }
 

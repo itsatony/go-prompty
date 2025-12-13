@@ -134,6 +134,9 @@ const (
 	LogFieldTemplateName = "template_name"
 	LogFieldDepth        = "depth"
 	LogFieldBranch       = "branch"
+	LogFieldBranches     = "branches"
+	LogFieldIsElse       = "is_else"
+	LogFieldCondition    = "condition"
 	LogFieldExpression   = "expression"
 	LogFieldResult       = "result"
 )

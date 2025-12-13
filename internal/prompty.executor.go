@@ -130,12 +130,12 @@ func (e *Executor) executeNode(ctx context.Context, node Node, execCtx ContextAc
 
 // executeConditional processes a conditional node and returns its output.
 func (e *Executor) executeConditional(ctx context.Context, cond *ConditionalNode, execCtx ContextAccessor, depth int) (string, error) {
-	e.logger.Debug(LogMsgConditionEval, zap.Int("branches", len(cond.Branches)))
+	e.logger.Debug(LogMsgConditionEval, zap.Int(LogFieldBranches, len(cond.Branches)))
 
 	for i, branch := range cond.Branches {
 		// else branch - always execute if we reach it
 		if branch.IsElse {
-			e.logger.Debug(LogMsgBranchSelected, zap.Int(LogFieldBranch, i), zap.Bool("isElse", true))
+			e.logger.Debug(LogMsgBranchSelected, zap.Int(LogFieldBranch, i), zap.Bool(LogFieldIsElse, true))
 			return e.executeNodes(ctx, branch.Children, execCtx, depth+1)
 		}
 
@@ -146,7 +146,7 @@ func (e *Executor) executeConditional(ctx context.Context, cond *ConditionalNode
 		}
 
 		if result {
-			e.logger.Debug(LogMsgBranchSelected, zap.Int(LogFieldBranch, i), zap.String("condition", branch.Condition))
+			e.logger.Debug(LogMsgBranchSelected, zap.Int(LogFieldBranch, i), zap.String(LogFieldCondition, branch.Condition))
 			return e.executeNodes(ctx, branch.Children, execCtx, depth+1)
 		}
 	}
