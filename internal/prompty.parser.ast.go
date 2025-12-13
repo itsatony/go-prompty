@@ -1,0 +1,228 @@
+package internal
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+)
+
+// Node is the interface all AST nodes implement
+type Node interface {
+	// Type returns the node type identifier
+	Type() NodeType
+	// Position returns the source position of this node
+	Pos() Position
+	// String returns a human-readable representation
+	String() string
+}
+
+// RootNode is the top-level container for an AST
+type RootNode struct {
+	Children []Node
+}
+
+// Type returns NodeTypeRoot
+func (n *RootNode) Type() NodeType {
+	return NodeTypeRoot
+}
+
+// Pos returns a zero position (root has no specific position)
+func (n *RootNode) Pos() Position {
+	return Position{Offset: 0, Line: 1, Column: 1}
+}
+
+// String returns a string representation of the root node
+func (n *RootNode) String() string {
+	var sb strings.Builder
+	sb.WriteString("RootNode{\n")
+	for i, child := range n.Children {
+		sb.WriteString(fmt.Sprintf("  [%d] %s\n", i, child.String()))
+	}
+	sb.WriteString("}")
+	return sb.String()
+}
+
+// TextNode represents literal text content
+type TextNode struct {
+	pos     Position
+	Content string
+}
+
+// Type returns NodeTypeText
+func (n *TextNode) Type() NodeType {
+	return NodeTypeText
+}
+
+// Pos returns the source position
+func (n *TextNode) Pos() Position {
+	return n.pos
+}
+
+// String returns a string representation
+func (n *TextNode) String() string {
+	content := n.Content
+	if len(content) > 50 {
+		content = content[:47] + "..."
+	}
+	return fmt.Sprintf("TextNode{%q @ %s}", content, n.pos)
+}
+
+// NewTextNode creates a new text node
+func NewTextNode(content string, pos Position) *TextNode {
+	return &TextNode{
+		pos:     pos,
+		Content: content,
+	}
+}
+
+// TagNode represents a tag (self-closing or block)
+type TagNode struct {
+	pos        Position
+	Name       string     // Tag name (e.g., "prompty.var", "UserProfile")
+	Attributes Attributes // Tag attributes
+	Children   []Node     // Child nodes (nil for self-closing)
+	SelfClose  bool       // True for self-closing tags
+	RawContent string     // For raw blocks, the unparsed content
+}
+
+// Type returns NodeTypeTag or NodeTypeRaw depending on the tag
+func (n *TagNode) Type() NodeType {
+	if n.Name == TagNameRaw {
+		return NodeTypeRaw
+	}
+	return NodeTypeTag
+}
+
+// Pos returns the source position
+func (n *TagNode) Pos() Position {
+	return n.pos
+}
+
+// String returns a string representation
+func (n *TagNode) String() string {
+	var sb strings.Builder
+	if n.SelfClose {
+		sb.WriteString(fmt.Sprintf("TagNode{%s, self-close, attrs=%v @ %s}", n.Name, n.Attributes, n.pos))
+	} else {
+		sb.WriteString(fmt.Sprintf("TagNode{%s, block, attrs=%v, children=%d @ %s}", n.Name, n.Attributes, len(n.Children), n.pos))
+	}
+	return sb.String()
+}
+
+// IsBuiltin returns true if this is a built-in prompty tag
+func (n *TagNode) IsBuiltin() bool {
+	return strings.HasPrefix(n.Name, "prompty.")
+}
+
+// IsRaw returns true if this is a raw block tag
+func (n *TagNode) IsRaw() bool {
+	return n.Name == TagNameRaw
+}
+
+// NewSelfClosingTag creates a new self-closing tag node
+func NewSelfClosingTag(name string, attrs Attributes, pos Position) *TagNode {
+	return &TagNode{
+		pos:        pos,
+		Name:       name,
+		Attributes: attrs,
+		SelfClose:  true,
+	}
+}
+
+// NewBlockTag creates a new block tag node
+func NewBlockTag(name string, attrs Attributes, children []Node, pos Position) *TagNode {
+	return &TagNode{
+		pos:        pos,
+		Name:       name,
+		Attributes: attrs,
+		Children:   children,
+		SelfClose:  false,
+	}
+}
+
+// NewRawBlockTag creates a new raw block tag node with raw content
+func NewRawBlockTag(rawContent string, pos Position) *TagNode {
+	return &TagNode{
+		pos:        pos,
+		Name:       TagNameRaw,
+		Attributes: make(Attributes),
+		SelfClose:  false,
+		RawContent: rawContent,
+	}
+}
+
+// Attributes is a map of tag attribute key-value pairs
+type Attributes map[string]string
+
+// Get retrieves an attribute value, returning ok=false if not found
+func (a Attributes) Get(key string) (string, bool) {
+	if a == nil {
+		return "", false
+	}
+	val, ok := a[key]
+	return val, ok
+}
+
+// GetDefault retrieves an attribute value with a default fallback
+func (a Attributes) GetDefault(key, defaultVal string) string {
+	if a == nil {
+		return defaultVal
+	}
+	if val, ok := a[key]; ok {
+		return val
+	}
+	return defaultVal
+}
+
+// Has checks if an attribute exists
+func (a Attributes) Has(key string) bool {
+	if a == nil {
+		return false
+	}
+	_, ok := a[key]
+	return ok
+}
+
+// Keys returns all attribute keys in sorted order
+func (a Attributes) Keys() []string {
+	if a == nil {
+		return nil
+	}
+	keys := make([]string, 0, len(a))
+	for k := range a {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// Map returns a copy of the underlying map
+func (a Attributes) Map() map[string]string {
+	if a == nil {
+		return make(map[string]string)
+	}
+	result := make(map[string]string, len(a))
+	for k, v := range a {
+		result[k] = v
+	}
+	return result
+}
+
+// String returns a string representation of the attributes
+func (a Attributes) String() string {
+	if len(a) == 0 {
+		return "{}"
+	}
+	keys := a.Keys()
+	pairs := make([]string, 0, len(keys))
+	for _, k := range keys {
+		pairs = append(pairs, fmt.Sprintf("%s=%q", k, a[k]))
+	}
+	return "{" + strings.Join(pairs, ", ") + "}"
+}
+
+// Tag name constants for built-in tags (re-exported from constants for convenience)
+const (
+	TagNameVar = "prompty.var"
+	TagNameRaw = "prompty.raw"
+)
