@@ -267,7 +267,3 @@ func (a *resolverAdapter) Validate(attrs internal.Attributes) error {
 	return a.resolver.Validate(wrappedAttrs)
 }
 
-// Additional error messages
-const (
-	ErrMsgInvalidContextType = "invalid context type"
-)

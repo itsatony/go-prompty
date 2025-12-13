@@ -1,0 +1,106 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] - 2024-12-13
+
+### Added
+
+#### Phase 1: Core Templating Engine
+- Lexer with configurable delimiters (`{~...~}`)
+- Parser producing AST with support for self-closing and block tags
+- Executor with resolver dispatch and raw block handling
+- Registry with first-come-wins semantics for custom resolvers
+- Built-in resolvers: `prompty.var` (variable interpolation), `prompty.raw` (literal blocks)
+- Thread-safe Context with dot-notation path resolution and parent-child scoping
+- Functional options API (`WithDelimiters`, `WithMaxDepth`, `WithLogger`)
+- Error handling with position tracking using go-cuserr
+
+#### Phase 2: Expression Evaluator and Conditionals
+- Safe expression language with comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`)
+- Logical operators (`&&`, `||`, `!`)
+- Built-in functions (`len`, `upper`, `lower`, `trim`, `contains`, `hasPrefix`, `hasSuffix`, etc.)
+- Conditional tags: `prompty.if`, `prompty.elseif`, `prompty.else`
+- Truthiness evaluation for various types
+
+#### Phase 2.5: Nested Templates
+- Template registration API (`RegisterTemplate`, `MustRegisterTemplate`)
+- `prompty.include` resolver for nested template execution
+- Context inheritance and override capabilities
+- `with` attribute for context path selection
+- `isolate` attribute for isolated context execution
+- Maximum depth protection against infinite recursion
+
+#### Phase 3: Error Strategies, Comments, and Validation
+- Five error strategies: `throw`, `default`, `remove`, `keepraw`, `log`
+- Per-tag error strategy override via `onerror` attribute
+- Comment blocks (`prompty.comment`) removed from output
+- Validation API for template syntax checking
+- ValidationResult with severity levels (Error, Warning, Info)
+
+#### Phase 4: Loops
+- `prompty.for` loop construct for iterating over collections
+- Support for slices, arrays, and maps
+- `item` and `index` loop variables
+- `limit` attribute for iteration bounds
+- Nested loop support
+- Context isolation per iteration
+
+#### Phase 5: Switch/Case, Custom Functions, and CLI
+- Switch/case statements: `prompty.switch`, `prompty.case`, `prompty.casedefault`
+- First-match-wins semantics (no fall-through)
+- Case matching by value or expression evaluation
+- Custom function registration API (`RegisterFunc`, `MustRegisterFunc`)
+- CLI tool (`prompty`) with four commands:
+  - `render`: Execute templates with JSON data
+  - `validate`: Check template syntax and structure
+  - `version`: Display version and build information
+  - `help`: Show command usage
+
+### Technical Details
+- 82%+ test coverage with race detection
+- All string literals use constants (no magic strings)
+- Thread-safe for concurrent access
+- Configurable timeouts and resource limits
+- Structured logging with zap
+
+## [0.5.0] - 2024-12-13
+
+### Added
+- Switch/case statements (`prompty.switch`, `prompty.case`, `prompty.casedefault`)
+- Custom function registration API
+- CLI tool with render, validate, version, help commands
+
+## [0.4.0] - 2024-12-12
+
+### Added
+- For loops (`prompty.for`) with item, index, in, and limit attributes
+- Map iteration support
+- Nested loop support
+
+## [0.3.0] - 2024-12-12
+
+### Added
+- Error strategies (throw, default, remove, keepraw, log)
+- Comment blocks (`prompty.comment`)
+- Validation API with severity levels
+
+## [0.2.0] - 2024-12-12
+
+### Added
+- Expression evaluator with comparison and logical operators
+- Built-in functions for strings, collections, and types
+- Conditional tags (if/elseif/else)
+- Nested template inclusion (`prompty.include`)
+
+## [0.1.0] - 2024-12-11
+
+### Added
+- Initial release with core templating engine
+- Lexer, parser, and executor
+- Variable interpolation (`prompty.var`)
+- Raw blocks (`prompty.raw`)
+- Custom resolver registration

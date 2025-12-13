@@ -83,6 +83,9 @@ const (
 	ErrMsgFuncNilFunc       = "function cannot be nil"
 	ErrMsgFuncEmptyName     = "function name cannot be empty"
 	ErrMsgFuncAlreadyExists = "function already registered"
+
+	// Context messages
+	ErrMsgInvalidContextType = "invalid context type"
 )
 
 // Error code constants for categorization

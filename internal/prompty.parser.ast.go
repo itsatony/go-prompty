@@ -61,8 +61,8 @@ func (n *TextNode) Pos() Position {
 // String returns a string representation
 func (n *TextNode) String() string {
 	content := n.Content
-	if len(content) > 50 {
-		content = content[:47] + "..."
+	if len(content) > MaxStringDisplayLength {
+		content = content[:TruncatedStringLength] + TruncationSuffix
 	}
 	return fmt.Sprintf("TextNode{%q @ %s}", content, n.pos)
 }

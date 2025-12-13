@@ -230,6 +230,13 @@ const (
 	FmtEmptyBraces  = "{}"
 )
 
+// String display constants for truncation
+const (
+	MaxStringDisplayLength = 50  // Maximum length before truncation
+	TruncatedStringLength  = 47  // Length to truncate to (leaves room for suffix)
+	TruncationSuffix       = "..." // Suffix to indicate truncation
+)
+
 // ErrorStrategy mirrors prompty.ErrorStrategy for internal use
 type ErrorStrategy int
 
