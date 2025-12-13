@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"strconv"
 
 	"go.uber.org/zap"
 )
@@ -159,6 +160,11 @@ func (p *Parser) parseBlockTag(tagName string, attrs Attributes, pos Position, o
 	// Special handling for comments - discard content entirely
 	if tagName == TagNameComment {
 		return p.parseCommentBlock(pos, openTok)
+	}
+
+	// Special handling for for loops (Phase 4)
+	if tagName == TagNameFor {
+		return p.parseFor(attrs, pos)
 	}
 
 	// Parse children
@@ -342,6 +348,93 @@ func (p *Parser) parseConditionalBranch() ([]Node, string, Attributes, Position,
 
 // newConditionError creates a conditional-specific error
 func (p *Parser) newConditionError(message string, pos Position) error {
+	return &ParserError{
+		Message:  message,
+		Position: pos,
+	}
+}
+
+// parseFor parses a for loop block (Phase 4)
+func (p *Parser) parseFor(attrs Attributes, pos Position) (*ForNode, error) {
+	// Get required 'item' attribute
+	itemVar, ok := attrs.Get(AttrItem)
+	if !ok || itemVar == "" {
+		return nil, p.newForError(ErrMsgForMissingItem, pos)
+	}
+
+	// Get required 'in' attribute
+	source, ok := attrs.Get(AttrIn)
+	if !ok || source == "" {
+		return nil, p.newForError(ErrMsgForMissingIn, pos)
+	}
+
+	// Get optional 'index' attribute
+	indexVar, _ := attrs.Get(AttrIndex)
+
+	// Get optional 'limit' attribute
+	limit := 0
+	if limitStr, hasLimit := attrs.Get(AttrLimit); hasLimit {
+		parsedLimit, err := strconv.Atoi(limitStr)
+		if err != nil || parsedLimit < 0 {
+			return nil, p.newForError(ErrMsgForInvalidLimit, pos)
+		}
+		limit = parsedLimit
+	}
+
+	// Parse loop body until {~/prompty.for~}
+	children, err := p.parseForBody()
+	if err != nil {
+		return nil, err
+	}
+
+	return NewForNode(itemVar, indexVar, source, limit, children, pos), nil
+}
+
+// parseForBody parses the body of a for loop until the closing tag
+func (p *Parser) parseForBody() ([]Node, error) {
+	var children []Node
+
+	for !p.isAtEnd() {
+		tok := p.current()
+
+		// Check for closing {~/prompty.for~}
+		if tok.Type == TokenTypeBlockClose {
+			if p.pos+1 < len(p.tokens) && p.tokens[p.pos+1].Type == TokenTypeTagName {
+				nextName := p.tokens[p.pos+1].Value
+				if nextName == TagNameFor {
+					// Consume closing sequence
+					p.advance() // BLOCK_CLOSE
+
+					_ = p.current() // TAG_NAME (already verified)
+					p.advance()     // consume TAG_NAME
+
+					closeTok := p.current()
+					if closeTok.Type != TokenTypeCloseTag {
+						return nil, p.newExpectedTokenError(TokenTypeCloseTag, closeTok)
+					}
+					p.advance() // CLOSE_TAG
+
+					return children, nil
+				}
+			}
+		}
+
+		// Parse a normal node
+		node, err := p.parseNode()
+		if err != nil {
+			return nil, err
+		}
+		if node != nil {
+			children = append(children, node)
+		}
+	}
+
+	// Reached EOF without finding closing tag
+	return nil, p.newForError(ErrMsgForNotClosed, Position{})
+}
+
+// newForError creates a for-loop specific error
+func (p *Parser) newForError(message string, pos Position) error {
 	return &ParserError{
 		Message:  message,
 		Position: pos,

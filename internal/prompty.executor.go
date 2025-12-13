@@ -92,6 +92,9 @@ func (e *Executor) executeNode(ctx context.Context, node Node, execCtx ContextAc
 	case *ConditionalNode:
 		return e.executeConditional(ctx, n, execCtx, depth)
 
+	case *ForNode:
+		return e.executeFor(ctx, n, execCtx, depth)
+
 	default:
 		return "", NewExecutorError(ErrMsgUnknownNodeType, "", node.Pos())
 	}
@@ -127,6 +130,150 @@ func (e *Executor) executeConditional(ctx context.Context, cond *ConditionalNode
 // evaluateCondition parses and evaluates a condition expression.
 func (e *Executor) evaluateCondition(expr string, execCtx ContextAccessor) (bool, error) {
 	return EvaluateExpressionBool(expr, e.funcs, execCtx)
+}
+
+// executeFor processes a for loop node and returns its output.
+func (e *Executor) executeFor(ctx context.Context, forNode *ForNode, execCtx ContextAccessor, depth int) (string, error) {
+	e.logger.Debug(LogMsgForStart,
+		zap.String(LogFieldItemVar, forNode.ItemVar),
+		zap.String(LogFieldIndexVar, forNode.IndexVar),
+		zap.String(LogFieldCollection, forNode.Source))
+
+	// Get the collection to iterate over
+	collection, found := execCtx.Get(forNode.Source)
+	if !found {
+		return "", NewExecutorError(ErrMsgForCollectionPath, TagNameFor, forNode.Pos())
+	}
+
+	// Convert to slice
+	items, err := toIterableSlice(collection)
+	if err != nil {
+		return "", NewExecutorErrorWithCause(ErrMsgForNotIterable, TagNameFor, forNode.Pos(), err)
+	}
+
+	// Determine iteration limit
+	limit := forNode.Limit
+	if limit <= 0 {
+		limit = DefaultMaxLoopIterations
+	}
+	if len(items) > limit {
+		e.logger.Debug(LogMsgForLimitApplied,
+			zap.Int(LogFieldCollection, len(items)),
+			zap.Int(AttrLimit, limit))
+		items = items[:limit]
+	}
+
+	// Check if context supports child creation
+	childCreator, canCreateChild := execCtx.(ChildContextCreator)
+	if !canCreateChild {
+		return "", NewExecutorError(ErrMsgForContextNoChild, TagNameFor, forNode.Pos())
+	}
+
+	// Iterate and execute children for each item
+	var sb strings.Builder
+	for i, item := range items {
+		e.logger.Debug(LogMsgForIteration,
+			zap.Int(LogFieldIteration, i))
+
+		// Build child context data with loop variables
+		childData := make(map[string]any)
+		childData[forNode.ItemVar] = item
+		if forNode.IndexVar != "" {
+			childData[forNode.IndexVar] = i
+		}
+
+		// Create child context
+		childCtxInterface := childCreator.Child(childData)
+		childCtx, ok := childCtxInterface.(ContextAccessor)
+		if !ok {
+			return "", NewExecutorError(ErrMsgForContextNoChild, TagNameFor, forNode.Pos())
+		}
+
+		// Execute children with child context
+		result, err := e.executeNodes(ctx, forNode.Children, childCtx, depth+1)
+		if err != nil {
+			return "", err
+		}
+		sb.WriteString(result)
+	}
+
+	e.logger.Debug(LogMsgForEnd, zap.Int(LogFieldIteration, len(items)))
+	return sb.String(), nil
+}
+
+// toIterableSlice converts a value to a slice of any for iteration.
+func toIterableSlice(val any) ([]any, error) {
+	if val == nil {
+		return []any{}, nil
+	}
+
+	switch v := val.(type) {
+	case []any:
+		return v, nil
+	case []string:
+		result := make([]any, len(v))
+		for i, s := range v {
+			result[i] = s
+		}
+		return result, nil
+	case []int:
+		result := make([]any, len(v))
+		for i, n := range v {
+			result[i] = n
+		}
+		return result, nil
+	case []int64:
+		result := make([]any, len(v))
+		for i, n := range v {
+			result[i] = n
+		}
+		return result, nil
+	case []float64:
+		result := make([]any, len(v))
+		for i, n := range v {
+			result[i] = n
+		}
+		return result, nil
+	case []bool:
+		result := make([]any, len(v))
+		for i, b := range v {
+			result[i] = b
+		}
+		return result, nil
+	case []map[string]any:
+		result := make([]any, len(v))
+		for i, m := range v {
+			result[i] = m
+		}
+		return result, nil
+	case map[string]any:
+		// Iterate over map keys (alphabetically sorted for determinism)
+		keys := make([]string, 0, len(v))
+		for k := range v {
+			keys = append(keys, k)
+		}
+		sortStrings(keys)
+		result := make([]any, len(keys))
+		for i, k := range keys {
+			// Create a key-value pair map for each entry
+			result[i] = map[string]any{
+				ForMapKeyField:   k,
+				ForMapValueField: v[k],
+			}
+		}
+		return result, nil
+	default:
+		return nil, fmt.Errorf(ErrMsgForTypeNotIterable, fmt.Sprintf("%T", val))
+	}
+}
+
+// sortStrings sorts a slice of strings in place (simple insertion sort for small slices).
+func sortStrings(s []string) {
+	for i := 1; i < len(s); i++ {
+		for j := i; j > 0 && s[j] < s[j-1]; j-- {
+			s[j], s[j-1] = s[j-1], s[j]
+		}
+	}
 }
 
 // executeTag processes a tag node and returns its output.

@@ -36,6 +36,16 @@ type ErrorStrategyAccessor interface {
 	ErrorStrategy() int
 }
 
+// ChildContextCreator extends ContextAccessor with the ability to create child contexts.
+// This is used by the executor for loop iterations to create scoped contexts.
+type ChildContextCreator interface {
+	ContextAccessor
+	// Child creates a child context with additional data.
+	// The child inherits from the parent and can override values.
+	// Returns interface{} to avoid import cycle issues - caller should type assert.
+	Child(data map[string]any) interface{}
+}
+
 // VarResolver handles the prompty.var built-in tag.
 // It retrieves variable values from the execution context.
 type VarResolver struct{}

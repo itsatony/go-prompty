@@ -268,7 +268,7 @@ func TestE2E_ExecuteWithContext(t *testing.T) {
 
 	// Create context with parent-child relationship
 	parent := prompty.NewContext(map[string]any{"parentKey": "parentValue"})
-	child := parent.Child(map[string]any{"key": "childValue"})
+	child := parent.Child(map[string]any{"key": "childValue"}).(*prompty.Context)
 
 	result, err := tmpl.ExecuteWithContext(context.Background(), child)
 	require.NoError(t, err)
@@ -282,7 +282,7 @@ func TestE2E_ContextParentFallback(t *testing.T) {
 	require.NoError(t, err)
 
 	parent := prompty.NewContext(map[string]any{"parentKey": "fromParent"})
-	child := parent.Child(map[string]any{})
+	child := parent.Child(map[string]any{}).(*prompty.Context)
 
 	result, err := tmpl.ExecuteWithContext(context.Background(), child)
 	require.NoError(t, err)
@@ -1703,4 +1703,421 @@ func TestValidationResult_IssueFiltering(t *testing.T) {
 	assert.GreaterOrEqual(t, len(errorsOnly), 1)
 	assert.GreaterOrEqual(t, len(warningsOnly), 1)
 	assert.Equal(t, len(allIssues), len(errorsOnly)+len(warningsOnly))
+}
+
+// =============================================================================
+// Phase 4 Tests: For Loops
+// =============================================================================
+
+func TestE2E_ForLoop_BasicStringSlice(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="items"~}{~prompty.var name="x" /~},{~/prompty.for~}`,
+		map[string]any{"items": []string{"a", "b", "c"}},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "a,b,c,", result)
+}
+
+func TestE2E_ForLoop_WithIndex(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" index="i" in="items"~}[{~prompty.var name="i" /~}:{~prompty.var name="x" /~}]{~/prompty.for~}`,
+		map[string]any{"items": []string{"a", "b", "c"}},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "[0:a][1:b][2:c]", result)
+}
+
+func TestE2E_ForLoop_IntSlice(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="n" in="numbers"~}{~prompty.var name="n" /~} {~/prompty.for~}`,
+		map[string]any{"numbers": []int{1, 2, 3, 4, 5}},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "1 2 3 4 5 ", result)
+}
+
+func TestE2E_ForLoop_AnySlice(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="items"~}{~prompty.var name="x" /~}|{~/prompty.for~}`,
+		map[string]any{"items": []any{"hello", 42, true}},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "hello|42|true|", result)
+}
+
+func TestE2E_ForLoop_MapSlice(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="user" in="users"~}{~prompty.var name="user.name" /~}({~prompty.var name="user.age" /~}) {~/prompty.for~}`,
+		map[string]any{
+			"users": []map[string]any{
+				{"name": "Alice", "age": 30},
+				{"name": "Bob", "age": 25},
+			},
+		},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Alice(30) Bob(25) ", result)
+}
+
+func TestE2E_ForLoop_EmptySlice(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`Before{~prompty.for item="x" in="items"~}{~prompty.var name="x" /~}{~/prompty.for~}After`,
+		map[string]any{"items": []any{}},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "BeforeAfter", result)
+}
+
+func TestE2E_ForLoop_NilCollection(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="items"~}{~prompty.var name="x" /~}{~/prompty.for~}`,
+		map[string]any{"items": nil},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "", result)
+}
+
+func TestE2E_ForLoop_SingleItem(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="items"~}Item: {~prompty.var name="x" /~}{~/prompty.for~}`,
+		map[string]any{"items": []string{"only"}},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Item: only", result)
+}
+
+func TestE2E_ForLoop_NestedPath(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="data.items"~}{~prompty.var name="x" /~},{~/prompty.for~}`,
+		map[string]any{
+			"data": map[string]any{
+				"items": []string{"a", "b", "c"},
+			},
+		},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "a,b,c,", result)
+}
+
+func TestE2E_ForLoop_WithLimit(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="items" limit="3"~}{~prompty.var name="x" /~},{~/prompty.for~}`,
+		map[string]any{"items": []string{"a", "b", "c", "d", "e"}},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "a,b,c,", result)
+}
+
+func TestE2E_ForLoop_LimitLargerThanCollection(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="items" limit="100"~}{~prompty.var name="x" /~},{~/prompty.for~}`,
+		map[string]any{"items": []string{"a", "b"}},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "a,b,", result)
+}
+
+func TestE2E_ForLoop_IterateOverMap(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Maps iterate over key-value pairs (sorted by key)
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="entry" in="config"~}{~prompty.var name="entry.key" /~}={~prompty.var name="entry.value" /~};{~/prompty.for~}`,
+		map[string]any{
+			"config": map[string]any{
+				"a": "1",
+				"b": "2",
+				"c": "3",
+			},
+		},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "a=1;b=2;c=3;", result)
+}
+
+func TestE2E_ForLoop_NestedLoops(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="row" in="matrix"~}[{~prompty.for item="col" in="row"~}{~prompty.var name="col" /~}{~/prompty.for~}]{~/prompty.for~}`,
+		map[string]any{
+			"matrix": []any{
+				[]any{1, 2},
+				[]any{3, 4},
+			},
+		},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "[12][34]", result)
+}
+
+func TestE2E_ForLoop_WithConditional(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="n" in="numbers"~}{~prompty.if eval="n > 2"~}*{~/prompty.if~}{~prompty.var name="n" /~} {~/prompty.for~}`,
+		map[string]any{"numbers": []int{1, 2, 3, 4}},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "1 2 *3 *4 ", result)
+}
+
+func TestE2E_ForLoop_WithInclude(t *testing.T) {
+	engine := prompty.MustNew()
+	// Test combining for loops with includes using explicit attributes to pass data
+	engine.MustRegisterTemplate("item-display", "Item: {~prompty.var name=\"val\" /~}")
+
+	// Pass the item value explicitly to the included template via attribute
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="items"~}[{~prompty.var name="x" /~}] {~/prompty.for~}Included: {~prompty.include template="item-display" val="static" /~}`,
+		map[string]any{
+			"items": []string{"a", "b", "c"},
+		},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "[a] [b] [c] Included: Item: static", result)
+}
+
+func TestE2E_ForLoop_PreservesParentContext(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`Prefix: {~prompty.var name="prefix" /~} - {~prompty.for item="x" in="items"~}{~prompty.var name="prefix" /~}:{~prompty.var name="x" /~} {~/prompty.for~}`,
+		map[string]any{
+			"prefix": "P",
+			"items":  []string{"a", "b"},
+		},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Prefix: P - P:a P:b ", result)
+}
+
+func TestE2E_ForLoop_ItemShadowsParent(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// If the loop variable has the same name as a parent variable, it shadows it
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="items"~}{~prompty.var name="x" /~}{~/prompty.for~}`,
+		map[string]any{
+			"x":     "parent-value",
+			"items": []string{"a", "b"},
+		},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "ab", result)
+}
+
+func TestE2E_ForLoop_Float64Slice(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="numbers"~}{~prompty.var name="x" /~},{~/prompty.for~}`,
+		map[string]any{"numbers": []float64{1.5, 2.5, 3.5}},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "1.5,2.5,3.5,", result)
+}
+
+func TestE2E_ForLoop_BoolSlice(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="flags"~}{~prompty.var name="x" /~} {~/prompty.for~}`,
+		map[string]any{"flags": []bool{true, false, true}},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "true false true ", result)
+}
+
+func TestE2E_ForLoop_Int64Slice(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="ids"~}{~prompty.var name="x" /~},{~/prompty.for~}`,
+		map[string]any{"ids": []int64{100, 200, 300}},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "100,200,300,", result)
+}
+
+func TestE2E_ForLoop_ParseOnceExecuteMany(t *testing.T) {
+	engine := prompty.MustNew()
+
+	tmpl, err := engine.Parse(`{~prompty.for item="x" in="items"~}{~prompty.var name="x" /~}{~/prompty.for~}`)
+	require.NoError(t, err)
+
+	result1, err := tmpl.Execute(context.Background(), map[string]any{"items": []string{"a", "b"}})
+	require.NoError(t, err)
+	assert.Equal(t, "ab", result1)
+
+	result2, err := tmpl.Execute(context.Background(), map[string]any{"items": []string{"x", "y", "z"}})
+	require.NoError(t, err)
+	assert.Equal(t, "xyz", result2)
+}
+
+func TestE2E_ForLoop_Error_MissingItemAttr(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.for in="items"~}content{~/prompty.for~}`,
+		map[string]any{"items": []string{"a"}},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "item")
+}
+
+func TestE2E_ForLoop_Error_MissingInAttr(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x"~}content{~/prompty.for~}`,
+		map[string]any{"items": []string{"a"}},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "in")
+}
+
+func TestE2E_ForLoop_Error_CollectionNotFound(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="missing"~}content{~/prompty.for~}`,
+		map[string]any{},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestE2E_ForLoop_Error_NotIterable(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="value"~}content{~/prompty.for~}`,
+		map[string]any{"value": "not-a-slice"},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "iterable")
+}
+
+func TestE2E_ForLoop_Error_InvalidLimit(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="items" limit="abc"~}content{~/prompty.for~}`,
+		map[string]any{"items": []string{"a"}},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "limit")
+}
+
+func TestE2E_ForLoop_Error_NegativeLimit(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="items" limit="-1"~}content{~/prompty.for~}`,
+		map[string]any{"items": []string{"a"}},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "limit")
+}
+
+func TestE2E_ForLoop_Error_UnclosedBlock(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.for item="x" in="items"~}content`,
+		map[string]any{"items": []string{"a"}},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not closed")
+}
+
+func TestE2E_ForLoop_Validation_Valid(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Validate(`{~prompty.for item="x" in="items"~}{~prompty.var name="x" /~}{~/prompty.for~}`)
+
+	require.NoError(t, err)
+	assert.True(t, result.IsValid())
+}
+
+func TestE2E_ForLoop_Validation_NestedContent(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Validate(`{~prompty.for item="x" in="items"~}
+		{~prompty.if eval="x > 0"~}
+			Positive: {~prompty.var name="x" /~}
+		{~/prompty.if~}
+	{~/prompty.for~}`)
+
+	require.NoError(t, err)
+	assert.True(t, result.IsValid())
+}
+
+func TestE2E_ForLoop_ComplexTemplate(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Use template without extra newlines for predictable output
+	template := `<ul>{~prompty.for item="user" index="i" in="users"~}<li>{~prompty.var name="i" /~}. {~prompty.var name="user.name" /~} - {~prompty.if eval="user.active"~}Active{~prompty.else~}Inactive{~/prompty.if~}</li>{~/prompty.for~}</ul>`
+
+	result, err := engine.Execute(context.Background(), template, map[string]any{
+		"users": []map[string]any{
+			{"name": "Alice", "active": true},
+			{"name": "Bob", "active": false},
+			{"name": "Carol", "active": true},
+		},
+	})
+
+	require.NoError(t, err)
+	expected := `<ul><li>0. Alice - Active</li><li>1. Bob - Inactive</li><li>2. Carol - Active</li></ul>`
+	assert.Equal(t, expected, result)
 }

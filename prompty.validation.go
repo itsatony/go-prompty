@@ -132,6 +132,9 @@ func (e *Engine) validateNode(node internal.Node, result *ValidationResult) {
 
 	case *internal.ConditionalNode:
 		e.validateConditionalNode(n, result)
+
+	case *internal.ForNode:
+		e.validateForNode(n, result)
 	}
 }
 
@@ -201,6 +204,42 @@ func (e *Engine) validateConditionalNode(cond *internal.ConditionalNode, result 
 		// Validate branch children recursively
 		e.validateNodes(branch.Children, result)
 	}
+}
+
+// validateForNode validates a for loop node.
+func (e *Engine) validateForNode(forNode *internal.ForNode, result *ValidationResult) {
+	// Check required item variable
+	if forNode.ItemVar == "" {
+		result.issues = append(result.issues, ValidationIssue{
+			Severity: SeverityError,
+			Message:  ErrMsgForMissingItem,
+			Position: e.internalPosToPublic(forNode.Pos()),
+			TagName:  TagNameFor,
+		})
+	}
+
+	// Check required source path
+	if forNode.Source == "" {
+		result.issues = append(result.issues, ValidationIssue{
+			Severity: SeverityError,
+			Message:  ErrMsgForMissingIn,
+			Position: e.internalPosToPublic(forNode.Pos()),
+			TagName:  TagNameFor,
+		})
+	}
+
+	// Check for negative limit
+	if forNode.Limit < 0 {
+		result.issues = append(result.issues, ValidationIssue{
+			Severity: SeverityError,
+			Message:  ErrMsgForInvalidLimit,
+			Position: e.internalPosToPublic(forNode.Pos()),
+			TagName:  TagNameFor,
+		})
+	}
+
+	// Validate children recursively
+	e.validateNodes(forNode.Children, result)
 }
 
 // internalPosToPublic converts internal Position to public Position.

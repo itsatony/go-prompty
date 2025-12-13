@@ -60,6 +60,15 @@ const (
 	ErrMsgUnknownTagInTemplate  = "unknown tag in template"
 	ErrMsgInvalidOnErrorAttr    = "invalid onerror attribute value"
 	ErrMsgMissingIncludeTarget  = "included template not found"
+
+	// For loop messages (Phase 4)
+	ErrMsgForMissingItem    = "missing required 'item' attribute"
+	ErrMsgForMissingIn      = "missing required 'in' attribute"
+	ErrMsgForInvalidLimit   = "invalid 'limit' attribute value"
+	ErrMsgForCollectionPath = "collection path not found"
+	ErrMsgForNotIterable    = "value is not iterable"
+	ErrMsgForLimitExceeded  = "loop iteration limit exceeded"
+	ErrMsgForNotClosed      = "for block not closed"
 )
 
 // Error code constants for categorization

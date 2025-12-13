@@ -155,7 +155,8 @@ func (c *Context) Has(path string) bool {
 // Child creates a child context with additional data.
 // The child inherits from the parent and can override values.
 // Engine reference and depth are propagated to child contexts.
-func (c *Context) Child(data map[string]any) *Context {
+// Returns interface{} to satisfy internal.ChildContextCreator interface.
+func (c *Context) Child(data map[string]any) interface{} {
 	if data == nil {
 		data = make(map[string]any)
 	}

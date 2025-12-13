@@ -27,6 +27,7 @@ const (
 	NodeTypeTag
 	NodeTypeRaw
 	NodeTypeConditional
+	NodeTypeFor // Phase 4: Loop node
 )
 
 // Node type string names for debugging
@@ -36,6 +37,7 @@ const (
 	NodeTypeNameTag         = "TAG"
 	NodeTypeNameRaw         = "RAW"
 	NodeTypeNameConditional = "CONDITIONAL"
+	NodeTypeNameFor         = "FOR"
 )
 
 // String returns the string representation of the node type
@@ -51,6 +53,8 @@ func (n NodeType) String() string {
 		return NodeTypeNameRaw
 	case NodeTypeConditional:
 		return NodeTypeNameConditional
+	case NodeTypeFor:
+		return NodeTypeNameFor
 	default:
 		return NodeTypeNameRoot
 	}
@@ -139,6 +143,7 @@ const (
 	TagNameElseIf  = "prompty.elseif"
 	TagNameElse    = "prompty.else"
 	TagNameComment = "prompty.comment" // Phase 3
+	TagNameFor     = "prompty.for"     // Phase 4
 )
 
 // Attribute name constants
@@ -150,6 +155,10 @@ const (
 	AttrIsolate  = "isolate"
 	AttrEval     = "eval"    // Condition expression for if/elseif
 	AttrOnError  = "onerror" // Per-tag error strategy override
+	AttrItem     = "item"    // Loop variable name (Phase 4)
+	AttrIndex    = "index"   // Loop index variable name (Phase 4)
+	AttrIn       = "in"      // Loop collection path (Phase 4)
+	AttrLimit    = "limit"   // Loop iteration limit (Phase 4)
 )
 
 // Boolean attribute values
@@ -279,4 +288,45 @@ const (
 	LogMsgErrorLogged          = "error logged and execution continued"
 	LogFieldStrategy           = "strategy"
 	LogFieldErrorMsg           = "error_message"
+)
+
+// Error messages for for loop (Phase 4)
+const (
+	ErrMsgForMissingItem    = "missing required 'item' attribute"
+	ErrMsgForMissingIn      = "missing required 'in' attribute"
+	ErrMsgForInvalidLimit   = "invalid 'limit' attribute value"
+	ErrMsgForCollectionPath = "collection path not found"
+	ErrMsgForNotIterable    = "value is not iterable"
+	ErrMsgForLimitExceeded  = "loop iteration limit exceeded"
+	ErrMsgForNotClosed      = "for block not closed"
+	ErrMsgForContextNoChild = "context does not support child creation"
+	ErrMsgForTypeNotIterable = "type %s is not iterable"
+)
+
+// Log messages for for loop operations (Phase 4)
+const (
+	LogMsgForStart        = "starting for loop"
+	LogMsgForIteration    = "for loop iteration"
+	LogMsgForEnd          = "for loop complete"
+	LogMsgForLimitApplied = "loop limit applied"
+)
+
+// Log field names for for loop (Phase 4)
+const (
+	LogFieldIteration  = "iteration"
+	LogFieldCollection = "collection"
+	LogFieldItemVar    = "item_var"
+	LogFieldIndexVar   = "index_var"
+)
+
+// Default values for for loop (Phase 4)
+const (
+	DefaultMaxLoopIterations = 10000
+)
+
+// Map iteration field names (Phase 4)
+// When iterating over a map, each item is a map with these keys.
+const (
+	ForMapKeyField   = "key"
+	ForMapValueField = "value"
 )

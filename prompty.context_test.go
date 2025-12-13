@@ -194,7 +194,7 @@ func TestContext_Child(t *testing.T) {
 
 		child := parent.Child(map[string]any{
 			"childKey": "childValue",
-		})
+		}).(*Context)
 
 		// Child has its own data
 		val, ok := child.Get("childKey")
@@ -214,7 +214,7 @@ func TestContext_Child(t *testing.T) {
 
 		child := parent.Child(map[string]any{
 			"key": "childValue",
-		})
+		}).(*Context)
 
 		val, ok := child.Get("key")
 		assert.True(t, ok)
@@ -228,11 +228,11 @@ func TestContext_Child(t *testing.T) {
 
 		parent := grandparent.Child(map[string]any{
 			"pKey": "pValue",
-		})
+		}).(*Context)
 
 		child := parent.Child(map[string]any{
 			"cKey": "cValue",
-		})
+		}).(*Context)
 
 		// Child can see grandparent
 		val, ok := child.Get("gpKey")
@@ -245,7 +245,7 @@ func TestContext_Child(t *testing.T) {
 			"key": "value",
 		})
 
-		child := parent.Child(nil)
+		child := parent.Child(nil).(*Context)
 
 		val, ok := child.Get("key")
 		assert.True(t, ok)
@@ -254,7 +254,7 @@ func TestContext_Child(t *testing.T) {
 
 	t.Run("inherits error strategy", func(t *testing.T) {
 		parent := NewContextWithStrategy(nil, ErrorStrategyDefault)
-		child := parent.Child(nil)
+		child := parent.Child(nil).(*Context)
 
 		assert.Equal(t, ErrorStrategyDefault, child.ErrorStrategyValue())
 	})
@@ -262,7 +262,7 @@ func TestContext_Child(t *testing.T) {
 
 func TestContext_Parent(t *testing.T) {
 	parent := NewContext(nil)
-	child := parent.Child(nil)
+	child := parent.Child(nil).(*Context)
 
 	assert.Equal(t, parent, child.Parent())
 	assert.Nil(t, parent.Parent())
@@ -346,7 +346,7 @@ func TestContext_ParentFallback(t *testing.T) {
 
 	child := parent.Child(map[string]any{
 		"child": "data",
-	})
+	}).(*Context)
 
 	// Should fall back to parent
 	val, ok := child.Get("parent.value")

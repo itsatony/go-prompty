@@ -278,3 +278,50 @@ func NewConditionalBranch(condition string, children []Node, isElse bool, pos Po
 		Pos:       pos,
 	}
 }
+
+// ForNode represents a for loop block (Phase 4)
+type ForNode struct {
+	pos      Position
+	ItemVar  string // Variable name for current item (required)
+	IndexVar string // Variable name for iteration index (optional)
+	Source   string // Path to collection to iterate (required)
+	Limit    int    // Max iterations (0 = use engine default)
+	Children []Node // Loop body
+}
+
+// Type returns NodeTypeFor
+func (n *ForNode) Type() NodeType {
+	return NodeTypeFor
+}
+
+// Pos returns the source position
+func (n *ForNode) Pos() Position {
+	return n.pos
+}
+
+// String returns a string representation
+func (n *ForNode) String() string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("ForNode{item=%s", n.ItemVar))
+	if n.IndexVar != "" {
+		sb.WriteString(fmt.Sprintf(", index=%s", n.IndexVar))
+	}
+	sb.WriteString(fmt.Sprintf(", in=%s", n.Source))
+	if n.Limit > 0 {
+		sb.WriteString(fmt.Sprintf(", limit=%d", n.Limit))
+	}
+	sb.WriteString(fmt.Sprintf(", children=%d @ %s}", len(n.Children), n.pos))
+	return sb.String()
+}
+
+// NewForNode creates a new for loop node
+func NewForNode(itemVar, indexVar, source string, limit int, children []Node, pos Position) *ForNode {
+	return &ForNode{
+		pos:      pos,
+		ItemVar:  itemVar,
+		IndexVar: indexVar,
+		Source:   source,
+		Limit:    limit,
+		Children: children,
+	}
+}
