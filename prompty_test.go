@@ -690,3 +690,519 @@ func TestE2E_NestedTemplate_ConcurrentRegistration(t *testing.T) {
 	count := engine.TemplateCount()
 	assert.Equal(t, 10, count)
 }
+
+// ============================================================================
+// Conditional Tests (prompty.if / prompty.elseif / prompty.else)
+// ============================================================================
+
+func TestE2E_Conditional_BasicIf_True(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.if eval="isActive"~}Active{~/prompty.if~}`,
+		map[string]any{"isActive": true},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Active", result)
+}
+
+func TestE2E_Conditional_BasicIf_False(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.if eval="isActive"~}Active{~/prompty.if~}`,
+		map[string]any{"isActive": false},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "", result)
+}
+
+func TestE2E_Conditional_IfElse_True(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.if eval="isAdmin"~}Admin{~prompty.else~}User{~/prompty.if~}`,
+		map[string]any{"isAdmin": true},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Admin", result)
+}
+
+func TestE2E_Conditional_IfElse_False(t *testing.T) {
+	engine := prompty.MustNew()
+
+	result, err := engine.Execute(context.Background(),
+		`{~prompty.if eval="isAdmin"~}Admin{~prompty.else~}User{~/prompty.if~}`,
+		map[string]any{"isAdmin": false},
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "User", result)
+}
+
+func TestE2E_Conditional_IfElseIfElse(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `{~prompty.if eval="role == \"admin\""~}Admin{~prompty.elseif eval="role == \"editor\""~}Editor{~prompty.else~}Viewer{~/prompty.if~}`
+
+	tests := []struct {
+		name     string
+		role     string
+		expected string
+	}{
+		{"admin", "admin", "Admin"},
+		{"editor", "editor", "Editor"},
+		{"viewer", "viewer", "Viewer"},
+		{"other", "other", "Viewer"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := engine.Execute(context.Background(), template,
+				map[string]any{"role": tt.role},
+			)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestE2E_Conditional_MultipleElseIf(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `{~prompty.if eval="level == 1"~}One{~prompty.elseif eval="level == 2"~}Two{~prompty.elseif eval="level == 3"~}Three{~prompty.else~}Other{~/prompty.if~}`
+
+	tests := []struct {
+		level    int
+		expected string
+	}{
+		{1, "One"},
+		{2, "Two"},
+		{3, "Three"},
+		{4, "Other"},
+		{0, "Other"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			result, err := engine.Execute(context.Background(), template,
+				map[string]any{"level": tt.level},
+			)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestE2E_Conditional_WithComparison(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `{~prompty.if eval="count > 0"~}Items: {~prompty.var name="count" /~}{~prompty.else~}No items{~/prompty.if~}`
+
+	t.Run("positive count", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{"count": 5},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "Items: 5", result)
+	})
+
+	t.Run("zero count", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{"count": 0},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "No items", result)
+	})
+}
+
+func TestE2E_Conditional_WithFunctionCall(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `{~prompty.if eval="len(items) > 0"~}Has items{~prompty.else~}Empty{~/prompty.if~}`
+
+	t.Run("non-empty array", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{"items": []any{1, 2, 3}},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "Has items", result)
+	})
+
+	t.Run("empty array", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{"items": []any{}},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "Empty", result)
+	})
+}
+
+func TestE2E_Conditional_WithContainsFunction(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `{~prompty.if eval="contains(roles, \"admin\")"~}Welcome Admin{~prompty.else~}Welcome User{~/prompty.if~}`
+
+	t.Run("has admin role", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{"roles": []any{"user", "admin"}},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "Welcome Admin", result)
+	})
+
+	t.Run("no admin role", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{"roles": []any{"user", "viewer"}},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "Welcome User", result)
+	})
+}
+
+func TestE2E_Conditional_LogicalAnd(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `{~prompty.if eval="isLoggedIn && isVerified"~}Access granted{~prompty.else~}Access denied{~/prompty.if~}`
+
+	tests := []struct {
+		name       string
+		loggedIn   bool
+		verified   bool
+		expected   string
+	}{
+		{"both true", true, true, "Access granted"},
+		{"logged in only", true, false, "Access denied"},
+		{"verified only", false, true, "Access denied"},
+		{"neither", false, false, "Access denied"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := engine.Execute(context.Background(), template,
+				map[string]any{"isLoggedIn": tt.loggedIn, "isVerified": tt.verified},
+			)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestE2E_Conditional_LogicalOr(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `{~prompty.if eval="isAdmin || isModerator"~}Has privileges{~prompty.else~}No privileges{~/prompty.if~}`
+
+	tests := []struct {
+		name      string
+		admin     bool
+		moderator bool
+		expected  string
+	}{
+		{"both", true, true, "Has privileges"},
+		{"admin only", true, false, "Has privileges"},
+		{"moderator only", false, true, "Has privileges"},
+		{"neither", false, false, "No privileges"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := engine.Execute(context.Background(), template,
+				map[string]any{"isAdmin": tt.admin, "isModerator": tt.moderator},
+			)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestE2E_Conditional_Negation(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `{~prompty.if eval="!isDisabled"~}Enabled{~prompty.else~}Disabled{~/prompty.if~}`
+
+	t.Run("not disabled", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{"isDisabled": false},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "Enabled", result)
+	})
+
+	t.Run("disabled", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{"isDisabled": true},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "Disabled", result)
+	})
+}
+
+func TestE2E_Conditional_NestedVariables(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `{~prompty.if eval="user.isActive"~}Hello, {~prompty.var name="user.name" /~}!{~prompty.else~}User inactive{~/prompty.if~}`
+
+	t.Run("active user", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{
+				"user": map[string]any{
+					"name":     "Alice",
+					"isActive": true,
+				},
+			},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "Hello, Alice!", result)
+	})
+
+	t.Run("inactive user", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{
+				"user": map[string]any{
+					"name":     "Bob",
+					"isActive": false,
+				},
+			},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "User inactive", result)
+	})
+}
+
+func TestE2E_Conditional_NestedConditionals(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `{~prompty.if eval="hasAccess"~}{~prompty.if eval="isAdmin"~}Admin Panel{~prompty.else~}User Panel{~/prompty.if~}{~prompty.else~}No Access{~/prompty.if~}`
+
+	tests := []struct {
+		name      string
+		hasAccess bool
+		isAdmin   bool
+		expected  string
+	}{
+		{"admin with access", true, true, "Admin Panel"},
+		{"user with access", true, false, "User Panel"},
+		{"no access", false, false, "No Access"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := engine.Execute(context.Background(), template,
+				map[string]any{"hasAccess": tt.hasAccess, "isAdmin": tt.isAdmin},
+			)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestE2E_Conditional_WithSurroundingText(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `Start - {~prompty.if eval="show"~}Middle{~/prompty.if~} - End`
+
+	t.Run("condition true", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{"show": true},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "Start - Middle - End", result)
+	})
+
+	t.Run("condition false", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{"show": false},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "Start -  - End", result)
+	})
+}
+
+func TestE2E_Conditional_StringComparison(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `{~prompty.if eval="status == \"active\""~}Active{~prompty.elseif eval="status == \"pending\""~}Pending{~prompty.else~}Unknown{~/prompty.if~}`
+
+	tests := []struct {
+		status   string
+		expected string
+	}{
+		{"active", "Active"},
+		{"pending", "Pending"},
+		{"inactive", "Unknown"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.status, func(t *testing.T) {
+			result, err := engine.Execute(context.Background(), template,
+				map[string]any{"status": tt.status},
+			)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestE2E_Conditional_NilCheck(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `{~prompty.if eval="value != nil"~}Value: {~prompty.var name="value" /~}{~prompty.else~}No value{~/prompty.if~}`
+
+	t.Run("has value", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{"value": "hello"},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "Value: hello", result)
+	})
+
+	t.Run("nil value", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{"value": nil},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "No value", result)
+	})
+}
+
+func TestE2E_Conditional_Truthiness(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `{~prompty.if eval="value"~}Truthy{~prompty.else~}Falsy{~/prompty.if~}`
+
+	tests := []struct {
+		name     string
+		value    any
+		expected string
+	}{
+		{"non-empty string", "hello", "Truthy"},
+		{"empty string", "", "Falsy"},
+		{"positive number", 1, "Truthy"},
+		{"zero", 0, "Falsy"},
+		{"true", true, "Truthy"},
+		{"false", false, "Falsy"},
+		{"nil", nil, "Falsy"},
+		{"non-empty array", []any{1}, "Truthy"},
+		{"empty array", []any{}, "Falsy"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := engine.Execute(context.Background(), template,
+				map[string]any{"value": tt.value},
+			)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestE2E_Conditional_ComplexExpression(t *testing.T) {
+	engine := prompty.MustNew()
+
+	template := `{~prompty.if eval="(isAdmin || isModerator) && isActive"~}Authorized{~prompty.else~}Unauthorized{~/prompty.if~}`
+
+	tests := []struct {
+		name      string
+		admin     bool
+		moderator bool
+		active    bool
+		expected  string
+	}{
+		{"active admin", true, false, true, "Authorized"},
+		{"active moderator", false, true, true, "Authorized"},
+		{"inactive admin", true, false, false, "Unauthorized"},
+		{"active user", false, false, true, "Unauthorized"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := engine.Execute(context.Background(), template,
+				map[string]any{"isAdmin": tt.admin, "isModerator": tt.moderator, "isActive": tt.active},
+			)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestE2E_Conditional_Error_MissingEvalAttribute(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.if~}Content{~/prompty.if~}`,
+		map[string]any{},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "eval")
+}
+
+func TestE2E_Conditional_Error_ElseWithEval(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.if eval="true"~}A{~prompty.else eval="false"~}B{~/prompty.if~}`,
+		map[string]any{},
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "else")
+}
+
+func TestE2E_Conditional_Error_InvalidExpression(t *testing.T) {
+	engine := prompty.MustNew()
+
+	_, err := engine.Execute(context.Background(),
+		`{~prompty.if eval="@@invalid"~}Content{~/prompty.if~}`,
+		map[string]any{},
+	)
+
+	require.Error(t, err)
+}
+
+func TestE2E_Conditional_WithIncludedTemplate(t *testing.T) {
+	engine := prompty.MustNew()
+
+	engine.MustRegisterTemplate("greeting", "Hello, {~prompty.var name=\"name\" default=\"Guest\" /~}!")
+
+	template := `{~prompty.if eval="showGreeting"~}{~prompty.include template="greeting" name="Alice" /~}{~prompty.else~}No greeting{~/prompty.if~}`
+
+	t.Run("show greeting", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{"showGreeting": true},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "Hello, Alice!", result)
+	})
+
+	t.Run("hide greeting", func(t *testing.T) {
+		result, err := engine.Execute(context.Background(), template,
+			map[string]any{"showGreeting": false},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "No greeting", result)
+	})
+}
+
+func TestE2E_Conditional_ParseOnceExecuteMany(t *testing.T) {
+	engine := prompty.MustNew()
+
+	tmpl, err := engine.Parse(`{~prompty.if eval="show"~}Visible{~prompty.else~}Hidden{~/prompty.if~}`)
+	require.NoError(t, err)
+
+	// Execute multiple times with different data
+	result1, err := tmpl.Execute(context.Background(), map[string]any{"show": true})
+	require.NoError(t, err)
+	assert.Equal(t, "Visible", result1)
+
+	result2, err := tmpl.Execute(context.Background(), map[string]any{"show": false})
+	require.NoError(t, err)
+	assert.Equal(t, "Hidden", result2)
+}

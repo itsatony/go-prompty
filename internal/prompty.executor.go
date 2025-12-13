@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"go.uber.org/zap"
@@ -24,6 +25,7 @@ type Executor struct {
 	registry *Registry
 	config   ExecutorConfig
 	logger   *zap.Logger
+	funcs    *FuncRegistry // Function registry for expression evaluation
 }
 
 // NewExecutor creates a new executor with the given registry and configuration.
@@ -32,10 +34,16 @@ func NewExecutor(registry *Registry, config ExecutorConfig, logger *zap.Logger) 
 		logger = zap.NewNop()
 	}
 	logger.Debug(LogMsgExecutorCreated)
+
+	// Create function registry with built-in functions
+	funcs := NewFuncRegistry()
+	RegisterBuiltinFuncs(funcs)
+
 	return &Executor{
 		registry: registry,
 		config:   config,
 		logger:   logger,
+		funcs:    funcs,
 	}
 }
 
@@ -81,9 +89,44 @@ func (e *Executor) executeNode(ctx context.Context, node Node, execCtx ContextAc
 	case *TagNode:
 		return e.executeTag(ctx, n, execCtx, depth)
 
+	case *ConditionalNode:
+		return e.executeConditional(ctx, n, execCtx, depth)
+
 	default:
 		return "", NewExecutorError(ErrMsgUnknownNodeType, "", node.Pos())
 	}
+}
+
+// executeConditional processes a conditional node and returns its output.
+func (e *Executor) executeConditional(ctx context.Context, cond *ConditionalNode, execCtx ContextAccessor, depth int) (string, error) {
+	e.logger.Debug(LogMsgConditionEval, zap.Int("branches", len(cond.Branches)))
+
+	for i, branch := range cond.Branches {
+		// else branch - always execute if we reach it
+		if branch.IsElse {
+			e.logger.Debug(LogMsgBranchSelected, zap.Int(LogFieldBranch, i), zap.Bool("isElse", true))
+			return e.executeNodes(ctx, branch.Children, execCtx, depth+1)
+		}
+
+		// Evaluate the condition expression
+		result, err := e.evaluateCondition(branch.Condition, execCtx)
+		if err != nil {
+			return "", NewExecutorErrorWithCause(ErrMsgCondExprFailed, TagNameIf, branch.Pos, err)
+		}
+
+		if result {
+			e.logger.Debug(LogMsgBranchSelected, zap.Int(LogFieldBranch, i), zap.String("condition", branch.Condition))
+			return e.executeNodes(ctx, branch.Children, execCtx, depth+1)
+		}
+	}
+
+	// No branch matched - return empty string
+	return "", nil
+}
+
+// evaluateCondition parses and evaluates a condition expression.
+func (e *Executor) evaluateCondition(expr string, execCtx ContextAccessor) (bool, error) {
+	return EvaluateExpressionBool(expr, e.funcs, execCtx)
 }
 
 // executeTag processes a tag node and returns its output.
@@ -98,13 +141,13 @@ func (e *Executor) executeTag(ctx context.Context, tag *TagNode, execCtx Context
 	// Look up resolver
 	resolver, ok := e.registry.Get(tag.Name)
 	if !ok {
-		return "", NewExecutorError(ErrMsgUnknownTag+": "+tag.Name, tag.Name, tag.Pos())
+		return "", NewExecutorError(ErrMsgUnknownTag, tag.Name, tag.Pos())
 	}
 
 	// Execute resolver
 	result, err := resolver.Resolve(ctx, execCtx, tag.Attributes)
 	if err != nil {
-		return "", NewExecutorError(ErrMsgResolverFailed+": "+err.Error(), tag.Name, tag.Pos())
+		return "", NewExecutorErrorWithCause(ErrMsgResolverFailed, tag.Name, tag.Pos(), err)
 	}
 
 	// For block tags with children, process children
@@ -126,6 +169,7 @@ type ExecutorError struct {
 	Message  string
 	TagName  string
 	Position Position
+	Cause    error
 }
 
 // NewExecutorError creates a new executor error.
@@ -137,12 +181,33 @@ func NewExecutorError(message, tagName string, pos Position) *ExecutorError {
 	}
 }
 
+// NewExecutorErrorWithCause creates a new executor error with a cause.
+func NewExecutorErrorWithCause(message, tagName string, pos Position, cause error) *ExecutorError {
+	return &ExecutorError{
+		Message:  message,
+		TagName:  tagName,
+		Position: pos,
+		Cause:    cause,
+	}
+}
+
 // Error implements the error interface.
 func (e *ExecutorError) Error() string {
-	if e.TagName != "" {
-		return e.Message + " at " + e.Position.String()
+	var result string
+	if e.TagName != StringValueEmpty {
+		result = fmt.Sprintf("%s [%s] at %s", e.Message, e.TagName, e.Position.String())
+	} else {
+		result = fmt.Sprintf("%s at %s", e.Message, e.Position.String())
 	}
-	return e.Message + " at " + e.Position.String()
+	if e.Cause != nil {
+		result = fmt.Sprintf("%s: %v", result, e.Cause)
+	}
+	return result
+}
+
+// Unwrap returns the underlying cause error.
+func (e *ExecutorError) Unwrap() error {
+	return e.Cause
 }
 
 // Executor error message constants

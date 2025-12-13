@@ -83,7 +83,7 @@ func (p *Parser) parseText() (*TextNode, error) {
 }
 
 // parseTag parses a tag (self-closing or block)
-func (p *Parser) parseTag() (*TagNode, error) {
+func (p *Parser) parseTag() (Node, error) {
 	openTok := p.advance() // consume OPEN_TAG
 
 	// Get tag name
@@ -121,10 +121,15 @@ func (p *Parser) parseTag() (*TagNode, error) {
 }
 
 // parseBlockTag parses the content and closing of a block tag
-func (p *Parser) parseBlockTag(tagName string, attrs Attributes, pos Position) (*TagNode, error) {
+func (p *Parser) parseBlockTag(tagName string, attrs Attributes, pos Position) (Node, error) {
 	// Special handling for raw blocks
 	if tagName == TagNameRaw {
 		return p.parseRawBlock(pos)
+	}
+
+	// Special handling for conditionals
+	if tagName == TagNameIf {
+		return p.parseConditional(attrs, pos)
 	}
 
 	// Parse children
@@ -162,6 +167,152 @@ func (p *Parser) parseBlockTag(tagName string, attrs Attributes, pos Position) (
 	p.advance()
 
 	return NewBlockTag(tagName, attrs, children, pos), nil
+}
+
+// parseConditional parses an if/elseif/else conditional block
+func (p *Parser) parseConditional(ifAttrs Attributes, pos Position) (*ConditionalNode, error) {
+	var branches []ConditionalBranch
+
+	// Get the condition from the if tag
+	condition, ok := ifAttrs.Get(AttrEval)
+	if !ok {
+		return nil, p.newConditionError(ErrMsgCondMissingEval, pos)
+	}
+
+	// Parse the first branch (if)
+	children, nextTag, nextAttrs, nextPos, err := p.parseConditionalBranch()
+	if err != nil {
+		return nil, err
+	}
+
+	branches = append(branches, NewConditionalBranch(condition, children, false, pos))
+
+	// Process subsequent branches (elseif, else)
+	for nextTag != "" {
+		switch nextTag {
+		case TagNameElseIf:
+			// elseif needs an eval attribute
+			condition, ok := nextAttrs.Get(AttrEval)
+			if !ok {
+				return nil, p.newConditionError(ErrMsgCondMissingEval, nextPos)
+			}
+
+			children, nextTag, nextAttrs, nextPos, err = p.parseConditionalBranch()
+			if err != nil {
+				return nil, err
+			}
+
+			branches = append(branches, NewConditionalBranch(condition, children, false, nextPos))
+
+		case TagNameElse:
+			// else cannot have an eval attribute
+			if nextAttrs.Has(AttrEval) {
+				return nil, p.newConditionError(ErrMsgCondInvalidElse, nextPos)
+			}
+
+			children, nextTag, nextAttrs, nextPos, err = p.parseConditionalBranch()
+			if err != nil {
+				return nil, err
+			}
+
+			// else must be the last branch
+			if nextTag != "" {
+				return nil, p.newConditionError(ErrMsgCondElseNotLast, nextPos)
+			}
+
+			branches = append(branches, NewConditionalBranch("", children, true, nextPos))
+
+		default:
+			// Unexpected tag inside conditional
+			return nil, p.newConditionError(ErrMsgCondUnexpectedTag, nextPos)
+		}
+	}
+
+	return NewConditionalNode(branches, pos), nil
+}
+
+// parseConditionalBranch parses nodes until we hit elseif, else, or the closing if tag
+// Returns: children nodes, next tag name (empty if closing), next tag attrs, next tag position, error
+func (p *Parser) parseConditionalBranch() ([]Node, string, Attributes, Position, error) {
+	var children []Node
+
+	for !p.isAtEnd() {
+		tok := p.current()
+
+		// Check for block close (could be elseif, else, or /if)
+		if tok.Type == TokenTypeBlockClose {
+			// This is {~/ - check if it's the closing /if
+			if p.pos+1 < len(p.tokens) && p.tokens[p.pos+1].Type == TokenTypeTagName {
+				nextName := p.tokens[p.pos+1].Value
+				if nextName == TagNameIf {
+					// This is the closing {~/prompty.if~}
+					p.advance() // consume BLOCK_CLOSE
+
+					closeNameTok := p.current()
+					p.advance() // consume TAG_NAME
+
+					closeTok := p.current()
+					if closeTok.Type != TokenTypeCloseTag {
+						return nil, "", nil, Position{}, p.newExpectedTokenError(TokenTypeCloseTag, closeTok)
+					}
+					p.advance() // consume CLOSE_TAG
+
+					return children, "", nil, closeNameTok.Position, nil
+				}
+			}
+		}
+
+		// Check for open tag (could be elseif or else, or a normal nested tag)
+		if tok.Type == TokenTypeOpenTag {
+			// Peek at the tag name
+			if p.pos+1 < len(p.tokens) && p.tokens[p.pos+1].Type == TokenTypeTagName {
+				nextName := p.tokens[p.pos+1].Value
+				if nextName == TagNameElseIf || nextName == TagNameElse {
+					// This is a branch boundary
+					openPos := tok.Position
+					p.advance() // consume OPEN_TAG
+
+					nameTok := p.current()
+					p.advance() // consume TAG_NAME
+
+					// Parse attributes
+					attrs, err := p.parseAttributes()
+					if err != nil {
+						return nil, "", nil, Position{}, err
+					}
+
+					// Consume CLOSE_TAG
+					closeTok := p.current()
+					if closeTok.Type != TokenTypeCloseTag {
+						return nil, "", nil, Position{}, p.newExpectedTokenError(TokenTypeCloseTag, closeTok)
+					}
+					p.advance()
+
+					return children, nameTok.Value, attrs, openPos, nil
+				}
+			}
+		}
+
+		// Parse a normal node
+		node, err := p.parseNode()
+		if err != nil {
+			return nil, "", nil, Position{}, err
+		}
+		if node != nil {
+			children = append(children, node)
+		}
+	}
+
+	// Reached EOF without finding closing tag
+	return nil, "", nil, Position{}, p.newConditionError(ErrMsgCondNotClosed, Position{})
+}
+
+// newConditionError creates a conditional-specific error
+func (p *Parser) newConditionError(message string, pos Position) error {
+	return &ParserError{
+		Message:  message,
+		Position: pos,
+	}
 }
 
 // parseRawBlock parses a raw block - preserving content literally

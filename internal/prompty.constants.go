@@ -26,14 +26,16 @@ const (
 	NodeTypeText
 	NodeTypeTag
 	NodeTypeRaw
+	NodeTypeConditional
 )
 
 // Node type string names for debugging
 const (
-	NodeTypeNameRoot = "ROOT"
-	NodeTypeNameText = "TEXT"
-	NodeTypeNameTag  = "TAG"
-	NodeTypeNameRaw  = "RAW"
+	NodeTypeNameRoot        = "ROOT"
+	NodeTypeNameText        = "TEXT"
+	NodeTypeNameTag         = "TAG"
+	NodeTypeNameRaw         = "RAW"
+	NodeTypeNameConditional = "CONDITIONAL"
 )
 
 // String returns the string representation of the node type
@@ -47,6 +49,8 @@ func (n NodeType) String() string {
 		return NodeTypeNameTag
 	case NodeTypeRaw:
 		return NodeTypeNameRaw
+	case NodeTypeConditional:
+		return NodeTypeNameConditional
 	default:
 		return NodeTypeNameRoot
 	}
@@ -121,6 +125,9 @@ const (
 	LogFieldColumn       = "column"
 	LogFieldTemplateName = "template_name"
 	LogFieldDepth        = "depth"
+	LogFieldBranch       = "branch"
+	LogFieldExpression   = "expression"
+	LogFieldResult       = "result"
 )
 
 // Built-in tag names (mirror public constants for internal use)
@@ -128,15 +135,19 @@ const (
 	TagNameVar     = "prompty.var"
 	TagNameRaw     = "prompty.raw"
 	TagNameInclude = "prompty.include"
+	TagNameIf      = "prompty.if"
+	TagNameElseIf  = "prompty.elseif"
+	TagNameElse    = "prompty.else"
 )
 
-// Attribute name constants for include resolver
+// Attribute name constants
 const (
 	AttrName     = "name"
 	AttrDefault  = "default"
 	AttrTemplate = "template"
 	AttrWith     = "with"
 	AttrIsolate  = "isolate"
+	AttrEval     = "eval" // Condition expression for if/elseif
 )
 
 // Boolean attribute values
@@ -164,4 +175,20 @@ const (
 	LogMsgTemplateRegistered = "template registered"
 	LogMsgTemplateIncluded   = "template included"
 	LogMsgIncludeDepthCheck  = "checking include depth"
+)
+
+// Error messages for conditional resolver
+const (
+	ErrMsgCondMissingEval   = "missing required 'eval' attribute"
+	ErrMsgCondInvalidElse   = "else tag cannot have eval attribute"
+	ErrMsgCondUnexpectedTag = "unexpected conditional tag"
+	ErrMsgCondNotClosed     = "conditional block not closed"
+	ErrMsgCondElseNotLast   = "else must be last in conditional chain"
+	ErrMsgCondExprFailed    = "condition expression evaluation failed"
+)
+
+// Log messages for conditional operations
+const (
+	LogMsgConditionEval  = "evaluating condition"
+	LogMsgBranchSelected = "branch selected"
 )

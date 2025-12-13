@@ -220,3 +220,60 @@ func (a Attributes) String() string {
 	}
 	return "{" + strings.Join(pairs, ", ") + "}"
 }
+
+// ConditionalNode represents an if/elseif/else conditional block
+type ConditionalNode struct {
+	pos      Position
+	Branches []ConditionalBranch
+}
+
+// ConditionalBranch represents a single branch in a conditional
+type ConditionalBranch struct {
+	Condition string // Expression string (empty for else)
+	Children  []Node // Content to render if condition is true
+	IsElse    bool   // True for the final else branch
+	Pos       Position
+}
+
+// Type returns NodeTypeConditional
+func (n *ConditionalNode) Type() NodeType {
+	return NodeTypeConditional
+}
+
+// Pos returns the source position
+func (n *ConditionalNode) Pos() Position {
+	return n.pos
+}
+
+// String returns a string representation
+func (n *ConditionalNode) String() string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("ConditionalNode{branches=%d @ %s", len(n.Branches), n.pos))
+	for i, branch := range n.Branches {
+		if branch.IsElse {
+			sb.WriteString(fmt.Sprintf(", [%d]else", i))
+		} else {
+			sb.WriteString(fmt.Sprintf(", [%d]if(%s)", i, branch.Condition))
+		}
+	}
+	sb.WriteString("}")
+	return sb.String()
+}
+
+// NewConditionalNode creates a new conditional node
+func NewConditionalNode(branches []ConditionalBranch, pos Position) *ConditionalNode {
+	return &ConditionalNode{
+		pos:      pos,
+		Branches: branches,
+	}
+}
+
+// NewConditionalBranch creates a new conditional branch
+func NewConditionalBranch(condition string, children []Node, isElse bool, pos Position) ConditionalBranch {
+	return ConditionalBranch{
+		Condition: condition,
+		Children:  children,
+		IsElse:    isElse,
+		Pos:       pos,
+	}
+}
