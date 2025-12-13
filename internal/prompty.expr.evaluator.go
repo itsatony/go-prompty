@@ -225,7 +225,7 @@ func compareLess(a, b any) (bool, error) {
 		return aStr < bStr, nil
 	}
 
-	return false, NewExprEvalError(ErrMsgExprTypeMismatch, fmt.Sprintf("cannot compare %T and %T", a, b))
+	return false, NewExprEvalError(ErrMsgExprTypeMismatch, fmt.Sprintf(ErrFmtTypeComparison, a, b))
 }
 
 // compareGreater checks if a > b
@@ -244,7 +244,7 @@ func compareGreater(a, b any) (bool, error) {
 		return aStr > bStr, nil
 	}
 
-	return false, NewExprEvalError(ErrMsgExprTypeMismatch, fmt.Sprintf("cannot compare %T and %T", a, b))
+	return false, NewExprEvalError(ErrMsgExprTypeMismatch, fmt.Sprintf(ErrFmtTypeComparison, a, b))
 }
 
 // toNumber attempts to convert a value to float64

@@ -195,12 +195,12 @@ func NewExecutorErrorWithCause(message, tagName string, pos Position, cause erro
 func (e *ExecutorError) Error() string {
 	var result string
 	if e.TagName != StringValueEmpty {
-		result = fmt.Sprintf("%s [%s] at %s", e.Message, e.TagName, e.Position.String())
+		result = fmt.Sprintf(ErrFmtWithTagAndPosition, e.Message, e.TagName, e.Position.String())
 	} else {
-		result = fmt.Sprintf("%s at %s", e.Message, e.Position.String())
+		result = fmt.Sprintf(ErrFmtWithPosition, e.Message, e.Position.String())
 	}
 	if e.Cause != nil {
-		result = fmt.Sprintf("%s: %v", result, e.Cause)
+		result = fmt.Sprintf(ErrFmtWithCause, result, e.Cause)
 	}
 	return result
 }

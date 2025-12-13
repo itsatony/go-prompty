@@ -211,14 +211,14 @@ func (a Attributes) Map() map[string]string {
 // String returns a string representation of the attributes
 func (a Attributes) String() string {
 	if len(a) == 0 {
-		return "{}"
+		return FmtEmptyBraces
 	}
 	keys := a.Keys()
 	pairs := make([]string, 0, len(keys))
 	for _, k := range keys {
-		pairs = append(pairs, fmt.Sprintf("%s=%q", k, a[k]))
+		pairs = append(pairs, k+FmtKeyValueSep+fmt.Sprintf("%q", a[k]))
 	}
-	return "{" + strings.Join(pairs, ", ") + "}"
+	return FmtOpenBrace + strings.Join(pairs, FmtCommaSep) + FmtCloseBrace
 }
 
 // ConditionalNode represents an if/elseif/else conditional block

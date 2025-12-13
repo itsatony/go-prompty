@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 
@@ -130,8 +131,8 @@ func NewRegistryError(message, tagName string) *RegistryError {
 
 // Error implements the error interface
 func (e *RegistryError) Error() string {
-	if e.TagName != "" {
-		return e.Message + ": " + e.TagName
+	if e.TagName != StringValueEmpty {
+		return fmt.Sprintf(ErrFmtTagMessage, e.Message, e.TagName)
 	}
 	return e.Message
 }

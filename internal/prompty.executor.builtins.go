@@ -149,7 +149,7 @@ func NewBuiltinError(message, tagName string) *BuiltinError {
 
 // Error implements the error interface.
 func (e *BuiltinError) Error() string {
-	return e.TagName + ": " + e.Message
+	return fmt.Sprintf(ErrFmtTagMessage, e.TagName, e.Message)
 }
 
 // Builtin error message constants

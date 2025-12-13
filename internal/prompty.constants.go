@@ -192,3 +192,21 @@ const (
 	LogMsgConditionEval  = "evaluating condition"
 	LogMsgBranchSelected = "branch selected"
 )
+
+// Error format string constants (for Error() methods)
+const (
+	ErrFmtWithPosition       = "%s at %s"
+	ErrFmtWithTagAndPosition = "%s [%s] at %s"
+	ErrFmtWithCause          = "%s: %v"
+	ErrFmtTagMessage         = "%s: %s"
+	ErrFmtTypeComparison     = "cannot compare %T and %T"
+)
+
+// String format constants for AST String() methods
+const (
+	FmtOpenBrace    = "{"
+	FmtCloseBrace   = "}"
+	FmtCommaSep     = ", "
+	FmtKeyValueSep  = "="
+	FmtEmptyBraces  = "{}"
+)

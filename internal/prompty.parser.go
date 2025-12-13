@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"fmt"
+
 	"go.uber.org/zap"
 )
 
@@ -564,7 +566,7 @@ type ParserError struct {
 }
 
 func (e *ParserError) Error() string {
-	return e.Message + " at " + e.Position.String()
+	return fmt.Sprintf(ErrFmtWithPosition, e.Message, e.Position.String())
 }
 
 // Parser error message constants

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"strings"
 
 	"go.uber.org/zap"
@@ -454,7 +455,7 @@ type LexerError struct {
 }
 
 func (e *LexerError) Error() string {
-	return e.Message + " at " + e.Position.String()
+	return fmt.Sprintf(ErrFmtWithPosition, e.Message, e.Position.String())
 }
 
 // Error message constants for lexer
