@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"fmt"
 )
 
 // TemplateExecutor is the interface for executing nested templates.
@@ -55,7 +54,7 @@ func (r *IncludeResolver) Resolve(ctx context.Context, execCtx interface{}, attr
 
 	// Check if template exists
 	if !engine.HasTemplate(templateName) {
-		return "", NewBuiltinError(fmt.Sprintf(ErrMsgTemplateNotFoundFmt, templateName), TagNameInclude)
+		return "", NewTemplateNotFoundBuiltinError(templateName)
 	}
 
 	// Check depth limit

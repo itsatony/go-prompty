@@ -808,3 +808,453 @@ func TestParser_ParserErrorString(t *testing.T) {
 	assert.Contains(t, errStr, ErrMsgMismatchedTag)
 	assert.Contains(t, errStr, "5")
 }
+
+// TestParser_ParseConditional tests the parseConditional function
+func TestParser_ParseConditional(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantErr   bool
+		errMsg    string
+		checkAST  func(*testing.T, *RootNode)
+	}{
+		{
+			name:    "valid if...else structure",
+			input:   `{~prompty.if eval="user.isAdmin"~}Admin{~prompty.else~}Guest{~/prompty.if~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				require.Len(t, ast.Children, 1)
+				condNode, ok := ast.Children[0].(*ConditionalNode)
+				require.True(t, ok)
+				assert.Len(t, condNode.Branches, 2)
+				assert.Equal(t, "user.isAdmin", condNode.Branches[0].Condition)
+				assert.False(t, condNode.Branches[0].IsElse)
+				assert.True(t, condNode.Branches[1].IsElse)
+			},
+		},
+		{
+			name:    "multiple elseif branches",
+			input:   `{~prompty.if eval="x > 10"~}High{~prompty.elseif eval="x > 5"~}Medium{~prompty.else~}Low{~/prompty.if~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				condNode := ast.Children[0].(*ConditionalNode)
+				assert.Len(t, condNode.Branches, 3)
+				assert.Equal(t, "x > 10", condNode.Branches[0].Condition)
+				assert.Equal(t, "x > 5", condNode.Branches[1].Condition)
+				assert.False(t, condNode.Branches[1].IsElse)
+				assert.True(t, condNode.Branches[2].IsElse)
+			},
+		},
+		{
+			name:    "missing eval attribute on if",
+			input:   `{~prompty.if~}Content{~/prompty.if~}`,
+			wantErr: true,
+			errMsg:  ErrMsgCondMissingEval,
+		},
+		{
+			name:    "missing eval attribute on elseif",
+			input:   `{~prompty.if eval="true"~}A{~prompty.elseif~}B{~/prompty.if~}`,
+			wantErr: true,
+			errMsg:  ErrMsgCondMissingEval,
+		},
+		{
+			name:    "else with eval attribute",
+			input:   `{~prompty.if eval="true"~}A{~prompty.else eval="false"~}B{~/prompty.if~}`,
+			wantErr: true,
+			errMsg:  ErrMsgCondInvalidElse,
+		},
+		{
+			name:    "else not as final branch",
+			input:   `{~prompty.if eval="a"~}A{~prompty.else~}B{~prompty.elseif eval="c"~}C{~/prompty.if~}`,
+			wantErr: true,
+			errMsg:  ErrMsgCondElseNotLast,
+		},
+		{
+			name:    "nested conditionals",
+			input:   `{~prompty.if eval="outer"~}{~prompty.if eval="inner"~}Nested{~/prompty.if~}{~/prompty.if~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				condNode := ast.Children[0].(*ConditionalNode)
+				assert.Len(t, condNode.Branches, 1)
+				// Inner conditional should be in children
+				assert.Len(t, condNode.Branches[0].Children, 1)
+				innerCond, ok := condNode.Branches[0].Children[0].(*ConditionalNode)
+				assert.True(t, ok)
+				assert.Equal(t, "inner", innerCond.Branches[0].Condition)
+			},
+		},
+		{
+			name:    "unclosed conditional block",
+			input:   `{~prompty.if eval="true"~}Content`,
+			wantErr: true,
+			errMsg:  ErrMsgCondNotClosed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input, nil)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
+
+			parser := NewParser(tokens, nil)
+			ast, err := parser.Parse()
+
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, ast)
+				if tt.checkAST != nil {
+					tt.checkAST(t, ast)
+				}
+			}
+		})
+	}
+}
+
+// TestParser_ParseFor tests the parseFor and parseForBody functions
+func TestParser_ParseFor(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantErr   bool
+		errMsg    string
+		checkAST  func(*testing.T, *RootNode)
+	}{
+		{
+			name:    "valid for loop with item and in",
+			input:   `{~prompty.for item="user" in="users"~}Name: {~prompty.var name="user.name" /~}{~/prompty.for~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				require.Len(t, ast.Children, 1)
+				forNode, ok := ast.Children[0].(*ForNode)
+				require.True(t, ok)
+				assert.Equal(t, "user", forNode.ItemVar)
+				assert.Equal(t, "users", forNode.Source)
+				assert.Equal(t, "", forNode.IndexVar)
+				assert.Equal(t, 0, forNode.Limit)
+			},
+		},
+		{
+			name:    "for loop with index variable",
+			input:   `{~prompty.for item="x" index="i" in="items"~}Index: {~prompty.var name="i" /~}{~/prompty.for~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				forNode := ast.Children[0].(*ForNode)
+				assert.Equal(t, "x", forNode.ItemVar)
+				assert.Equal(t, "i", forNode.IndexVar)
+				assert.Equal(t, "items", forNode.Source)
+			},
+		},
+		{
+			name:    "for loop with limit attribute",
+			input:   `{~prompty.for item="x" in="items" limit="10"~}Item{~/prompty.for~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				forNode := ast.Children[0].(*ForNode)
+				assert.Equal(t, 10, forNode.Limit)
+			},
+		},
+		{
+			name:    "missing item attribute",
+			input:   `{~prompty.for in="items"~}Content{~/prompty.for~}`,
+			wantErr: true,
+			errMsg:  ErrMsgForMissingItem,
+		},
+		{
+			name:    "missing in attribute",
+			input:   `{~prompty.for item="x"~}Content{~/prompty.for~}`,
+			wantErr: true,
+			errMsg:  ErrMsgForMissingIn,
+		},
+		{
+			name:    "invalid limit - negative",
+			input:   `{~prompty.for item="x" in="items" limit="-1"~}Content{~/prompty.for~}`,
+			wantErr: true,
+			errMsg:  ErrMsgForInvalidLimit,
+		},
+		{
+			name:    "invalid limit - non-numeric",
+			input:   `{~prompty.for item="x" in="items" limit="abc"~}Content{~/prompty.for~}`,
+			wantErr: true,
+			errMsg:  ErrMsgForInvalidLimit,
+		},
+		{
+			name:    "nested for loops",
+			input:   `{~prompty.for item="row" in="rows"~}{~prompty.for item="col" in="row.columns"~}Cell{~/prompty.for~}{~/prompty.for~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				forNode := ast.Children[0].(*ForNode)
+				assert.Len(t, forNode.Children, 1)
+				innerFor, ok := forNode.Children[0].(*ForNode)
+				assert.True(t, ok)
+				assert.Equal(t, "col", innerFor.ItemVar)
+				assert.Equal(t, "row.columns", innerFor.Source)
+			},
+		},
+		{
+			name:    "unclosed for block",
+			input:   `{~prompty.for item="x" in="items"~}Content`,
+			wantErr: true,
+			errMsg:  ErrMsgForNotClosed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input, nil)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
+
+			parser := NewParser(tokens, nil)
+			ast, err := parser.Parse()
+
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, ast)
+				if tt.checkAST != nil {
+					tt.checkAST(t, ast)
+				}
+			}
+		})
+	}
+}
+
+// TestParser_ParseSwitch tests the parseSwitch and parseSwitchCase functions
+func TestParser_ParseSwitch(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantErr   bool
+		errMsg    string
+		checkAST  func(*testing.T, *RootNode)
+	}{
+		{
+			name:    "valid switch with single case",
+			input:   `{~prompty.switch eval="status"~}{~prompty.case value="active"~}Active{~/prompty.case~}{~/prompty.switch~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				require.Len(t, ast.Children, 1)
+				switchNode, ok := ast.Children[0].(*SwitchNode)
+				require.True(t, ok)
+				assert.Equal(t, "status", switchNode.Expression)
+				assert.Len(t, switchNode.Cases, 1)
+				assert.Equal(t, "active", switchNode.Cases[0].Value)
+				assert.Nil(t, switchNode.Default)
+			},
+		},
+		{
+			name:    "switch with multiple cases",
+			input:   `{~prompty.switch eval="role"~}{~prompty.case value="admin"~}A{~/prompty.case~}{~prompty.case value="user"~}U{~/prompty.case~}{~/prompty.switch~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				switchNode := ast.Children[0].(*SwitchNode)
+				assert.Len(t, switchNode.Cases, 2)
+				assert.Equal(t, "admin", switchNode.Cases[0].Value)
+				assert.Equal(t, "user", switchNode.Cases[1].Value)
+			},
+		},
+		{
+			name:    "switch with default case",
+			input:   `{~prompty.switch eval="x"~}{~prompty.case value="1"~}One{~/prompty.case~}{~prompty.casedefault~}Other{~/prompty.casedefault~}{~/prompty.switch~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				switchNode := ast.Children[0].(*SwitchNode)
+				assert.Len(t, switchNode.Cases, 1)
+				assert.NotNil(t, switchNode.Default)
+				assert.True(t, switchNode.Default.IsDefault)
+			},
+		},
+		{
+			name:    "switch with default not as last case",
+			input:   `{~prompty.switch eval="x"~}{~prompty.casedefault~}Default{~/prompty.casedefault~}{~prompty.case value="1"~}One{~/prompty.case~}{~/prompty.switch~}`,
+			wantErr: true,
+			errMsg:  ErrMsgSwitchDefaultNotLast,
+		},
+		{
+			name:    "switch missing eval attribute",
+			input:   `{~prompty.switch~}{~prompty.case value="1"~}One{~/prompty.case~}{~/prompty.switch~}`,
+			wantErr: true,
+			errMsg:  ErrMsgSwitchMissingEval,
+		},
+		{
+			name:    "case with value attribute",
+			input:   `{~prompty.switch eval="color"~}{~prompty.case value="red"~}Red{~/prompty.case~}{~/prompty.switch~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				switchNode := ast.Children[0].(*SwitchNode)
+				assert.Equal(t, "red", switchNode.Cases[0].Value)
+				assert.Equal(t, "", switchNode.Cases[0].Eval)
+			},
+		},
+		{
+			name:    "case with eval attribute",
+			input:   `{~prompty.switch eval="age"~}{~prompty.case eval="age > 18"~}Adult{~/prompty.case~}{~/prompty.switch~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				switchNode := ast.Children[0].(*SwitchNode)
+				assert.Equal(t, "", switchNode.Cases[0].Value)
+				assert.Equal(t, "age > 18", switchNode.Cases[0].Eval)
+			},
+		},
+		{
+			name:    "case missing both value and eval",
+			input:   `{~prompty.switch eval="x"~}{~prompty.case~}Content{~/prompty.case~}{~/prompty.switch~}`,
+			wantErr: true,
+			errMsg:  ErrMsgSwitchMissingValue,
+		},
+		{
+			name:    "unclosed switch block",
+			input:   `{~prompty.switch eval="x"~}{~prompty.case value="1"~}One{~/prompty.case~}`,
+			wantErr: true,
+			errMsg:  ErrMsgSwitchNotClosed,
+		},
+		{
+			name:    "nested switch statements",
+			input:   `{~prompty.switch eval="outer"~}{~prompty.case value="1"~}{~prompty.switch eval="inner"~}{~prompty.case value="a"~}Nested{~/prompty.case~}{~/prompty.switch~}{~/prompty.case~}{~/prompty.switch~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				switchNode := ast.Children[0].(*SwitchNode)
+				assert.Len(t, switchNode.Cases, 1)
+				assert.Len(t, switchNode.Cases[0].Children, 1)
+				innerSwitch, ok := switchNode.Cases[0].Children[0].(*SwitchNode)
+				assert.True(t, ok)
+				assert.Equal(t, "inner", innerSwitch.Expression)
+			},
+		},
+		{
+			name:    "duplicate default case",
+			input:   `{~prompty.switch eval="x"~}{~prompty.casedefault~}First{~/prompty.casedefault~}{~prompty.casedefault~}Second{~/prompty.casedefault~}{~/prompty.switch~}`,
+			wantErr: true,
+			errMsg:  ErrMsgSwitchDuplicateDefault,
+		},
+		{
+			name:    "unclosed case block",
+			input:   `{~prompty.switch eval="x"~}{~prompty.case value="1"~}Content{~/prompty.switch~}`,
+			wantErr: true,
+			errMsg:  ErrMsgSwitchCaseNotClosed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input, nil)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
+
+			parser := NewParser(tokens, nil)
+			ast, err := parser.Parse()
+
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, ast)
+				if tt.checkAST != nil {
+					tt.checkAST(t, ast)
+				}
+			}
+		})
+	}
+}
+
+// TestParser_ParseCommentBlock tests the parseCommentBlock function
+func TestParser_ParseCommentBlock(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantErr   bool
+		errMsg    string
+		checkAST  func(*testing.T, *RootNode)
+	}{
+		{
+			name:    "comment with text content returns nil",
+			input:   `{~prompty.comment~}This is a comment{~/prompty.comment~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				// Comment nodes produce nil, so they're not in the AST
+				assert.Empty(t, ast.Children)
+			},
+		},
+		{
+			name:    "comment with tags inside - all discarded",
+			input:   `{~prompty.comment~}{~prompty.var name="x" /~}{~section~}ignored{~/section~}{~/prompty.comment~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				assert.Empty(t, ast.Children)
+			},
+		},
+		{
+			name:    "unclosed comment",
+			input:   `{~prompty.comment~}This comment never closes`,
+			wantErr: true,
+			errMsg:  ErrMsgMismatchedTag,
+		},
+		{
+			name:    "multiple comments in sequence",
+			input:   `{~prompty.comment~}First{~/prompty.comment~}Text{~prompty.comment~}Second{~/prompty.comment~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				// Only the text between comments should remain
+				require.Len(t, ast.Children, 1)
+				textNode, ok := ast.Children[0].(*TextNode)
+				require.True(t, ok)
+				assert.Equal(t, "Text", textNode.Content)
+			},
+		},
+		{
+			name:    "empty comment block",
+			input:   `{~prompty.comment~}{~/prompty.comment~}`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				assert.Empty(t, ast.Children)
+			},
+		},
+		{
+			name:    "comment with multiline content",
+			input:   "{~prompty.comment~}\nLine 1\nLine 2\nLine 3\n{~/prompty.comment~}",
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				assert.Empty(t, ast.Children)
+			},
+		},
+		{
+			name:    "comment mixed with regular content",
+			input:   `Before{~prompty.comment~}Hidden{~/prompty.comment~}After`,
+			wantErr: false,
+			checkAST: func(t *testing.T, ast *RootNode) {
+				require.Len(t, ast.Children, 2)
+				assert.Equal(t, "Before", ast.Children[0].(*TextNode).Content)
+				assert.Equal(t, "After", ast.Children[1].(*TextNode).Content)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input, nil)
+			tokens, err := lexer.Tokenize()
+			require.NoError(t, err)
+
+			parser := NewParser(tokens, nil)
+			ast, err := parser.Parse()
+
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, ast)
+				if tt.checkAST != nil {
+					tt.checkAST(t, ast)
+				}
+			}
+		})
+	}
+}

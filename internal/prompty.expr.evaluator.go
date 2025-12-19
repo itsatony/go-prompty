@@ -225,7 +225,7 @@ func compareLess(a, b any) (bool, error) {
 		return aStr < bStr, nil
 	}
 
-	return false, NewExprEvalError(ErrMsgExprTypeMismatch, fmt.Sprintf(ErrFmtTypeComparison, a, b))
+	return false, NewTypeComparisonError(fmt.Sprintf("%T", a), fmt.Sprintf("%T", b))
 }
 
 // compareGreater checks if a > b
@@ -244,7 +244,7 @@ func compareGreater(a, b any) (bool, error) {
 		return aStr > bStr, nil
 	}
 
-	return false, NewExprEvalError(ErrMsgExprTypeMismatch, fmt.Sprintf(ErrFmtTypeComparison, a, b))
+	return false, NewTypeComparisonError(fmt.Sprintf("%T", a), fmt.Sprintf("%T", b))
 }
 
 // toNumber attempts to convert a value to float64
@@ -265,34 +265,60 @@ func toNumber(v any) (float64, bool) {
 
 // ExprEvalError represents an expression evaluation error
 type ExprEvalError struct {
-	Message string
-	Detail  string
+	Message  string
+	Detail   string
+	Metadata map[string]string
 }
 
 // NewExprEvalError creates a new expression evaluation error
 func NewExprEvalError(message, detail string) *ExprEvalError {
 	return &ExprEvalError{
-		Message: message,
-		Detail:  detail,
+		Message:  message,
+		Detail:   detail,
+		Metadata: make(map[string]string),
 	}
+}
+
+// WithMetadata adds a metadata key-value pair and returns the error for chaining.
+func (e *ExprEvalError) WithMetadata(key, value string) *ExprEvalError {
+	if e.Metadata == nil {
+		e.Metadata = make(map[string]string)
+	}
+	e.Metadata[key] = value
+	return e
 }
 
 // Error implements the error interface
 func (e *ExprEvalError) Error() string {
+	var result string
 	if e.Detail != "" {
-		return fmt.Sprintf("%s: %s", e.Message, e.Detail)
+		result = fmt.Sprintf("%s: %s", e.Message, e.Detail)
+	} else {
+		result = e.Message
 	}
-	return e.Message
+	if len(e.Metadata) > 0 {
+		for k, v := range e.Metadata {
+			result += fmt.Sprintf(" [%s=%s]", k, v)
+		}
+	}
+	return result
+}
+
+// NewTypeComparisonError creates an error for type mismatch in comparisons.
+func NewTypeComparisonError(typeA, typeB string) *ExprEvalError {
+	return NewExprEvalError(ErrMsgExprTypeMismatch, "").
+		WithMetadata(MetaKeyFromType, typeA).
+		WithMetadata(MetaKeyToType, typeB)
 }
 
 // Expression evaluator error messages
 const (
-	ErrMsgExprNilNode        = "nil expression node"
+	ErrMsgExprNilNode         = "nil expression node"
 	ErrMsgExprUnknownNodeType = "unknown expression node type"
-	ErrMsgExprNoContext      = "no context available for variable lookup"
+	ErrMsgExprNoContext       = "no context available for variable lookup"
 	ErrMsgExprUnknownOperator = "unknown operator"
-	ErrMsgExprNoFuncRegistry = "no function registry available"
-	ErrMsgExprTypeMismatch   = "type mismatch in comparison"
+	ErrMsgExprNoFuncRegistry  = "no function registry available"
+	ErrMsgExprTypeMismatch    = "type mismatch in comparison"
 )
 
 // EvaluateExpression is a convenience function that parses and evaluates an expression string

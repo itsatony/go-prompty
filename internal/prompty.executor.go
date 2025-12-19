@@ -369,7 +369,7 @@ func toIterableSlice(val any) ([]any, error) {
 		}
 		return result, nil
 	default:
-		return nil, fmt.Errorf(ErrMsgForTypeNotIterable, fmt.Sprintf("%T", val))
+		return nil, NewTypeNotIterableError(fmt.Sprintf("%T", val))
 	}
 }
 
@@ -488,6 +488,7 @@ type ExecutorError struct {
 	TagName  string
 	Position Position
 	Cause    error
+	Metadata map[string]string
 }
 
 // NewExecutorError creates a new executor error.
@@ -496,6 +497,7 @@ func NewExecutorError(message, tagName string, pos Position) *ExecutorError {
 		Message:  message,
 		TagName:  tagName,
 		Position: pos,
+		Metadata: make(map[string]string),
 	}
 }
 
@@ -506,7 +508,17 @@ func NewExecutorErrorWithCause(message, tagName string, pos Position, cause erro
 		TagName:  tagName,
 		Position: pos,
 		Cause:    cause,
+		Metadata: make(map[string]string),
 	}
+}
+
+// WithMetadata adds a metadata key-value pair and returns the error for chaining.
+func (e *ExecutorError) WithMetadata(key, value string) *ExecutorError {
+	if e.Metadata == nil {
+		e.Metadata = make(map[string]string)
+	}
+	e.Metadata[key] = value
+	return e
 }
 
 // Error implements the error interface.
@@ -520,6 +532,11 @@ func (e *ExecutorError) Error() string {
 	if e.Cause != nil {
 		result = fmt.Sprintf(ErrFmtWithCause, result, e.Cause)
 	}
+	if len(e.Metadata) > 0 {
+		for k, v := range e.Metadata {
+			result += fmt.Sprintf(" [%s=%s]", k, v)
+		}
+	}
 	return result
 }
 
@@ -528,12 +545,19 @@ func (e *ExecutorError) Unwrap() error {
 	return e.Cause
 }
 
+// NewTypeNotIterableError creates an error for non-iterable types in for loops.
+func NewTypeNotIterableError(typeName string) *ExecutorError {
+	return NewExecutorError(ErrMsgTypeNotIterable, TagNameFor, Position{}).
+		WithMetadata(MetaKeyIterableType, typeName)
+}
+
 // Executor error message constants
 const (
 	ErrMsgMaxDepthExceeded = "maximum nesting depth exceeded"
 	ErrMsgUnknownNodeType  = "unknown node type"
 	ErrMsgUnknownTag       = "unknown tag"
 	ErrMsgResolverFailed   = "resolver failed"
+	ErrMsgTypeNotIterable  = "type is not iterable"
 )
 
 // Default configuration values

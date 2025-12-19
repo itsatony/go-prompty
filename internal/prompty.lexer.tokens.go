@@ -29,45 +29,6 @@ func (t Token) String() string {
 	return fmt.Sprintf("Token{%s: %q @ %s}", t.Type, t.Value, t.Position)
 }
 
-// IsEOF returns true if this is an end-of-file token
-func (t Token) IsEOF() bool {
-	return t.Type == TokenTypeEOF
-}
-
-// IsText returns true if this is a text token
-func (t Token) IsText() bool {
-	return t.Type == TokenTypeText
-}
-
-// IsOpenTag returns true if this is an open tag token
-func (t Token) IsOpenTag() bool {
-	return t.Type == TokenTypeOpenTag
-}
-
-// IsSelfClose returns true if this is a self-closing tag end token
-func (t Token) IsSelfClose() bool {
-	return t.Type == TokenTypeSelfClose
-}
-
-// IsBlockClose returns true if this is a block closing tag start token
-func (t Token) IsBlockClose() bool {
-	return t.Type == TokenTypeBlockClose
-}
-
-// IsCloseTag returns true if this is a close tag token
-func (t Token) IsCloseTag() bool {
-	return t.Type == TokenTypeCloseTag
-}
-
-// NewToken creates a new token with the given type, value, and position
-func NewToken(tokenType TokenType, value string, pos Position) Token {
-	return Token{
-		Type:     tokenType,
-		Value:    value,
-		Position: pos,
-	}
-}
-
 // NewEOFToken creates an EOF token at the given position
 func NewEOFToken(pos Position) Token {
 	return Token{

@@ -34,7 +34,7 @@ func (m *mockTemplateExecutor) ExecuteTemplate(ctx context.Context, name string,
 	if result, ok := m.templates[name]; ok {
 		return result, nil
 	}
-	return "", errors.New(ErrMsgTemplateNotFoundFmt)
+	return "", errors.New(ErrMsgTemplateNotFound)
 }
 
 func (m *mockTemplateExecutor) HasTemplate(name string) bool {

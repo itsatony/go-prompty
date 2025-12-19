@@ -80,7 +80,7 @@ func (r *VarResolver) Resolve(ctx context.Context, execCtx interface{}, attrs At
 		if defaultVal, hasDefault := attrs.Get(AttrDefault); hasDefault {
 			return defaultVal, nil
 		}
-		return "", NewBuiltinError(fmt.Sprintf(ErrMsgVariableNotFoundFmt, name), TagNameVar)
+		return "", NewVariableNotFoundBuiltinError(name)
 	}
 
 	// Convert value to string
@@ -154,27 +154,57 @@ func RegisterBuiltins(registry *Registry) {
 
 // BuiltinError represents an error from a built-in resolver.
 type BuiltinError struct {
-	Message string
-	TagName string
+	Message  string
+	TagName  string
+	Metadata map[string]string
 }
 
 // NewBuiltinError creates a new builtin error.
 func NewBuiltinError(message, tagName string) *BuiltinError {
 	return &BuiltinError{
-		Message: message,
-		TagName: tagName,
+		Message:  message,
+		TagName:  tagName,
+		Metadata: make(map[string]string),
 	}
+}
+
+// WithMetadata adds a metadata key-value pair and returns the error for chaining.
+func (e *BuiltinError) WithMetadata(key, value string) *BuiltinError {
+	if e.Metadata == nil {
+		e.Metadata = make(map[string]string)
+	}
+	e.Metadata[key] = value
+	return e
 }
 
 // Error implements the error interface.
 func (e *BuiltinError) Error() string {
-	return fmt.Sprintf(ErrFmtTagMessage, e.TagName, e.Message)
+	base := fmt.Sprintf(ErrFmtTagMessage, e.TagName, e.Message)
+	if len(e.Metadata) > 0 {
+		for k, v := range e.Metadata {
+			base += fmt.Sprintf(" [%s=%s]", k, v)
+		}
+	}
+	return base
+}
+
+// NewVariableNotFoundBuiltinError creates an error for variable not found.
+func NewVariableNotFoundBuiltinError(path string) *BuiltinError {
+	return NewBuiltinError(ErrMsgVariableNotFound, TagNameVar).
+		WithMetadata(MetaKeyPath, path)
+}
+
+// NewTemplateNotFoundBuiltinError creates an error for template not found.
+func NewTemplateNotFoundBuiltinError(name string) *BuiltinError {
+	return NewBuiltinError(ErrMsgTemplateNotFound, TagNameInclude).
+		WithMetadata(MetaKeyTemplateName, name)
 }
 
 // Builtin error message constants
 const (
-	ErrMsgInvalidContext      = "invalid execution context type"
-	ErrMsgMissingNameAttr     = "missing required 'name' attribute"
-	ErrMsgVariableNotFoundFmt = "variable not found: %s"
-	ErrMsgRawResolverCalled   = "raw resolver should not be called directly"
+	ErrMsgInvalidContext    = "invalid execution context type"
+	ErrMsgMissingNameAttr   = "missing required 'name' attribute"
+	ErrMsgVariableNotFound  = "variable not found"
+	ErrMsgTemplateNotFound  = "template not found"
+	ErrMsgRawResolverCalled = "raw resolver should not be called directly"
 )

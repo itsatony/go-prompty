@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2024-12-19
+
+### Added
+
+- Comprehensive unit tests for parser internals (conditionals, loops, switch/case, comments)
+- Comprehensive unit tests for executor internals (conditional execution, for loops, switch statements)
+- Complete error constructor test coverage (100% on all error creation functions)
+- Production-focused README with architecture overview, best practices, and troubleshooting guide
+
+### Changed
+
+- Improved error handling with metadata support for all internal error types
+- Replaced magic format strings with structured error constructors using metadata
+- Enhanced test coverage from 64.9% to 88.3% across library code
+
+### Removed
+
+- Unused Token helper methods (IsEOF, IsText, IsOpenTag, IsSelfClose, IsBlockClose, IsCloseTag, NewToken)
+- Obsolete format string constants (ErrMsgVariableNotFoundFmt, ErrMsgTemplateNotFoundFmt, ErrFmtTypeComparison)
+
+### Technical Details
+
+- 88%+ test coverage with race detection
+- Zero magic string violations in error handling
+- All tests pass with `-race` flag
+- Clean golangci-lint output
+
 ## [1.0.0] - 2024-12-13
 
 ### Added

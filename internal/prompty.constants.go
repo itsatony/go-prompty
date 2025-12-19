@@ -182,14 +182,18 @@ const (
 const (
 	ErrMsgMissingTemplateAttr = "missing required 'template' attribute"
 	ErrMsgEngineNotAvailable  = "engine not available in context"
-	ErrMsgTemplateNotFoundFmt = "template not found: %s"
-	ErrMsgDepthExceeded       = "maximum template inclusion depth exceeded"
+	ErrMsgDepthExceeded = "maximum template inclusion depth exceeded"
 )
 
-// Meta key constants for internal data passing
+// Meta key constants for internal data passing and error metadata
 const (
-	MetaKeyParentDepth = "_parentDepth"
-	MetaKeyValue       = "_value"
+	MetaKeyParentDepth   = "_parentDepth"
+	MetaKeyValue         = "_value"
+	MetaKeyPath          = "path"
+	MetaKeyTemplateName  = "template_name"
+	MetaKeyFromType      = "from_type"
+	MetaKeyToType        = "to_type"
+	MetaKeyIterableType  = "iterable_type"
 )
 
 // Log messages for template operations
@@ -221,7 +225,6 @@ const (
 	ErrFmtWithTagAndPosition = "%s [%s] at %s"
 	ErrFmtWithCause          = "%s: %v"
 	ErrFmtTagMessage         = "%s: %s"
-	ErrFmtTypeComparison     = "cannot compare %T and %T"
 )
 
 // String format constants for AST String() methods
@@ -318,7 +321,6 @@ const (
 	ErrMsgForLimitExceeded  = "loop iteration limit exceeded"
 	ErrMsgForNotClosed      = "for block not closed"
 	ErrMsgForContextNoChild = "context does not support child creation"
-	ErrMsgForTypeNotIterable = "type %s is not iterable"
 )
 
 // Log messages for for loop operations (Phase 4)
