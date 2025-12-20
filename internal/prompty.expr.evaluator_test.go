@@ -1,7 +1,9 @@
 package internal
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -403,4 +405,118 @@ func TestEvaluateExpression_ParseError(t *testing.T) {
 	_, err := EvaluateExpression("@@invalid", funcs, ctx)
 
 	require.Error(t, err)
+}
+
+func TestEvaluateExpressionWithContext_Cancellation(t *testing.T) {
+	funcs := NewFuncRegistry()
+	RegisterBuiltinFuncs(funcs)
+	ctx := newMockContextAccessor(map[string]any{
+		"value": 42,
+	})
+
+	t.Run("cancelled context returns error", func(t *testing.T) {
+		cancelledCtx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately
+
+		_, err := EvaluateExpressionWithContext(cancelledCtx, "value > 10", funcs, ctx)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), ErrMsgExprCancelled)
+	})
+
+	t.Run("timed out context returns error", func(t *testing.T) {
+		timedOutCtx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+		defer cancel()
+		time.Sleep(10 * time.Millisecond) // Wait for timeout
+
+		_, err := EvaluateExpressionWithContext(timedOutCtx, "value > 10", funcs, ctx)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), ErrMsgExprTimeout)
+	})
+
+	t.Run("valid context works normally", func(t *testing.T) {
+		validCtx := context.Background()
+
+		result, err := EvaluateExpressionWithContext(validCtx, "value > 10", funcs, ctx)
+
+		require.NoError(t, err)
+		assert.Equal(t, true, result)
+	})
+}
+
+func TestEvaluateExpressionBoolWithContext_Cancellation(t *testing.T) {
+	funcs := NewFuncRegistry()
+	RegisterBuiltinFuncs(funcs)
+	ctx := newMockContextAccessor(map[string]any{
+		"flag": true,
+	})
+
+	t.Run("cancelled context returns error", func(t *testing.T) {
+		cancelledCtx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := EvaluateExpressionBoolWithContext(cancelledCtx, "flag", funcs, ctx)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), ErrMsgExprCancelled)
+	})
+
+	t.Run("valid context works normally", func(t *testing.T) {
+		result, err := EvaluateExpressionBoolWithContext(context.Background(), "flag", funcs, ctx)
+
+		require.NoError(t, err)
+		assert.True(t, result)
+	})
+}
+
+func TestNewExprEvaluatorWithContext_NilContext(t *testing.T) {
+	funcs := NewFuncRegistry()
+	ctx := newMockContextAccessor(nil)
+
+	// Should not panic with nil context - pass context.TODO for the test
+	//nolint:staticcheck // Testing nil context handling
+	evaluator := NewExprEvaluatorWithContext(nil, funcs, ctx) //nolint:staticcheck
+	require.NotNil(t, evaluator)
+
+	// Should work normally with nil context (uses background)
+	node, err := ParseExpression("true")
+	require.NoError(t, err)
+
+	result, err := evaluator.Evaluate(node)
+	require.NoError(t, err)
+	assert.Equal(t, true, result)
+}
+
+func TestExprEvaluator_CheckContext(t *testing.T) {
+	funcs := NewFuncRegistry()
+	ctx := newMockContextAccessor(nil)
+
+	t.Run("nil context is ok", func(t *testing.T) {
+		evaluator := &ExprEvaluator{
+			funcs:   funcs,
+			ctx:     ctx,
+			evalCtx: nil,
+		}
+
+		err := evaluator.checkContext()
+		require.NoError(t, err)
+	})
+
+	t.Run("non-cancelled context is ok", func(t *testing.T) {
+		evaluator := NewExprEvaluatorWithContext(context.Background(), funcs, ctx)
+
+		err := evaluator.checkContext()
+		require.NoError(t, err)
+	})
+
+	t.Run("cancelled context returns error", func(t *testing.T) {
+		cancelledCtx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		evaluator := NewExprEvaluatorWithContext(cancelledCtx, funcs, ctx)
+
+		err := evaluator.checkContext()
+		require.Error(t, err)
+	})
 }

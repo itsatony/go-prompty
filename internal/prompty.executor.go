@@ -140,7 +140,7 @@ func (e *Executor) executeConditional(ctx context.Context, cond *ConditionalNode
 		}
 
 		// Evaluate the condition expression
-		result, err := e.evaluateCondition(branch.Condition, execCtx)
+		result, err := e.evaluateCondition(ctx, branch.Condition, execCtx)
 		if err != nil {
 			return "", NewExecutorErrorWithCause(ErrMsgCondExprFailed, TagNameIf, branch.Pos, err)
 		}
@@ -156,8 +156,9 @@ func (e *Executor) executeConditional(ctx context.Context, cond *ConditionalNode
 }
 
 // evaluateCondition parses and evaluates a condition expression.
-func (e *Executor) evaluateCondition(expr string, execCtx ContextAccessor) (bool, error) {
-	return EvaluateExpressionBool(expr, e.funcs, execCtx)
+// The context.Context from the executor is passed through for timeout/cancellation support.
+func (e *Executor) evaluateCondition(ctx context.Context, expr string, execCtx ContextAccessor) (bool, error) {
+	return EvaluateExpressionBoolWithContext(ctx, expr, e.funcs, execCtx)
 }
 
 // executeFor processes a for loop node and returns its output.
@@ -235,7 +236,7 @@ func (e *Executor) executeSwitch(ctx context.Context, switchNode *SwitchNode, ex
 		zap.String(LogFieldExpression, switchNode.Expression))
 
 	// Evaluate the switch expression to get the value to compare against
-	switchValue, err := EvaluateExpression(switchNode.Expression, e.funcs, execCtx)
+	switchValue, err := EvaluateExpressionWithContext(ctx, switchNode.Expression, e.funcs, execCtx)
 	if err != nil {
 		return "", NewExecutorErrorWithCause(ErrMsgCondExprFailed, TagNameSwitch, switchNode.Pos(), err)
 	}
@@ -256,7 +257,7 @@ func (e *Executor) executeSwitch(ctx context.Context, switchNode *SwitchNode, ex
 			matched = switchValueStr == caseNode.Value
 		} else if caseNode.Eval != "" {
 			// Boolean expression evaluation
-			result, evalErr := e.evaluateCondition(caseNode.Eval, execCtx)
+			result, evalErr := e.evaluateCondition(ctx, caseNode.Eval, execCtx)
 			if evalErr != nil {
 				return "", NewExecutorErrorWithCause(ErrMsgCondExprFailed, TagNameCase, caseNode.Pos, evalErr)
 			}

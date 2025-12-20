@@ -779,7 +779,7 @@ func TestExecutor_EvaluateCondition(t *testing.T) {
 			"flag": true,
 		})
 
-		result, err := executor.evaluateCondition("flag", ctx)
+		result, err := executor.evaluateCondition(context.Background(), "flag", ctx)
 		require.NoError(t, err)
 		assert.True(t, result)
 	})
@@ -792,7 +792,7 @@ func TestExecutor_EvaluateCondition(t *testing.T) {
 			"count": 10,
 		})
 
-		result, err := executor.evaluateCondition("count > 5", ctx)
+		result, err := executor.evaluateCondition(context.Background(), "count > 5", ctx)
 		require.NoError(t, err)
 		assert.True(t, result)
 	})
@@ -803,7 +803,7 @@ func TestExecutor_EvaluateCondition(t *testing.T) {
 
 		ctx := newMockContextAccessor(nil)
 
-		_, err := executor.evaluateCondition("undefined_func()", ctx)
+		_, err := executor.evaluateCondition(context.Background(), "undefined_func()", ctx)
 		require.Error(t, err)
 	})
 }

@@ -2,6 +2,7 @@ package prompty
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"sync"
 )
@@ -174,16 +175,55 @@ func (c *Context) Parent() *Context {
 	return c.parent
 }
 
-// Data returns a copy of the context's direct data (not including parent).
+// Data returns a deep copy of the context's direct data (not including parent).
+// The copy is safe to modify without affecting the original context.
 func (c *Context) Data() map[string]any {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	result := make(map[string]any, len(c.data))
-	for k, v := range c.data {
-		result[k] = v
+	return deepCopyMap(c.data)
+}
+
+// Keys returns a list of all top-level keys in this context (not including parent).
+// This is used by the "did you mean?" suggestion system to find similar variable names.
+func (c *Context) Keys() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	keys := make([]string, 0, len(c.data))
+	for k := range c.data {
+		keys = append(keys, k)
 	}
-	return result
+	return keys
+}
+
+// AllKeys returns a list of all top-level keys including parent contexts.
+// Keys from this context take precedence over parent keys.
+func (c *Context) AllKeys() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	keySet := make(map[string]bool)
+
+	// Collect keys from this context
+	for k := range c.data {
+		keySet[k] = true
+	}
+
+	// Collect keys from parent chain (only add if not already present)
+	for parent := c.parent; parent != nil; parent = parent.parent {
+		parent.mu.RLock()
+		for k := range parent.data {
+			keySet[k] = true
+		}
+		parent.mu.RUnlock()
+	}
+
+	keys := make([]string, 0, len(keySet))
+	for k := range keySet {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // ErrorStrategy returns the current error handling strategy as an int.
@@ -218,11 +258,9 @@ func (c *Context) WithEngine(engine TemplateExecutor) *Context {
 	defer c.mu.Unlock()
 
 	// Deep copy the data map to avoid race conditions
-	// when parent and child contexts are accessed concurrently
-	dataCopy := make(map[string]any, len(c.data))
-	for k, v := range c.data {
-		dataCopy[k] = v
-	}
+	// when parent and child contexts are accessed concurrently.
+	// This now properly handles nested maps and slices.
+	dataCopy := deepCopyMap(c.data)
 
 	newCtx := &Context{
 		data:       dataCopy,
@@ -242,11 +280,9 @@ func (c *Context) WithDepth(depth int) *Context {
 	defer c.mu.Unlock()
 
 	// Deep copy the data map to avoid race conditions
-	// when parent and child contexts are accessed concurrently
-	dataCopy := make(map[string]any, len(c.data))
-	for k, v := range c.data {
-		dataCopy[k] = v
-	}
+	// when parent and child contexts are accessed concurrently.
+	// This now properly handles nested maps and slices.
+	dataCopy := deepCopyMap(c.data)
 
 	newCtx := &Context{
 		data:       dataCopy,
@@ -260,3 +296,285 @@ func (c *Context) WithDepth(depth int) *Context {
 
 // Path separator for dot-notation
 const PathSeparator = "."
+
+// deepCopyValue recursively copies a value to ensure no shared references.
+// Handles maps, slices, and basic types. Complex types (structs, pointers)
+// are copied by value which may still share internal state.
+func deepCopyValue(v any) any {
+	if v == nil {
+		return nil
+	}
+
+	switch val := v.(type) {
+	case map[string]any:
+		return deepCopyMap(val)
+	case map[string]string:
+		result := make(map[string]string, len(val))
+		for k, v := range val {
+			result[k] = v
+		}
+		return result
+	case []any:
+		return deepCopySlice(val)
+	case []string:
+		result := make([]string, len(val))
+		copy(result, val)
+		return result
+	case []int:
+		result := make([]int, len(val))
+		copy(result, val)
+		return result
+	case []float64:
+		result := make([]float64, len(val))
+		copy(result, val)
+		return result
+	case []bool:
+		result := make([]bool, len(val))
+		copy(result, val)
+		return result
+	default:
+		// For basic types (string, int, float, bool) and complex types
+		// (structs, pointers), return as-is. Basic types are copied by value.
+		// Complex types may still share internal state, which is acceptable
+		// for template data that typically doesn't contain mutable structs.
+		return val
+	}
+}
+
+// deepCopyMap creates a deep copy of a map[string]any.
+func deepCopyMap(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		result[k] = deepCopyValue(v)
+	}
+	return result
+}
+
+// deepCopySlice creates a deep copy of a []any slice.
+func deepCopySlice(s []any) []any {
+	if s == nil {
+		return nil
+	}
+	result := make([]any, len(s))
+	for i, v := range s {
+		result[i] = deepCopyValue(v)
+	}
+	return result
+}
+
+// GetInt retrieves an integer value by path.
+// Handles int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64.
+// Returns the value and true if found and convertible, or 0 and false otherwise.
+func (c *Context) GetInt(path string) (int, bool) {
+	val, ok := c.Get(path)
+	if !ok {
+		return 0, false
+	}
+
+	// Direct type assertion for common cases
+	switch v := val.(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case int32:
+		return int(v), true
+	case float64:
+		return int(v), true
+	case float32:
+		return int(v), true
+	}
+
+	// Use reflection for other numeric types
+	rv := reflect.ValueOf(val)
+	switch rv.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return int(rv.Int()), true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return int(rv.Uint()), true
+	case reflect.Float32, reflect.Float64:
+		return int(rv.Float()), true
+	}
+
+	return 0, false
+}
+
+// GetIntDefault retrieves an integer value with a fallback default.
+func (c *Context) GetIntDefault(path string, defaultVal int) int {
+	val, ok := c.GetInt(path)
+	if !ok {
+		return defaultVal
+	}
+	return val
+}
+
+// GetFloat retrieves a float64 value by path.
+// Handles float32, float64, and integer types.
+// Returns the value and true if found and convertible, or 0 and false otherwise.
+func (c *Context) GetFloat(path string) (float64, bool) {
+	val, ok := c.Get(path)
+	if !ok {
+		return 0, false
+	}
+
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	}
+
+	// Use reflection for other numeric types
+	rv := reflect.ValueOf(val)
+	switch rv.Kind() {
+	case reflect.Float32, reflect.Float64:
+		return rv.Float(), true
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return float64(rv.Int()), true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return float64(rv.Uint()), true
+	}
+
+	return 0, false
+}
+
+// GetFloatDefault retrieves a float64 value with a fallback default.
+func (c *Context) GetFloatDefault(path string, defaultVal float64) float64 {
+	val, ok := c.GetFloat(path)
+	if !ok {
+		return defaultVal
+	}
+	return val
+}
+
+// GetBool retrieves a boolean value by path.
+// Returns the value and true if found and is a bool, or false and false otherwise.
+func (c *Context) GetBool(path string) (bool, bool) {
+	val, ok := c.Get(path)
+	if !ok {
+		return false, false
+	}
+	if b, ok := val.(bool); ok {
+		return b, true
+	}
+	return false, false
+}
+
+// GetBoolDefault retrieves a boolean value with a fallback default.
+func (c *Context) GetBoolDefault(path string, defaultVal bool) bool {
+	val, ok := c.GetBool(path)
+	if !ok {
+		return defaultVal
+	}
+	return val
+}
+
+// GetSlice retrieves a slice value by path.
+// Returns the value and true if found and is a []any, or nil and false otherwise.
+func (c *Context) GetSlice(path string) ([]any, bool) {
+	val, ok := c.Get(path)
+	if !ok {
+		return nil, false
+	}
+	if s, ok := val.([]any); ok {
+		return s, true
+	}
+
+	// Try to convert other slice types using reflection
+	rv := reflect.ValueOf(val)
+	if rv.Kind() == reflect.Slice {
+		result := make([]any, rv.Len())
+		for i := 0; i < rv.Len(); i++ {
+			result[i] = rv.Index(i).Interface()
+		}
+		return result, true
+	}
+
+	return nil, false
+}
+
+// GetSliceDefault retrieves a slice value with a fallback default.
+func (c *Context) GetSliceDefault(path string, defaultVal []any) []any {
+	val, ok := c.GetSlice(path)
+	if !ok {
+		return defaultVal
+	}
+	return val
+}
+
+// GetMap retrieves a map value by path.
+// Returns the value and true if found and is a map[string]any, or nil and false otherwise.
+func (c *Context) GetMap(path string) (map[string]any, bool) {
+	val, ok := c.Get(path)
+	if !ok {
+		return nil, false
+	}
+	if m, ok := val.(map[string]any); ok {
+		return m, true
+	}
+
+	// Try to convert map[string]string
+	if m, ok := val.(map[string]string); ok {
+		result := make(map[string]any, len(m))
+		for k, v := range m {
+			result[k] = v
+		}
+		return result, true
+	}
+
+	return nil, false
+}
+
+// GetMapDefault retrieves a map value with a fallback default.
+func (c *Context) GetMapDefault(path string, defaultVal map[string]any) map[string]any {
+	val, ok := c.GetMap(path)
+	if !ok {
+		return defaultVal
+	}
+	return val
+}
+
+// GetStringSlice retrieves a []string value by path.
+// Returns the value and true if found and convertible, or nil and false otherwise.
+func (c *Context) GetStringSlice(path string) ([]string, bool) {
+	val, ok := c.Get(path)
+	if !ok {
+		return nil, false
+	}
+
+	// Direct type assertion
+	if s, ok := val.([]string); ok {
+		return s, true
+	}
+
+	// Try to convert []any to []string
+	if s, ok := val.([]any); ok {
+		result := make([]string, 0, len(s))
+		for _, v := range s {
+			if str, ok := v.(string); ok {
+				result = append(result, str)
+			} else {
+				return nil, false
+			}
+		}
+		return result, true
+	}
+
+	return nil, false
+}
+
+// GetStringSliceDefault retrieves a []string value with a fallback default.
+func (c *Context) GetStringSliceDefault(path string, defaultVal []string) []string {
+	val, ok := c.GetStringSlice(path)
+	if !ok {
+		return defaultVal
+	}
+	return val
+}

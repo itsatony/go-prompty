@@ -1,25 +1,48 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 )
 
 // ExprEvaluator evaluates expression AST nodes
 type ExprEvaluator struct {
-	funcs *FuncRegistry
-	ctx   ContextAccessor
+	funcs   *FuncRegistry
+	ctx     ContextAccessor
+	evalCtx context.Context // Execution context for cancellation/timeout
 }
 
 // NewExprEvaluator creates a new expression evaluator
 func NewExprEvaluator(funcs *FuncRegistry, ctx ContextAccessor) *ExprEvaluator {
 	return &ExprEvaluator{
-		funcs: funcs,
-		ctx:   ctx,
+		funcs:   funcs,
+		ctx:     ctx,
+		evalCtx: context.Background(),
 	}
 }
 
-// Evaluate evaluates an expression and returns the result
+// NewExprEvaluatorWithContext creates a new expression evaluator with cancellation context.
+// The provided context is checked during evaluation to support timeouts and cancellation.
+func NewExprEvaluatorWithContext(evalCtx context.Context, funcs *FuncRegistry, ctx ContextAccessor) *ExprEvaluator {
+	if evalCtx == nil {
+		evalCtx = context.Background()
+	}
+	return &ExprEvaluator{
+		funcs:   funcs,
+		ctx:     ctx,
+		evalCtx: evalCtx,
+	}
+}
+
+// Evaluate evaluates an expression and returns the result.
+// It checks for context cancellation before evaluating each node to support
+// timeouts and cancellation of long-running or deeply-nested expressions.
 func (e *ExprEvaluator) Evaluate(node ExprNode) (any, error) {
+	// Check for context cancellation before evaluation
+	if err := e.checkContext(); err != nil {
+		return nil, err
+	}
+
 	if node == nil {
 		return nil, NewExprEvalError(ErrMsgExprNilNode, "")
 	}
@@ -42,6 +65,26 @@ func (e *ExprEvaluator) Evaluate(node ExprNode) (any, error) {
 
 	default:
 		return nil, NewExprEvalError(ErrMsgExprUnknownNodeType, fmt.Sprintf("%T", node))
+	}
+}
+
+// checkContext checks if the evaluation context has been cancelled or timed out.
+func (e *ExprEvaluator) checkContext() error {
+	if e.evalCtx == nil {
+		return nil
+	}
+	select {
+	case <-e.evalCtx.Done():
+		err := e.evalCtx.Err()
+		if err == context.Canceled {
+			return NewExprEvalError(ErrMsgExprCancelled, "")
+		}
+		if err == context.DeadlineExceeded {
+			return NewExprEvalError(ErrMsgExprTimeout, "")
+		}
+		return NewExprEvalError(ErrMsgExprContextDone, err.Error())
+	default:
+		return nil
 	}
 }
 
@@ -319,26 +362,43 @@ const (
 	ErrMsgExprUnknownOperator = "unknown operator"
 	ErrMsgExprNoFuncRegistry  = "no function registry available"
 	ErrMsgExprTypeMismatch    = "type mismatch in comparison"
+	ErrMsgExprCancelled       = "expression evaluation cancelled"
+	ErrMsgExprTimeout         = "expression evaluation timed out"
+	ErrMsgExprContextDone     = "expression evaluation context done"
 )
 
-// EvaluateExpression is a convenience function that parses and evaluates an expression string
+// EvaluateExpression is a convenience function that parses and evaluates an expression string.
+// It uses a background context. For cancellation/timeout support, use EvaluateExpressionWithContext.
 func EvaluateExpression(expr string, funcs *FuncRegistry, ctx ContextAccessor) (any, error) {
+	return EvaluateExpressionWithContext(context.Background(), expr, funcs, ctx)
+}
+
+// EvaluateExpressionWithContext parses and evaluates an expression string with context support.
+// The context is checked during evaluation to support timeouts and cancellation.
+func EvaluateExpressionWithContext(evalCtx context.Context, expr string, funcs *FuncRegistry, ctx ContextAccessor) (any, error) {
 	node, err := ParseExpression(expr)
 	if err != nil {
 		return nil, err
 	}
 
-	evaluator := NewExprEvaluator(funcs, ctx)
+	evaluator := NewExprEvaluatorWithContext(evalCtx, funcs, ctx)
 	return evaluator.Evaluate(node)
 }
 
-// EvaluateExpressionBool is a convenience function that parses and evaluates an expression as a boolean
+// EvaluateExpressionBool is a convenience function that parses and evaluates an expression as a boolean.
+// It uses a background context. For cancellation/timeout support, use EvaluateExpressionBoolWithContext.
 func EvaluateExpressionBool(expr string, funcs *FuncRegistry, ctx ContextAccessor) (bool, error) {
+	return EvaluateExpressionBoolWithContext(context.Background(), expr, funcs, ctx)
+}
+
+// EvaluateExpressionBoolWithContext parses and evaluates an expression as a boolean with context support.
+// The context is checked during evaluation to support timeouts and cancellation.
+func EvaluateExpressionBoolWithContext(evalCtx context.Context, expr string, funcs *FuncRegistry, ctx ContextAccessor) (bool, error) {
 	node, err := ParseExpression(expr)
 	if err != nil {
 		return false, err
 	}
 
-	evaluator := NewExprEvaluator(funcs, ctx)
+	evaluator := NewExprEvaluatorWithContext(evalCtx, funcs, ctx)
 	return evaluator.EvaluateBool(node)
 }

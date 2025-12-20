@@ -274,3 +274,123 @@ type customStringer struct {
 func (c customStringer) String() string {
 	return fmt.Sprintf("custom:%s", c.value)
 }
+
+// mockContextAccessorWithKeys implements ContextAccessor and KeyLister for testing
+type mockContextAccessorWithKeys struct {
+	data map[string]any
+}
+
+func newMockContextAccessorWithKeys(data map[string]any) *mockContextAccessorWithKeys {
+	if data == nil {
+		data = make(map[string]any)
+	}
+	return &mockContextAccessorWithKeys{data: data}
+}
+
+func (m *mockContextAccessorWithKeys) Get(path string) (any, bool) {
+	val, ok := m.data[path]
+	return val, ok
+}
+
+func (m *mockContextAccessorWithKeys) GetString(path string) string {
+	val, ok := m.data[path]
+	if !ok {
+		return ""
+	}
+	if s, ok := val.(string); ok {
+		return s
+	}
+	return ""
+}
+
+func (m *mockContextAccessorWithKeys) GetStringDefault(path, defaultVal string) string {
+	val := m.GetString(path)
+	if val == "" {
+		return defaultVal
+	}
+	return val
+}
+
+func (m *mockContextAccessorWithKeys) Has(path string) bool {
+	_, ok := m.data[path]
+	return ok
+}
+
+func (m *mockContextAccessorWithKeys) Keys() []string {
+	keys := make([]string, 0, len(m.data))
+	for k := range m.data {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func TestVarResolver_Resolve_WithSuggestions(t *testing.T) {
+	t.Run("shows 'did you mean' when similar key exists", func(t *testing.T) {
+		resolver := NewVarResolver()
+		ctx := newMockContextAccessorWithKeys(map[string]any{
+			"name":  "Alice",
+			"email": "alice@example.com",
+		})
+		attrs := Attributes{"name": "nam"} // similar to "name" (distance 1, within threshold)
+
+		_, err := resolver.Resolve(context.Background(), ctx, attrs)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Did you mean")
+		assert.Contains(t, err.Error(), "name")
+	})
+
+	t.Run("shows available keys when no similar keys found", func(t *testing.T) {
+		resolver := NewVarResolver()
+		ctx := newMockContextAccessorWithKeys(map[string]any{
+			"name":  "Alice",
+			"email": "alice@example.com",
+			"age":   30,
+		})
+		attrs := Attributes{"name": "xyz_completely_different"}
+
+		_, err := resolver.Resolve(context.Background(), ctx, attrs)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Available keys")
+	})
+
+	t.Run("handles empty context gracefully", func(t *testing.T) {
+		resolver := NewVarResolver()
+		ctx := newMockContextAccessorWithKeys(map[string]any{})
+		attrs := Attributes{"name": "missing"}
+
+		_, err := resolver.Resolve(context.Background(), ctx, attrs)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
+		// Should not contain suggestions or available keys since context is empty
+		assert.NotContains(t, err.Error(), "Did you mean")
+		assert.NotContains(t, err.Error(), "Available keys")
+	})
+}
+
+func TestNewVariableNotFoundWithAvailableKeysError(t *testing.T) {
+	t.Run("formats available keys correctly", func(t *testing.T) {
+		err := NewVariableNotFoundWithAvailableKeysError("missing", []string{"name", "email", "age"})
+		errStr := err.Error()
+		assert.Contains(t, errStr, "variable not found")
+		assert.Contains(t, errStr, "Available keys")
+		assert.Contains(t, errStr, "'name'")
+		assert.Contains(t, errStr, "'email'")
+		assert.Contains(t, errStr, "'age'")
+		assert.Contains(t, errStr, "[path=missing]")
+	})
+
+	t.Run("handles empty keys", func(t *testing.T) {
+		err := NewVariableNotFoundWithAvailableKeysError("missing", []string{})
+		errStr := err.Error()
+		assert.Contains(t, errStr, "variable not found")
+		assert.NotContains(t, errStr, "Available keys")
+	})
+
+	t.Run("truncates long key lists", func(t *testing.T) {
+		keys := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
+		err := NewVariableNotFoundWithAvailableKeysError("missing", keys)
+		errStr := err.Error()
+		assert.Contains(t, errStr, "Available keys")
+		assert.Contains(t, errStr, "(3 more)")
+	})
+}

@@ -80,6 +80,21 @@ func (r *VarResolver) Resolve(ctx context.Context, execCtx interface{}, attrs At
 		if defaultVal, hasDefault := attrs.Get(AttrDefault); hasDefault {
 			return defaultVal, nil
 		}
+
+		// Try to provide helpful error messages with suggestions or available keys
+		var suggestions []string
+		var availableKeys []string
+		if keyLister, ok := accessor.(KeyLister); ok {
+			availableKeys = keyLister.Keys()
+			pathPrefix := ExtractPathPrefix(name)
+			suggestions = FindSimilarStrings(pathPrefix, availableKeys, 3)
+		}
+		if len(suggestions) > 0 {
+			return "", NewVariableNotFoundWithSuggestionsError(name, suggestions)
+		}
+		if len(availableKeys) > 0 {
+			return "", NewVariableNotFoundWithAvailableKeysError(name, availableKeys)
+		}
 		return "", NewVariableNotFoundBuiltinError(name)
 	}
 
@@ -191,6 +206,28 @@ func (e *BuiltinError) Error() string {
 // NewVariableNotFoundBuiltinError creates an error for variable not found.
 func NewVariableNotFoundBuiltinError(path string) *BuiltinError {
 	return NewBuiltinError(ErrMsgVariableNotFound, TagNameVar).
+		WithMetadata(MetaKeyPath, path)
+}
+
+// NewVariableNotFoundWithSuggestionsError creates an error for variable not found
+// with "did you mean?" suggestions based on available keys in the context.
+func NewVariableNotFoundWithSuggestionsError(path string, suggestions []string) *BuiltinError {
+	message := ErrMsgVariableNotFound
+	if len(suggestions) > 0 {
+		message += FormatSuggestions(suggestions)
+	}
+	return NewBuiltinError(message, TagNameVar).
+		WithMetadata(MetaKeyPath, path)
+}
+
+// NewVariableNotFoundWithAvailableKeysError creates an error for variable not found
+// with a list of available keys when no similar suggestions are found.
+func NewVariableNotFoundWithAvailableKeysError(path string, availableKeys []string) *BuiltinError {
+	message := ErrMsgVariableNotFound
+	if len(availableKeys) > 0 {
+		message += FormatAvailableKeys(availableKeys, 5)
+	}
+	return NewBuiltinError(message, TagNameVar).
 		WithMetadata(MetaKeyPath, path)
 }
 
