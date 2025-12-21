@@ -933,7 +933,7 @@ func (r *ExplainResult) String() string {
 	if len(r.Variables) > 0 {
 		sb.WriteString("\n--- Variable Accesses ---\n")
 		for _, v := range r.Variables {
-			status := "found"
+			var status string
 			if !v.Found {
 				if v.Default != "" {
 					status = fmt.Sprintf("not found, using default: %q", v.Default)
