@@ -32,7 +32,7 @@ type FilesystemStorage struct {
 type FilesystemStorageDriver struct{}
 
 func init() {
-	RegisterStorageDriver("filesystem", &FilesystemStorageDriver{})
+	RegisterStorageDriver(StorageDriverNameFilesystem, &FilesystemStorageDriver{})
 }
 
 // Open creates a new FilesystemStorage instance.
@@ -65,6 +65,11 @@ func NewFilesystemStorage(root string) (*FilesystemStorage, error) {
 // Get retrieves the latest version of a template by name.
 func (s *FilesystemStorage) Get(ctx context.Context, name string) (*StoredTemplate, error) {
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Validate template name for security
+	if err := validateTemplateNameForFilesystem(name); err != nil {
 		return nil, err
 	}
 
@@ -136,6 +141,11 @@ func (s *FilesystemStorage) GetVersion(ctx context.Context, name string, version
 		return nil, err
 	}
 
+	// Validate template name for security
+	if err := validateTemplateNameForFilesystem(name); err != nil {
+		return nil, err
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -152,13 +162,9 @@ func (s *FilesystemStorage) Save(ctx context.Context, tmpl *StoredTemplate) erro
 		return err
 	}
 
-	if tmpl.Name == "" {
-		return &StorageError{Message: ErrMsgInvalidTemplateName}
-	}
-
-	// Validate template name for filesystem safety
-	if strings.ContainsAny(tmpl.Name, "/\\:*?\"<>|") {
-		return &StorageError{Message: ErrMsgInvalidTemplateName, Name: tmpl.Name}
+	// Validate template name for security
+	if err := validateTemplateNameForFilesystem(tmpl.Name); err != nil {
+		return err
 	}
 
 	s.mu.Lock()
@@ -223,6 +229,11 @@ func (s *FilesystemStorage) Delete(ctx context.Context, name string) error {
 		return err
 	}
 
+	// Validate template name for security
+	if err := validateTemplateNameForFilesystem(name); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -245,6 +256,11 @@ func (s *FilesystemStorage) Delete(ctx context.Context, name string) error {
 // DeleteVersion removes a specific version of a template.
 func (s *FilesystemStorage) DeleteVersion(ctx context.Context, name string, version int) error {
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Validate template name for security
+	if err := validateTemplateNameForFilesystem(name); err != nil {
 		return err
 	}
 
@@ -486,3 +502,20 @@ const (
 	ErrMsgReadTemplate       = "failed to read template file"
 	ErrMsgDeleteTemplate     = "failed to delete template"
 )
+
+// validateTemplateNameForFilesystem validates a template name for filesystem safety.
+// Prevents path traversal attacks and invalid filesystem characters.
+func validateTemplateNameForFilesystem(name string) error {
+	if name == "" {
+		return &StorageError{Message: ErrMsgInvalidTemplateName}
+	}
+	// Check for path traversal attempts
+	if strings.Contains(name, "..") {
+		return &StorageError{Message: ErrMsgPathTraversalDetected, Name: name}
+	}
+	// Check for invalid filesystem characters
+	if strings.ContainsAny(name, "/\\:*?\"<>|") {
+		return &StorageError{Message: ErrMsgInvalidTemplateName, Name: name}
+	}
+	return nil
+}

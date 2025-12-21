@@ -102,6 +102,23 @@ func TestFilesystemStorage_Save(t *testing.T) {
 		err := storage.Save(ctx, tmpl)
 		require.Error(t, err)
 	})
+
+	t.Run("rejects path traversal in name", func(t *testing.T) {
+		traversalNames := []string{
+			"../etc/passwd",
+			"..\\windows\\system32",
+			"foo/../bar",
+			"foo/..\\bar",
+			"..test",
+			"test..",
+			"te..st",
+		}
+		for _, name := range traversalNames {
+			tmpl := &StoredTemplate{Name: name, Source: "test"}
+			err := storage.Save(ctx, tmpl)
+			require.Error(t, err, "should reject path traversal: %s", name)
+		}
+	})
 }
 
 func TestFilesystemStorage_Get(t *testing.T) {
@@ -130,6 +147,12 @@ func TestFilesystemStorage_Get(t *testing.T) {
 	t.Run("returns error for nonexistent template", func(t *testing.T) {
 		_, err := storage.Get(ctx, "nonexistent")
 		require.Error(t, err)
+	})
+
+	t.Run("rejects path traversal", func(t *testing.T) {
+		_, err := storage.Get(ctx, "../etc/passwd")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "path traversal")
 	})
 }
 

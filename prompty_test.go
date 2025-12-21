@@ -2670,3 +2670,94 @@ func TestE2E_CustomFunc_CombinedWithBuiltin(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Yes", result)
 }
+
+// ============================================================================
+// Resolver Introspection Tests (HasResolver / ListResolvers / ResolverCount)
+// ============================================================================
+
+func TestE2E_HasResolver_BuiltIn(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Test built-in resolvers exist
+	// Note: prompty.if/for/switch are handled by the executor's block processing,
+	// not registered as separate resolvers. Only prompty.var, prompty.raw, prompty.include
+	// are registered as traditional resolvers.
+	assert.True(t, engine.HasResolver("prompty.var"))
+	assert.True(t, engine.HasResolver("prompty.raw"))
+	assert.True(t, engine.HasResolver("prompty.include"))
+
+	// Test nonexistent resolver
+	assert.False(t, engine.HasResolver("nonexistent"))
+	assert.False(t, engine.HasResolver("custom.tag"))
+}
+
+func TestE2E_HasResolver_CustomResolver(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Register custom resolver (uppercaseResolver uses "myapp.uppercase")
+	engine.MustRegister(&uppercaseResolver{})
+
+	// Verify it's registered
+	assert.True(t, engine.HasResolver("myapp.uppercase"))
+	assert.False(t, engine.HasResolver("myapp.lowercase"))
+}
+
+func TestE2E_ListResolvers(t *testing.T) {
+	engine := prompty.MustNew()
+
+	resolvers := engine.ListResolvers()
+
+	// Should contain built-in resolvers
+	assert.Contains(t, resolvers, "prompty.var")
+	assert.Contains(t, resolvers, "prompty.raw")
+	assert.Contains(t, resolvers, "prompty.include")
+
+	// List should be sorted
+	sorted := true
+	for i := 1; i < len(resolvers); i++ {
+		if resolvers[i-1] > resolvers[i] {
+			sorted = false
+			break
+		}
+	}
+	assert.True(t, sorted, "ListResolvers should return sorted list")
+}
+
+func TestE2E_ListResolvers_IncludesCustom(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Register custom resolver (uppercaseResolver uses "myapp.uppercase")
+	engine.MustRegister(&uppercaseResolver{})
+
+	resolvers := engine.ListResolvers()
+
+	// Should contain custom resolver
+	assert.Contains(t, resolvers, "myapp.uppercase")
+}
+
+func TestE2E_ResolverCount(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Get initial count (built-in resolvers)
+	initialCount := engine.ResolverCount()
+	assert.Greater(t, initialCount, 0)
+
+	// Register custom resolver
+	engine.MustRegister(&uppercaseResolver{})
+
+	// Count should increase by 1
+	assert.Equal(t, initialCount+1, engine.ResolverCount())
+}
+
+func TestE2E_ResolverIntrospection_Consistency(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// ResolverCount should match length of ListResolvers
+	assert.Equal(t, engine.ResolverCount(), len(engine.ListResolvers()))
+
+	// Register custom resolver
+	engine.MustRegister(&uppercaseResolver{})
+
+	// Still consistent after registration
+	assert.Equal(t, engine.ResolverCount(), len(engine.ListResolvers()))
+}

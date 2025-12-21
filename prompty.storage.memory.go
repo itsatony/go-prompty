@@ -24,7 +24,7 @@ type MemoryStorage struct {
 type MemoryStorageDriver struct{}
 
 func init() {
-	RegisterStorageDriver("memory", &MemoryStorageDriver{})
+	RegisterStorageDriver(StorageDriverNameMemory, &MemoryStorageDriver{})
 }
 
 // Open creates a new MemoryStorage instance.
@@ -390,7 +390,7 @@ func generateTemplateID() TemplateID {
 	b := make([]byte, 12)
 	if _, err := rand.Read(b); err != nil {
 		// Cryptographic failure is catastrophic - panic is appropriate
-		panic("crypto/rand failure: " + err.Error())
+		panic(ErrMsgCryptoRandFailure + ": " + err.Error())
 	}
 	id := base64.RawURLEncoding.EncodeToString(b)
 	return TemplateID(TemplateIDPrefix + id)

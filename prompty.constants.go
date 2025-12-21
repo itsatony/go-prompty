@@ -216,3 +216,21 @@ const ErrorStrategyNotSet ErrorStrategy = -1
 const (
 	TemplateIDPrefix = "tmpl_"
 )
+
+// Storage driver names
+const (
+	StorageDriverNameMemory     = "memory"
+	StorageDriverNameFilesystem = "filesystem"
+)
+
+// Storage error messages
+const (
+	ErrMsgCryptoRandFailure    = "cryptographic random number generator failure"
+	ErrMsgPathTraversalDetected = "invalid template name: path traversal characters detected"
+)
+
+// Access control message formats
+const (
+	ErrFmtOperationAllowed    = "operation %s is allowed"
+	ErrFmtOperationNotAllowed = "operation %s is not allowed"
+)

@@ -2,6 +2,7 @@ package prompty
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -369,9 +370,9 @@ func NewOperationChecker(ops ...Operation) *OperationChecker {
 // Check allows if the operation is in the allowed set.
 func (c *OperationChecker) Check(ctx context.Context, req *AccessRequest) (*AccessDecision, error) {
 	if c.allowed[req.Operation] {
-		return Allow("operation " + string(req.Operation) + " is allowed"), nil
+		return Allow(fmt.Sprintf(ErrFmtOperationAllowed, req.Operation)), nil
 	}
-	return Deny("operation " + string(req.Operation) + " is not allowed"), nil
+	return Deny(fmt.Sprintf(ErrFmtOperationNotAllowed, req.Operation)), nil
 }
 
 // BatchCheck evaluates all requests.

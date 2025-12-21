@@ -118,6 +118,21 @@ func (e *Engine) MustRegister(r Resolver) {
 	}
 }
 
+// HasResolver checks if a resolver is registered for the given tag name.
+func (e *Engine) HasResolver(tagName string) bool {
+	return e.registry.Has(tagName)
+}
+
+// ListResolvers returns all registered resolver tag names in sorted order.
+func (e *Engine) ListResolvers() []string {
+	return e.registry.List()
+}
+
+// ResolverCount returns the number of registered resolvers.
+func (e *Engine) ResolverCount() int {
+	return e.registry.Count()
+}
+
 // RegisterTemplate registers a named template for later inclusion via prompty.include.
 // Template names cannot be empty or use the reserved "prompty." namespace prefix.
 // Returns an error if a template with the same name already exists.
