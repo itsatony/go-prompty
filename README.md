@@ -858,6 +858,36 @@ Use \{~ for literal delimiters.
 
 ---
 
+## Storage & Persistence
+
+go-prompty includes a pluggable storage layer for managing templates with versioning, metadata, and multi-tenant support:
+
+- **Built-in drivers**: Memory (testing) and Filesystem (persistent)
+- **Custom backends**: Implement `TemplateStorage` for PostgreSQL, MongoDB, Redis, etc.
+- **Caching**: Automatic caching wrapper for any storage backend
+
+```go
+// Filesystem storage (persistent)
+storage, _ := prompty.NewFilesystemStorage("/path/to/templates")
+engine, _ := prompty.NewStorageEngine(prompty.StorageEngineConfig{
+    Storage: storage,
+})
+
+// Save with versioning
+engine.Save(ctx, &prompty.StoredTemplate{
+    Name:   "greeting",
+    Source: `Hello {~prompty.var name="user" /~}!`,
+    Tags:   []string{"production"},
+})
+
+// Execute
+result, _ := engine.Execute(ctx, "greeting", map[string]any{"user": "Alice"})
+```
+
+See [docs/STORAGE.md](docs/STORAGE.md) for complete documentation, and [docs/CUSTOM_STORAGE.md](docs/CUSTOM_STORAGE.md) for implementing custom database backends like PostgreSQL.
+
+---
+
 ## Contributing
 
 Contributions welcome! Please read our contributing guidelines and submit PRs.

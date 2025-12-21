@@ -85,8 +85,17 @@ func (e *Engine) Parse(source string) (*Template, error) {
 	return newTemplate(source, ast, e.executor, e.config, e), nil
 }
 
-// Execute is a convenience method that parses and executes in one step.
-// For templates that will be executed multiple times, use Parse() instead.
+// Execute is a convenience method that parses and executes a template in one step.
+//
+// PERFORMANCE WARNING: This method parses the template on every call.
+// For production workloads or repeated execution, use Parse() instead:
+//
+//	tmpl, err := engine.Parse(source)
+//	if err != nil { return err }
+//	result, err := tmpl.Execute(ctx, data)  // Reuse tmpl for multiple executions
+//
+// Parsing is typically 2-3x more expensive than execution alone.
+// See docs/PERFORMANCE.md for optimization guidelines.
 func (e *Engine) Execute(ctx context.Context, source string, data map[string]any) (string, error) {
 	tmpl, err := e.Parse(source)
 	if err != nil {

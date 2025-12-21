@@ -213,7 +213,7 @@ func NewResolverError(resolverName string, cause error) error {
 }
 
 // NewTypeConversionError creates a type conversion error
-func NewTypeConversionError(fromType, toType string, value interface{}) error {
+func NewTypeConversionError(fromType, toType string, value any) error {
 	return cuserr.NewValidationError(ErrCodeExec, ErrMsgTypeConversion).
 		WithMetadata(MetaKeyFromType, fromType).
 		WithMetadata(MetaKeyToType, toType).

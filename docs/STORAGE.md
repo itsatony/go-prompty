@@ -477,5 +477,6 @@ wg.Wait()
 
 ## See Also
 
+- [Custom Storage Backends](CUSTOM_STORAGE.md) - Implementing PostgreSQL, MongoDB, Redis, etc.
 - [Thread Safety Guide](THREAD_SAFETY.md)
 - [README](../README.md)
