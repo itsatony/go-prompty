@@ -385,11 +385,15 @@ func containsString(slice []string, s string) bool {
 }
 
 // generateTemplateID generates a unique template ID.
+// Panics if cryptographic randomness is unavailable (should never happen).
 func generateTemplateID() TemplateID {
 	b := make([]byte, 12)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Cryptographic failure is catastrophic - panic is appropriate
+		panic("crypto/rand failure: " + err.Error())
+	}
 	id := base64.RawURLEncoding.EncodeToString(b)
-	return TemplateID("tmpl_" + id)
+	return TemplateID(TemplateIDPrefix + id)
 }
 
 // copyStoredTemplate creates a deep copy of a StoredTemplate.

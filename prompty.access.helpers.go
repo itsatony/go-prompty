@@ -375,10 +375,17 @@ func (c *OperationChecker) Check(ctx context.Context, req *AccessRequest) (*Acce
 }
 
 // BatchCheck evaluates all requests.
+// Errors from individual Check calls result in Deny decisions (fail-safe).
 func (c *OperationChecker) BatchCheck(ctx context.Context, reqs []*AccessRequest) ([]*AccessDecision, error) {
 	decisions := make([]*AccessDecision, len(reqs))
 	for i, req := range reqs {
-		decisions[i], _ = c.Check(ctx, req)
+		decision, err := c.Check(ctx, req)
+		if err != nil {
+			// Fail-safe: deny access on error
+			decisions[i] = Deny(ErrMsgAccessCheckFailed)
+		} else {
+			decisions[i] = decision
+		}
 	}
 	return decisions, nil
 }
@@ -431,10 +438,17 @@ func (c *TenantChecker) Check(ctx context.Context, req *AccessRequest) (*AccessD
 }
 
 // BatchCheck evaluates all requests.
+// Errors from individual Check calls result in Deny decisions (fail-safe).
 func (c *TenantChecker) BatchCheck(ctx context.Context, reqs []*AccessRequest) ([]*AccessDecision, error) {
 	decisions := make([]*AccessDecision, len(reqs))
 	for i, req := range reqs {
-		decisions[i], _ = c.Check(ctx, req)
+		decision, err := c.Check(ctx, req)
+		if err != nil {
+			// Fail-safe: deny access on error
+			decisions[i] = Deny(ErrMsgAccessCheckFailed)
+		} else {
+			decisions[i] = decision
+		}
 	}
 	return decisions, nil
 }
@@ -504,10 +518,17 @@ func (c *RoleChecker) Check(ctx context.Context, req *AccessRequest) (*AccessDec
 }
 
 // BatchCheck evaluates all requests.
+// Errors from individual Check calls result in Deny decisions (fail-safe).
 func (c *RoleChecker) BatchCheck(ctx context.Context, reqs []*AccessRequest) ([]*AccessDecision, error) {
 	decisions := make([]*AccessDecision, len(reqs))
 	for i, req := range reqs {
-		decisions[i], _ = c.Check(ctx, req)
+		decision, err := c.Check(ctx, req)
+		if err != nil {
+			// Fail-safe: deny access on error
+			decisions[i] = Deny(ErrMsgAccessCheckFailed)
+		} else {
+			decisions[i] = decision
+		}
 	}
 	return decisions, nil
 }

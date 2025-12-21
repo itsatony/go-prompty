@@ -211,3 +211,8 @@ func (s ValidationSeverity) String() string {
 
 // ErrorStrategyNotSet is a sentinel value indicating no strategy override
 const ErrorStrategyNotSet ErrorStrategy = -1
+
+// Storage ID prefixes
+const (
+	TemplateIDPrefix = "tmpl_"
+)
