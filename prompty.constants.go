@@ -24,6 +24,8 @@ const (
 	TagNameSwitch      = "prompty.switch"      // Phase 5
 	TagNameCase        = "prompty.case"        // Phase 5
 	TagNameCaseDefault = "prompty.casedefault" // Phase 5 - default case in switch
+	TagNameEnv         = "prompty.env"         // Environment variable resolver
+	TagNameConfig      = "prompty.config"      // Inference configuration block
 )
 
 // Reserved namespace prefix for built-in tags
@@ -48,6 +50,7 @@ const (
 	AttrTemplate = "template" // Template name for include
 	AttrWith     = "with"     // Context path for include
 	AttrIsolate  = "isolate"  // Isolated context flag for include
+	AttrRequired = "required" // Required flag for env resolver
 )
 
 // Boolean attribute values
@@ -129,6 +132,8 @@ const (
 	MetaKeyReason       = "reason"
 	MetaKeyFromType     = "from_type"
 	MetaKeyToType       = "to_type"
+	MetaKeyEnvVar       = "env_var"
+	MetaKeyInputName    = "input_name"
 )
 
 // Escape sequence constants
@@ -221,6 +226,37 @@ const (
 const (
 	StorageDriverNameMemory     = "memory"
 	StorageDriverNameFilesystem = "filesystem"
+)
+
+// Model API types
+const (
+	ModelAPIChat       = "chat"
+	ModelAPICompletion = "completion"
+)
+
+// Input/Output schema types
+const (
+	SchemaTypeString  = "string"
+	SchemaTypeNumber  = "number"
+	SchemaTypeBoolean = "boolean"
+	SchemaTypeArray   = "array"
+	SchemaTypeObject  = "object"
+)
+
+// Model parameter map keys (for ToMap conversion)
+const (
+	ParamKeyTemperature      = "temperature"
+	ParamKeyMaxTokens        = "max_tokens"
+	ParamKeyTopP             = "top_p"
+	ParamKeyFrequencyPenalty = "frequency_penalty"
+	ParamKeyPresencePenalty  = "presence_penalty"
+	ParamKeyStop             = "stop"
+	ParamKeySeed             = "seed"
+)
+
+// Error format strings for type validation
+const (
+	ErrFmtTypeMismatch = "expected %s, got %s"
 )
 
 // Storage error messages

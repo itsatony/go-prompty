@@ -28,6 +28,11 @@ type StoredTemplate struct {
 	// Metadata contains arbitrary key-value pairs for user-defined data.
 	Metadata map[string]string `json:"metadata,omitempty"`
 
+	// InferenceConfig holds parsed frontmatter configuration from the template source.
+	// This coexists with Metadata and is automatically extracted when the template is parsed.
+	// Use this for model configuration, input/output schemas, and sample data.
+	InferenceConfig *InferenceConfig `json:"inference_config,omitempty"`
+
 	// CreatedAt is when this version was created.
 	CreatedAt time.Time `json:"created_at"`
 

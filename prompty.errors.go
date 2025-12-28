@@ -86,6 +86,19 @@ const (
 
 	// Context messages
 	ErrMsgInvalidContextType = "invalid context type"
+
+	// Environment variable messages
+	ErrMsgEnvVarNotFound = "environment variable not found"
+	ErrMsgEnvVarRequired = "required environment variable not set"
+
+	// Config block messages
+	ErrMsgConfigBlockExtract    = "failed to extract config block"
+	ErrMsgConfigBlockParse      = "failed to parse config block JSON"
+	ErrMsgConfigBlockInvalid    = "invalid config block format"
+	ErrMsgConfigBlockUnclosed   = "config block not properly closed"
+	ErrMsgInputValidationFailed = "input validation failed"
+	ErrMsgRequiredInputMissing  = "required input missing"
+	ErrMsgInputTypeMismatch     = "input type mismatch"
 )
 
 // Error code constants for categorization
@@ -96,6 +109,8 @@ const (
 	ErrCodeRegistry   = "PROMPTY_REGISTRY"
 	ErrCodeTemplate   = "PROMPTY_TEMPLATE"
 	ErrCodeFunc       = "PROMPTY_FUNC"
+	ErrCodeConfig     = "PROMPTY_CONFIG"
+	ErrCodeEnv        = "PROMPTY_ENV"
 )
 
 // Position represents a location in the source template
@@ -263,4 +278,48 @@ func NewFuncRegistrationError(msg, funcName string) error {
 		err = err.WithMetadata(MetaKeyFuncName, funcName)
 	}
 	return err
+}
+
+// NewEnvVarNotFoundError creates an error for environment variable not found
+func NewEnvVarNotFoundError(varName string) error {
+	return cuserr.NewNotFoundError(ErrCodeEnv, ErrMsgEnvVarNotFound).
+		WithMetadata(MetaKeyEnvVar, varName)
+}
+
+// NewEnvVarRequiredError creates an error for required environment variable not set
+func NewEnvVarRequiredError(varName string) error {
+	return cuserr.NewValidationError(ErrCodeEnv, ErrMsgEnvVarRequired).
+		WithMetadata(MetaKeyEnvVar, varName)
+}
+
+// NewConfigBlockError creates an error for config block parsing failures
+func NewConfigBlockError(msg string, pos Position, cause error) error {
+	var err *cuserr.CustomError
+	if cause != nil {
+		err = cuserr.WrapStdError(cause, ErrCodeConfig, msg)
+	} else {
+		err = cuserr.NewValidationError(ErrCodeConfig, msg)
+	}
+	return err.
+		WithMetadata(MetaKeyLine, strconv.Itoa(pos.Line)).
+		WithMetadata(MetaKeyColumn, strconv.Itoa(pos.Column)).
+		WithMetadata(MetaKeyOffset, strconv.Itoa(pos.Offset))
+}
+
+// NewConfigBlockParseError creates an error for config block JSON parsing failures
+func NewConfigBlockParseError(cause error) error {
+	return cuserr.WrapStdError(cause, ErrCodeConfig, ErrMsgConfigBlockParse)
+}
+
+// NewInputValidationError creates an error for input validation failures
+func NewInputValidationError(inputName, reason string) error {
+	return cuserr.NewValidationError(ErrCodeConfig, ErrMsgInputValidationFailed).
+		WithMetadata(MetaKeyInputName, inputName).
+		WithMetadata(MetaKeyReason, reason)
+}
+
+// NewRequiredInputMissingError creates an error for missing required input
+func NewRequiredInputMissingError(inputName string) error {
+	return cuserr.NewValidationError(ErrCodeConfig, ErrMsgRequiredInputMissing).
+		WithMetadata(MetaKeyInputName, inputName)
 }

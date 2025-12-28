@@ -154,6 +154,8 @@ const (
 	TagNameSwitch      = "prompty.switch"      // Phase 5
 	TagNameCase        = "prompty.case"        // Phase 5
 	TagNameCaseDefault = "prompty.casedefault" // Phase 5
+	TagNameEnv         = "prompty.env"         // Environment variable resolver
+	TagNameConfig      = "prompty.config"      // Inference configuration block
 )
 
 // Attribute name constants
@@ -163,13 +165,14 @@ const (
 	AttrTemplate = "template"
 	AttrWith     = "with"
 	AttrIsolate  = "isolate"
-	AttrEval     = "eval"    // Condition expression for if/elseif
-	AttrOnError  = "onerror" // Per-tag error strategy override
-	AttrItem     = "item"    // Loop variable name (Phase 4)
-	AttrIndex    = "index"   // Loop index variable name (Phase 4)
-	AttrIn       = "in"      // Loop collection path (Phase 4)
-	AttrLimit    = "limit"   // Loop iteration limit (Phase 4)
-	AttrValue    = "value"   // Case value for switch/case (Phase 5)
+	AttrEval     = "eval"     // Condition expression for if/elseif
+	AttrOnError  = "onerror"  // Per-tag error strategy override
+	AttrItem     = "item"     // Loop variable name (Phase 4)
+	AttrIndex    = "index"    // Loop index variable name (Phase 4)
+	AttrIn       = "in"       // Loop collection path (Phase 4)
+	AttrLimit    = "limit"    // Loop iteration limit (Phase 4)
+	AttrValue    = "value"    // Case value for switch/case (Phase 5)
+	AttrRequired = "required" // Required flag for env resolver
 )
 
 // Boolean attribute values
@@ -375,4 +378,34 @@ const (
 const (
 	LogFieldCaseValue = "case_value"
 	LogFieldCaseEval  = "case_eval"
+)
+
+// Error messages for env resolver
+const (
+	ErrMsgEnvVarNotFound = "environment variable not found"
+	ErrMsgEnvVarRequired = "required environment variable not set"
+	ErrMsgEnvVarEmpty    = "environment variable is empty"
+)
+
+// Log messages for env resolver operations
+const (
+	LogMsgEnvResolve = "resolving environment variable"
+)
+
+// Log field names for env resolver
+const (
+	LogFieldEnvVar = "env_var"
+)
+
+// Meta key constants for env resolver
+const (
+	MetaKeyEnvVar = "env_var"
+)
+
+// Error messages for config block
+const (
+	ErrMsgConfigBlockExtract  = "failed to extract config block"
+	ErrMsgConfigBlockParse    = "failed to parse config block JSON"
+	ErrMsgConfigBlockInvalid  = "invalid config block format"
+	ErrMsgConfigBlockUnclosed = "config block not properly closed"
 )

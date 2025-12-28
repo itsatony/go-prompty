@@ -139,16 +139,17 @@ func (s *MemoryStorage) Save(ctx context.Context, tmpl *StoredTemplate) error {
 
 	// Create new stored template with generated fields
 	stored := &StoredTemplate{
-		ID:        generateTemplateID(),
-		Name:      tmpl.Name,
-		Source:    tmpl.Source,
-		Version:   nextVersion,
-		Metadata:  copyStringMap(tmpl.Metadata),
-		CreatedAt: now,
-		UpdatedAt: now,
-		CreatedBy: tmpl.CreatedBy,
-		TenantID:  tmpl.TenantID,
-		Tags:      copyStringSlice(tmpl.Tags),
+		ID:              generateTemplateID(),
+		Name:            tmpl.Name,
+		Source:          tmpl.Source,
+		Version:         nextVersion,
+		Metadata:        copyStringMap(tmpl.Metadata),
+		InferenceConfig: tmpl.InferenceConfig, // InferenceConfig is immutable after parsing
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		CreatedBy:       tmpl.CreatedBy,
+		TenantID:        tmpl.TenantID,
+		Tags:            copyStringSlice(tmpl.Tags),
 	}
 
 	// Update input template with generated values
@@ -402,16 +403,17 @@ func copyStoredTemplate(tmpl *StoredTemplate) *StoredTemplate {
 		return nil
 	}
 	return &StoredTemplate{
-		ID:        tmpl.ID,
-		Name:      tmpl.Name,
-		Source:    tmpl.Source,
-		Version:   tmpl.Version,
-		Metadata:  copyStringMap(tmpl.Metadata),
-		CreatedAt: tmpl.CreatedAt,
-		UpdatedAt: tmpl.UpdatedAt,
-		CreatedBy: tmpl.CreatedBy,
-		TenantID:  tmpl.TenantID,
-		Tags:      copyStringSlice(tmpl.Tags),
+		ID:              tmpl.ID,
+		Name:            tmpl.Name,
+		Source:          tmpl.Source,
+		Version:         tmpl.Version,
+		Metadata:        copyStringMap(tmpl.Metadata),
+		InferenceConfig: tmpl.InferenceConfig, // InferenceConfig is immutable after parsing
+		CreatedAt:       tmpl.CreatedAt,
+		UpdatedAt:       tmpl.UpdatedAt,
+		CreatedBy:       tmpl.CreatedBy,
+		TenantID:        tmpl.TenantID,
+		Tags:            copyStringSlice(tmpl.Tags),
 	}
 }
 

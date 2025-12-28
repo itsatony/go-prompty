@@ -61,13 +61,51 @@ func MustNew(opts ...Option) *Engine {
 
 // Parse parses a template source string and returns a Template.
 // The returned Template can be executed multiple times with different data.
+//
+// If the source contains a config block ({~prompty.config~}...{~/prompty.config~}),
+// it is extracted and parsed as InferenceConfig. The config block must appear
+// at the start of the source (after optional whitespace).
 func (e *Engine) Parse(source string) (*Template, error) {
-	// Create lexer with configured delimiters
+	// Create lexer config
 	lexerConfig := internal.LexerConfig{
 		OpenDelim:  e.config.openDelim,
 		CloseDelim: e.config.closeDelim,
 	}
-	lexer := internal.NewLexerWithConfig(source, lexerConfig, e.logger)
+
+	// Extract config block if present
+	configResult, err := internal.ExtractConfigBlock(source, lexerConfig)
+	if err != nil {
+		pos := Position{}
+		if configErr, ok := err.(*internal.ConfigError); ok {
+			pos = Position{
+				Offset: configErr.Position.Offset,
+				Line:   configErr.Position.Line,
+				Column: configErr.Position.Column,
+			}
+		}
+		return nil, NewConfigBlockError(ErrMsgConfigBlockExtract, pos, err)
+	}
+
+	// Parse inference config if config block was found
+	var inferenceConfig *InferenceConfig
+	if configResult.HasConfig && configResult.ConfigJSON != "" {
+		// Resolve environment variables in config JSON before parsing
+		resolvedJSON, err := e.resolveConfigEnvVars(configResult.ConfigJSON)
+		if err != nil {
+			return nil, err
+		}
+
+		inferenceConfig, err = ParseInferenceConfig(resolvedJSON)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Use template body (without config block) for parsing
+	templateBody := configResult.TemplateBody
+
+	// Create lexer with configured delimiters
+	lexer := internal.NewLexerWithConfig(templateBody, lexerConfig, e.logger)
 
 	// Tokenize
 	tokens, err := lexer.Tokenize()
@@ -76,13 +114,32 @@ func (e *Engine) Parse(source string) (*Template, error) {
 	}
 
 	// Parse with source for raw text extraction (keepRaw strategy)
-	parser := internal.NewParserWithSource(tokens, source, e.logger)
+	parser := internal.NewParserWithSource(tokens, templateBody, e.logger)
 	ast, err := parser.Parse()
 	if err != nil {
 		return nil, NewParseError(ErrMsgParseFailed, Position{}, err)
 	}
 
-	return newTemplate(source, ast, e.executor, e.config, e), nil
+	return newTemplateWithConfig(source, templateBody, ast, e.executor, e.config, e, inferenceConfig), nil
+}
+
+// resolveConfigEnvVars resolves {~prompty.env~} tags in the config JSON.
+// This allows environment variables to be used in config blocks.
+func (e *Engine) resolveConfigEnvVars(configJSON string) (string, error) {
+	// If there are no template tags, return as-is
+	if !strings.Contains(configJSON, e.config.openDelim) {
+		return configJSON, nil
+	}
+
+	// Execute the config JSON as a template to resolve env vars
+	// We use an empty context since env vars don't need external data
+	ctx := context.Background()
+	result, err := e.Execute(ctx, configJSON, nil)
+	if err != nil {
+		return "", NewConfigBlockError(ErrMsgConfigBlockParse, Position{}, err)
+	}
+
+	return result, nil
 }
 
 // Execute is a convenience method that parses and executes a template in one step.

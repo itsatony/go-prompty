@@ -191,16 +191,17 @@ func (s *FilesystemStorage) Save(ctx context.Context, tmpl *StoredTemplate) erro
 
 	// Create stored template with generated fields
 	stored := &StoredTemplate{
-		ID:        generateTemplateID(),
-		Name:      tmpl.Name,
-		Source:    tmpl.Source,
-		Version:   nextVersion,
-		Metadata:  copyStringMap(tmpl.Metadata),
-		CreatedAt: now,
-		UpdatedAt: now,
-		CreatedBy: tmpl.CreatedBy,
-		TenantID:  tmpl.TenantID,
-		Tags:      copyStringSlice(tmpl.Tags),
+		ID:              generateTemplateID(),
+		Name:            tmpl.Name,
+		Source:          tmpl.Source,
+		Version:         nextVersion,
+		Metadata:        copyStringMap(tmpl.Metadata),
+		InferenceConfig: tmpl.InferenceConfig, // InferenceConfig is immutable after parsing
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		CreatedBy:       tmpl.CreatedBy,
+		TenantID:        tmpl.TenantID,
+		Tags:            copyStringSlice(tmpl.Tags),
 	}
 
 	// Write to file

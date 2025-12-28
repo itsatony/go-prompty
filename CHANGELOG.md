@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2024-12-28
+
+### Added
+
+#### Inference Configuration (Config Blocks)
+- JSON-based config blocks (`{~prompty.config~}...{~/prompty.config~}`) for self-describing templates
+- `InferenceConfig` type with typed model configuration, parameters, input/output schemas, and sample data
+- Model configuration fields: `api`, `provider`, `name`, `parameters` (temperature, max_tokens, top_p, etc.)
+- Input/output schema definitions with type validation
+- Sample data for testing and documentation
+- `prompty.env` resolver for environment variable access in templates and config blocks
+- Automatic `InferenceConfig` extraction and storage persistence
+- Template accessor methods: `InferenceConfig()`, `HasInferenceConfig()`, `TemplateBody()`
+- JSON serialization: `InferenceConfig.JSON()`, `InferenceConfig.JSONPretty()`
+- Input validation: `InferenceConfig.ValidateInputs(data)`
+- Parameter helpers: `GetTemperature()`, `GetMaxTokens()`, `GetTopP()`, `ToMap()`, etc.
+
+#### Environment Variable Resolver
+- New `prompty.env` tag for environment variable interpolation
+- Attributes: `name` (required), `default` (optional), `required` (optional)
+- Works in both templates and config blocks
+
+### Changed
+
+- `StoredTemplate` now includes `InferenceConfig` field for storage persistence
+- `StorageEngine.Save()` automatically extracts `InferenceConfig` from templates
+- Memory and filesystem storage implementations preserve `InferenceConfig`
+
+### Documentation
+
+- New `docs/INFERENCE_CONFIG.md` with comprehensive usage guide
+- New `examples/inference_config/main.go` demonstrating all features
+
+### Technical Details
+
+- 19 new E2E tests for inference configuration
+- All string literals use constants (no magic strings)
+- Thread-safe for concurrent access
+- Compatible with existing templates (backward compatible)
+
 ## [1.1.0] - 2024-12-19
 
 ### Added

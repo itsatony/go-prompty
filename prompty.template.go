@@ -8,21 +8,25 @@ import (
 
 // Template represents a parsed template that can be executed multiple times.
 type Template struct {
-	source   string
-	ast      *internal.RootNode
-	executor *internal.Executor
-	config   *engineConfig
-	engine   TemplateExecutor // Engine reference for nested template execution
+	source          string
+	templateBody    string // Template body without config block
+	ast             *internal.RootNode
+	executor        *internal.Executor
+	config          *engineConfig
+	engine          TemplateExecutor   // Engine reference for nested template execution
+	inferenceConfig *InferenceConfig   // Parsed inference configuration from config block
 }
 
-// newTemplate creates a new template (internal use).
-func newTemplate(source string, ast *internal.RootNode, executor *internal.Executor, config *engineConfig, engine TemplateExecutor) *Template {
+// newTemplateWithConfig creates a new template with inference configuration (internal use).
+func newTemplateWithConfig(source, templateBody string, ast *internal.RootNode, executor *internal.Executor, config *engineConfig, engine TemplateExecutor, inferenceConfig *InferenceConfig) *Template {
 	return &Template{
-		source:   source,
-		ast:      ast,
-		executor: executor,
-		config:   config,
-		engine:   engine,
+		source:          source,
+		templateBody:    templateBody,
+		ast:             ast,
+		executor:        executor,
+		config:          config,
+		engine:          engine,
+		inferenceConfig: inferenceConfig,
 	}
 }
 
@@ -44,9 +48,26 @@ func (t *Template) ExecuteWithContext(ctx context.Context, execCtx *Context) (st
 	return t.executor.Execute(ctx, t.ast, execCtx)
 }
 
-// Source returns the original template source string.
+// Source returns the original template source string (including config block if present).
 func (t *Template) Source() string {
 	return t.source
+}
+
+// TemplateBody returns the template body without the config block.
+// This is the portion of the template that is actually executed.
+func (t *Template) TemplateBody() string {
+	return t.templateBody
+}
+
+// InferenceConfig returns the parsed inference configuration from the config block.
+// Returns nil if the template has no config block.
+func (t *Template) InferenceConfig() *InferenceConfig {
+	return t.inferenceConfig
+}
+
+// HasInferenceConfig returns true if the template has a parsed inference configuration.
+func (t *Template) HasInferenceConfig() bool {
+	return t.inferenceConfig != nil
 }
 
 // internalAttributesAdapter wraps internal.Attributes to implement Attributes interface
