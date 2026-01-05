@@ -6,8 +6,8 @@
 *.dylib
 
 # Binary output (built CLI tool)
-prompty
 /prompty
+/cmd/prompty/prompty
 
 # Test binary, built with `go test -c`
 *.test
