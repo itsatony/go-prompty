@@ -5,11 +5,12 @@ import (
 )
 
 // TemplateExecutor is the interface for executing nested templates.
-// This is used by IncludeResolver to execute registered templates.
+// This is used by IncludeResolver and InheritanceResolver to execute registered templates.
 type TemplateExecutor interface {
 	ExecuteTemplate(ctx context.Context, name string, data map[string]any) (string, error)
 	HasTemplate(name string) bool
 	MaxDepth() int
+	GetTemplateSource(name string) (string, bool)
 }
 
 // IncludeResolver handles the prompty.include built-in tag.

@@ -47,26 +47,37 @@ When implementing a custom storage backend, ensure you handle:
 | Resource Cleanup | `Close()` must release all resources |
 | Closed State | Operations on closed storage should return errors |
 
-## Complete PostgreSQL Example
+## PostgreSQL (Built-in)
 
-See the full implementation in `examples/custom_storage_postgres/`:
+PostgreSQL storage is now a built-in driver. See [STORAGE.md](STORAGE.md#postgresql-storage) for usage:
 
-- `main.go` - Complete PostgreSQL storage implementation
-- `schema.sql` - Database schema
+```go
+// Use the built-in PostgreSQL driver
+storage, err := prompty.OpenStorage("postgres",
+    "postgres://user:pass@localhost/db?sslmode=disable")
 
-### Key Implementation Patterns
+// Or with full configuration
+storage, err := prompty.NewPostgresStorage(prompty.PostgresConfig{
+    ConnectionString: os.Getenv("DATABASE_URL"),
+    AutoMigrate:      true,
+})
+```
+
+## Key Implementation Patterns
+
+The patterns below are useful when implementing custom storage backends:
 
 #### 1. Connection Management
 
 ```go
-type PostgresStorage struct {
+type SQLStorage struct {
     db     *sql.DB
     mu     sync.RWMutex // Protects closed state
     closed bool
 }
 
-func NewPostgresStorage(connectionString string) (*PostgresStorage, error) {
-    db, err := sql.Open("postgres", connectionString)
+func NewSQLStorage(driverName, connectionString string) (*SQLStorage, error) {
+    db, err := sql.Open(driverName, connectionString)
     if err != nil {
         return nil, fmt.Errorf("failed to open database: %w", err)
     }
@@ -82,24 +93,24 @@ func NewPostgresStorage(connectionString string) (*PostgresStorage, error) {
     db.SetMaxIdleConns(5)
     db.SetConnMaxLifetime(5 * time.Minute)
 
-    return &PostgresStorage{db: db}, nil
+    return &SQLStorage{db: db}, nil
 }
 ```
 
 #### 2. Version Management with Transactions
 
 ```go
-func (s *PostgresStorage) Save(ctx context.Context, tmpl *prompty.StoredTemplate) error {
+func (s *SQLStorage) Save(ctx context.Context, tmpl *prompty.StoredTemplate) error {
     tx, err := s.db.BeginTx(ctx, nil)
     if err != nil {
         return fmt.Errorf("failed to begin transaction: %w", err)
     }
-    defer tx.Rollback()
+    defer func() { _ = tx.Rollback() }()
 
     // Get current max version atomically
     var maxVersion sql.NullInt64
     err = tx.QueryRowContext(ctx,
-        `SELECT MAX(version) FROM templates WHERE name = $1`,
+        `SELECT MAX(version) FROM templates WHERE name = ?`, // Use ? for MySQL, $1 for PostgreSQL
         tmpl.Name,
     ).Scan(&maxVersion)
     if err != nil {
@@ -115,8 +126,8 @@ func (s *PostgresStorage) Save(ctx context.Context, tmpl *prompty.StoredTemplate
     // Insert with new version
     _, err = tx.ExecContext(ctx, `
         INSERT INTO templates (id, name, source, version, ...)
-        VALUES ($1, $2, $3, $4, ...)`,
-        tmpl.ID, tmpl.Name, tmpl.Source, newVersion, ...,
+        VALUES (?, ?, ?, ?, ...)`,
+        tmpl.ID, tmpl.Name, tmpl.Source, newVersion, /* ... */
     )
     if err != nil {
         return fmt.Errorf("failed to insert: %w", err)
@@ -129,7 +140,7 @@ func (s *PostgresStorage) Save(ctx context.Context, tmpl *prompty.StoredTemplate
 #### 3. Proper Error Handling
 
 ```go
-func (s *PostgresStorage) Get(ctx context.Context, name string) (*prompty.StoredTemplate, error) {
+func (s *SQLStorage) Get(ctx context.Context, name string) (*prompty.StoredTemplate, error) {
     // Check closed state
     s.mu.RLock()
     if s.closed {
@@ -140,7 +151,7 @@ func (s *PostgresStorage) Get(ctx context.Context, name string) (*prompty.Stored
 
     row := s.db.QueryRowContext(ctx, query, name)
 
-    err := row.Scan(...)
+    err := row.Scan(/* ... */)
     if err == sql.ErrNoRows {
         // Use the prompty error constructor for not-found
         return nil, prompty.NewStorageTemplateNotFoundError(name)
@@ -173,19 +184,19 @@ tagsJSON, _ := json.Marshal(tmpl.Tags)
 Implement `StorageDriver` to enable driver-based opening:
 
 ```go
-type PostgresDriver struct{}
+type MySQLDriver struct{}
 
-func (d *PostgresDriver) Open(connectionString string) (prompty.TemplateStorage, error) {
-    return NewPostgresStorage(connectionString)
+func (d *MySQLDriver) Open(connectionString string) (prompty.TemplateStorage, error) {
+    return NewMySQLStorage(connectionString)
 }
 
 // Register during initialization
 func init() {
-    prompty.RegisterStorageDriver("postgres", &PostgresDriver{})
+    prompty.RegisterStorageDriver("mysql", &MySQLDriver{})
 }
 
 // Usage:
-storage, err := prompty.OpenStorage("postgres", "postgres://user:pass@host/db")
+storage, err := prompty.OpenStorage("mysql", "user:pass@tcp(localhost:3306)/db")
 ```
 
 ## Adapting to Other Databases
@@ -368,6 +379,5 @@ func TestMyStorage_Compliance(t *testing.T) {
 
 ## See Also
 
-- [Storage Layer Guide](STORAGE.md) - Overview of storage features
-- [examples/custom_storage_postgres](../examples/custom_storage_postgres/) - Complete PostgreSQL example
+- [Storage Layer Guide](STORAGE.md) - Overview of storage features (includes PostgreSQL)
 - [examples/storage_persistence](../examples/storage_persistence/) - Filesystem persistence example

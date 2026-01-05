@@ -3,6 +3,7 @@ package prompty_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/itsatony/go-prompty"
@@ -2760,4 +2761,146 @@ func TestE2E_ResolverIntrospection_Consistency(t *testing.T) {
 
 	// Still consistent after registration
 	assert.Equal(t, engine.ResolverCount(), len(engine.ListResolvers()))
+}
+
+// Template Inheritance Tests
+
+func TestE2E_Inheritance_BasicExtends(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Register base template
+	engine.MustRegisterTemplate("base", `{~prompty.block name="content"~}Default Content{~/prompty.block~}`)
+
+	// Child template extends base and overrides block
+	child := `{~prompty.extends template="base" /~}
+{~prompty.block name="content"~}Overridden Content{~/prompty.block~}`
+
+	result, err := engine.Execute(context.Background(), child, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "Overridden Content", strings.TrimSpace(result))
+}
+
+func TestE2E_Inheritance_BlockNotOverridden(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Register base template with two blocks
+	engine.MustRegisterTemplate("base", `{~prompty.block name="header"~}Header{~/prompty.block~}
+{~prompty.block name="footer"~}Footer{~/prompty.block~}`)
+
+	// Child only overrides header
+	child := `{~prompty.extends template="base" /~}
+{~prompty.block name="header"~}Custom Header{~/prompty.block~}`
+
+	result, err := engine.Execute(context.Background(), child, nil)
+	require.NoError(t, err)
+	assert.Contains(t, result, "Custom Header")
+	assert.Contains(t, result, "Footer")
+}
+
+func TestE2E_Inheritance_ParentCall(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Register base template
+	engine.MustRegisterTemplate("base", `{~prompty.block name="content"~}Base Content{~/prompty.block~}`)
+
+	// Child extends and calls parent
+	child := `{~prompty.extends template="base" /~}
+{~prompty.block name="content"~}Before - {~prompty.parent /~} - After{~/prompty.block~}`
+
+	result, err := engine.Execute(context.Background(), child, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "Before - Base Content - After", strings.TrimSpace(result))
+}
+
+func TestE2E_Inheritance_WithVariables(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Register base template with variable
+	engine.MustRegisterTemplate("base", `{~prompty.block name="greeting"~}Hello, {~prompty.var name="name" default="World" /~}!{~/prompty.block~}`)
+
+	// Child overrides greeting
+	child := `{~prompty.extends template="base" /~}
+{~prompty.block name="greeting"~}Welcome, {~prompty.var name="name" /~}!{~/prompty.block~}`
+
+	result, err := engine.Execute(context.Background(), child, map[string]any{
+		"name": "Alice",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Welcome, Alice!", strings.TrimSpace(result))
+}
+
+func TestE2E_Inheritance_MultiLevel(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Level 1: Base layout
+	engine.MustRegisterTemplate("layout", `{~prompty.block name="body"~}Default Body{~/prompty.block~}`)
+
+	// Level 2: Page layout extends layout
+	engine.MustRegisterTemplate("page-layout", `{~prompty.extends template="layout" /~}
+{~prompty.block name="body"~}Page: {~prompty.parent /~}{~/prompty.block~}`)
+
+	// Level 3: Actual page extends page-layout
+	page := `{~prompty.extends template="page-layout" /~}
+{~prompty.block name="body"~}Custom: {~prompty.parent /~}{~/prompty.block~}`
+
+	result, err := engine.Execute(context.Background(), page, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "Custom: Page: Default Body", strings.TrimSpace(result))
+}
+
+func TestE2E_Inheritance_ExecuteRegisteredTemplate(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Register base and child templates
+	engine.MustRegisterTemplate("base", `{~prompty.block name="msg"~}Hello{~/prompty.block~}`)
+	engine.MustRegisterTemplate("child", `{~prompty.extends template="base" /~}
+{~prompty.block name="msg"~}Goodbye{~/prompty.block~}`)
+
+	// Execute child template by name
+	result, err := engine.ExecuteTemplate(context.Background(), "child", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "Goodbye", strings.TrimSpace(result))
+}
+
+func TestE2E_Inheritance_EmptyBlock(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Base with empty block
+	engine.MustRegisterTemplate("base", `Start{~prompty.block name="middle"~}{~/prompty.block~}End`)
+
+	// Child fills the empty block
+	child := `{~prompty.extends template="base" /~}
+{~prompty.block name="middle"~} CONTENT {~/prompty.block~}`
+
+	result, err := engine.Execute(context.Background(), child, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "Start CONTENT End", strings.TrimSpace(result))
+}
+
+func TestE2E_Inheritance_ParentNotFound(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Try to extend non-existent template
+	child := `{~prompty.extends template="nonexistent" /~}
+{~prompty.block name="content"~}Content{~/prompty.block~}`
+
+	_, err := engine.Execute(context.Background(), child, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "template not found")
+}
+
+func TestE2E_Inheritance_MultipleBlocks(t *testing.T) {
+	engine := prompty.MustNew()
+
+	// Base with three blocks
+	engine.MustRegisterTemplate("base", `{~prompty.block name="header"~}H{~/prompty.block~}|{~prompty.block name="body"~}B{~/prompty.block~}|{~prompty.block name="footer"~}F{~/prompty.block~}`)
+
+	// Child overrides two blocks
+	child := `{~prompty.extends template="base" /~}
+{~prompty.block name="header"~}HEADER{~/prompty.block~}
+{~prompty.block name="footer"~}FOOTER{~/prompty.block~}`
+
+	result, err := engine.Execute(context.Background(), child, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "HEADER|B|FOOTER", strings.TrimSpace(result))
 }

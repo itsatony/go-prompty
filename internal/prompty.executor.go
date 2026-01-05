@@ -123,9 +123,18 @@ func (e *Executor) executeNode(ctx context.Context, node Node, execCtx ContextAc
 	case *SwitchNode:
 		return e.executeSwitch(ctx, n, execCtx, depth)
 
+	case *BlockNode:
+		return e.executeBlockNode(ctx, n, execCtx, depth)
+
 	default:
 		return "", NewExecutorError(ErrMsgUnknownNodeType, "", node.Pos())
 	}
+}
+
+// executeBlockNode processes a block node (template inheritance)
+func (e *Executor) executeBlockNode(ctx context.Context, block *BlockNode, execCtx ContextAccessor, depth int) (string, error) {
+	// Execute the block's children - at this point inheritance should be resolved
+	return e.executeNodes(ctx, block.Children, execCtx, depth+1)
 }
 
 // executeConditional processes a conditional node and returns its output.

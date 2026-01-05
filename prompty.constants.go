@@ -26,6 +26,9 @@ const (
 	TagNameCaseDefault = "prompty.casedefault" // Phase 5 - default case in switch
 	TagNameEnv         = "prompty.env"         // Environment variable resolver
 	TagNameConfig      = "prompty.config"      // Inference configuration block
+	TagNameExtends     = "prompty.extends"     // Template inheritance - extends parent
+	TagNameBlock       = "prompty.block"       // Template inheritance - overridable block
+	TagNameParent      = "prompty.parent"      // Template inheritance - call parent block content
 )
 
 // Reserved namespace prefix for built-in tags
@@ -226,6 +229,17 @@ const (
 const (
 	StorageDriverNameMemory     = "memory"
 	StorageDriverNameFilesystem = "filesystem"
+	StorageDriverNamePostgres   = "postgres"
+)
+
+// PostgreSQL storage driver configuration defaults
+const (
+	PostgresTablePrefix            = "prompty_"
+	PostgresDefaultMaxOpenConns    = 25
+	PostgresDefaultMaxIdleConns    = 5
+	PostgresDefaultConnMaxLifetime = 5 * time.Minute
+	PostgresDefaultConnMaxIdleTime = 5 * time.Minute
+	PostgresDefaultQueryTimeout    = 30 * time.Second
 )
 
 // Model API types
@@ -261,8 +275,21 @@ const (
 
 // Storage error messages
 const (
-	ErrMsgCryptoRandFailure    = "cryptographic random number generator failure"
+	ErrMsgCryptoRandFailure     = "cryptographic random number generator failure"
 	ErrMsgPathTraversalDetected = "invalid template name: path traversal characters detected"
+)
+
+// PostgreSQL storage error messages
+const (
+	ErrMsgPostgresConnectionFailed  = "failed to connect to PostgreSQL"
+	ErrMsgPostgresQueryFailed       = "PostgreSQL query failed"
+	ErrMsgPostgresTransactionFailed = "PostgreSQL transaction failed"
+	ErrMsgPostgresScanFailed        = "failed to scan PostgreSQL result"
+	ErrMsgPostgresMarshalFailed     = "failed to marshal data for PostgreSQL"
+	ErrMsgPostgresUnmarshalFailed   = "failed to unmarshal PostgreSQL data"
+	ErrMsgPostgresMigrationFailed   = "PostgreSQL migration failed"
+	ErrMsgPostgresEmptyConnString   = "PostgreSQL connection string is empty"
+	ErrMsgPostgresAlreadyClosed     = "PostgreSQL storage is already closed"
 )
 
 // Access control message formats

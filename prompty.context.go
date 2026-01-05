@@ -16,6 +16,9 @@ type TemplateExecutor interface {
 	HasTemplate(name string) bool
 	// MaxDepth returns the configured maximum nesting depth.
 	MaxDepth() int
+	// GetTemplateSource retrieves the source string of a registered template.
+	// Used for template inheritance resolution.
+	GetTemplateSource(name string) (string, bool)
 }
 
 // Context provides access to template variables and execution state.

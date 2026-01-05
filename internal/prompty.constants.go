@@ -156,6 +156,9 @@ const (
 	TagNameCaseDefault = "prompty.casedefault" // Phase 5
 	TagNameEnv         = "prompty.env"         // Environment variable resolver
 	TagNameConfig      = "prompty.config"      // Inference configuration block
+	TagNameExtends     = "prompty.extends"     // Template inheritance - extends parent
+	TagNameBlock       = "prompty.block"       // Template inheritance - overridable block
+	TagNameParent      = "prompty.parent"      // Template inheritance - call parent block content
 )
 
 // Attribute name constants
@@ -408,4 +411,43 @@ const (
 	ErrMsgConfigBlockParse    = "failed to parse config block JSON"
 	ErrMsgConfigBlockInvalid  = "invalid config block format"
 	ErrMsgConfigBlockUnclosed = "config block not properly closed"
+)
+
+// Error messages for template inheritance
+const (
+	ErrMsgExtendsNotFirst         = "extends must be first tag in template"
+	ErrMsgExtendsMultiple         = "only one extends allowed per template"
+	ErrMsgExtendsMissingTemplate  = "missing required 'template' attribute for extends"
+	ErrMsgBlockMissingName        = "missing required 'name' attribute for block"
+	ErrMsgBlockDuplicateName      = "duplicate block name"
+	ErrMsgBlockNotClosed          = "block not properly closed"
+	ErrMsgParentOutsideBlock      = "parent can only be used inside a block"
+	ErrMsgCircularInheritance     = "circular template inheritance detected"
+	ErrMsgInheritanceDepthExceeded = "template inheritance depth exceeded"
+)
+
+// Log messages for template inheritance
+const (
+	LogMsgExtendsFound        = "template extends found"
+	LogMsgBlockDefined        = "block defined"
+	LogMsgBlockOverride       = "block override"
+	LogMsgParentBlockInserted = "parent block content inserted"
+	LogMsgInheritanceResolved = "template inheritance resolved"
+)
+
+// Log field names for template inheritance
+const (
+	LogFieldParentTemplate = "parent_template"
+	LogFieldBlockName      = "block_name"
+	LogFieldInheritanceDepth = "inheritance_depth"
+)
+
+// Default values for template inheritance
+const (
+	DefaultMaxInheritanceDepth = 10
+)
+
+// Node type for inheritance (add to NodeType constants)
+const (
+	NodeTypeBlock NodeType = iota + 100 // Block node for inheritance
 )

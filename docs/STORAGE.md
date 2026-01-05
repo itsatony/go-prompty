@@ -8,7 +8,7 @@ The storage layer consists of:
 
 - **TemplateStorage Interface**: Abstract interface for storage backends
 - **StoredTemplate**: Template with metadata, versioning, and tenant support
-- **Built-in Drivers**: Memory and filesystem implementations
+- **Built-in Drivers**: Memory, filesystem, and PostgreSQL implementations
 - **CachedStorage**: Caching wrapper for any storage backend
 - **StorageEngine**: Combines storage with template execution
 
@@ -143,6 +143,134 @@ Directory structure example:
     v1.json
 ```
 
+### PostgreSQL Storage
+
+Production-ready PostgreSQL storage with connection pooling and migrations:
+
+```go
+// Simple: Open via driver registry
+storage, err := prompty.OpenStorage("postgres",
+    "postgres://user:password@localhost:5432/prompty?sslmode=disable")
+
+// Full control: Use PostgresConfig
+storage, err := prompty.NewPostgresStorage(prompty.PostgresConfig{
+    ConnectionString: os.Getenv("DATABASE_URL"),
+    MaxOpenConns:     25,
+    MaxIdleConns:     5,
+    ConnMaxLifetime:  5 * time.Minute,
+    ConnMaxIdleTime:  5 * time.Minute,
+    TablePrefix:      "prompty_",
+    AutoMigrate:      true,
+    QueryTimeout:     30 * time.Second,
+})
+if err != nil {
+    log.Fatal(err)
+}
+defer storage.Close()
+```
+
+Features:
+- Automatic schema migrations with version tracking
+- Connection pooling with configurable limits
+- JSONB storage for metadata, inference config, and tags
+- GIN indexes for efficient tag queries
+- SERIALIZABLE transactions for version safety
+- Context-aware query timeouts
+- Thread-safe for concurrent access
+
+#### Database Schema
+
+The driver creates the following tables (with configurable prefix):
+
+```sql
+-- Templates table
+CREATE TABLE prompty_templates (
+    id               VARCHAR(255) PRIMARY KEY,
+    name             VARCHAR(255) NOT NULL,
+    source           TEXT NOT NULL,
+    version          INTEGER NOT NULL DEFAULT 1,
+    metadata         JSONB DEFAULT '{}',
+    inference_config JSONB DEFAULT NULL,
+    created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_by       VARCHAR(255),
+    tenant_id        VARCHAR(255),
+    tags             JSONB DEFAULT '[]',
+    CONSTRAINT prompty_templates_name_version_unique UNIQUE (name, version)
+);
+
+-- Schema migrations tracking
+CREATE TABLE prompty_schema_migrations (
+    version     INTEGER PRIMARY KEY,
+    applied_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    description VARCHAR(255)
+);
+```
+
+Indexes are automatically created for:
+- `name` - Fast lookup by template name
+- `name, version DESC` - Efficient latest version queries
+- `tenant_id` - Multi-tenant filtering (partial index)
+- `created_by` - Creator filtering (partial index)
+- `tags` - GIN index for tag containment queries
+- `created_at DESC` - Chronological listing
+
+#### Configuration Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `ConnectionString` | (required) | PostgreSQL connection DSN |
+| `MaxOpenConns` | 25 | Maximum open connections |
+| `MaxIdleConns` | 5 | Maximum idle connections |
+| `ConnMaxLifetime` | 5m | Maximum connection lifetime |
+| `ConnMaxIdleTime` | 5m | Maximum idle time |
+| `TablePrefix` | `prompty_` | Table name prefix |
+| `AutoMigrate` | false | Run migrations on open |
+| `QueryTimeout` | 30s | Default query timeout |
+
+#### Running Migrations
+
+Migrations run automatically with `AutoMigrate: true`, or manually:
+
+```go
+storage, err := prompty.NewPostgresStorage(prompty.PostgresConfig{
+    ConnectionString: connStr,
+    AutoMigrate:      false,
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+// Run migrations manually
+if err := storage.RunMigrations(ctx); err != nil {
+    log.Fatal(err)
+}
+```
+
+#### Query Performance
+
+The PostgreSQL driver optimizes common query patterns:
+
+```go
+// Efficient: Uses name index
+tmpl, _ := storage.Get(ctx, "greeting")
+
+// Efficient: Uses GIN index for tag containment
+results, _ := storage.List(ctx, &prompty.TemplateQuery{
+    Tags: []string{"production", "email"},
+})
+
+// Efficient: Uses partial index for tenant
+results, _ := storage.List(ctx, &prompty.TemplateQuery{
+    TenantID: "org_123",
+})
+
+// Efficient: Uses DISTINCT ON with name index
+results, _ := storage.List(ctx, &prompty.TemplateQuery{
+    IncludeAllVersions: false, // Default: only latest versions
+})
+```
+
 ### Opening Storage by Driver Name
 
 Storage can be opened using registered driver names:
@@ -150,10 +278,14 @@ Storage can be opened using registered driver names:
 ```go
 // List available drivers
 drivers := prompty.ListStorageDrivers()
-fmt.Println(drivers) // ["memory", "filesystem"]
+fmt.Println(drivers) // ["memory", "filesystem", "postgres"]
 
 // Open storage by driver name
 storage, err := prompty.OpenStorage("filesystem", "/path/to/templates")
+
+// Open PostgreSQL storage
+storage, err := prompty.OpenStorage("postgres",
+    "postgres://user:pass@localhost/prompty?sslmode=disable")
 ```
 
 ## Caching
@@ -361,11 +493,11 @@ Note: The storage layer does not enforce tenant isolation automatically. Impleme
 Create custom storage backends by implementing `TemplateStorage`:
 
 ```go
-type PostgresStorage struct {
-    db *sql.DB
+type RedisStorage struct {
+    client *redis.Client
 }
 
-func (s *PostgresStorage) Get(ctx context.Context, name string) (*prompty.StoredTemplate, error) {
+func (s *RedisStorage) Get(ctx context.Context, name string) (*prompty.StoredTemplate, error) {
     // Your implementation
 }
 
@@ -373,23 +505,23 @@ func (s *PostgresStorage) Get(ctx context.Context, name string) (*prompty.Stored
 
 // Register driver
 func init() {
-    prompty.RegisterStorageDriver("postgres", &PostgresDriver{})
+    prompty.RegisterStorageDriver("redis", &RedisDriver{})
 }
 
-type PostgresDriver struct{}
+type RedisDriver struct{}
 
-func (d *PostgresDriver) Open(connectionString string) (prompty.TemplateStorage, error) {
-    db, err := sql.Open("postgres", connectionString)
+func (d *RedisDriver) Open(connectionString string) (prompty.TemplateStorage, error) {
+    opts, err := redis.ParseURL(connectionString)
     if err != nil {
         return nil, err
     }
-    return &PostgresStorage{db: db}, nil
+    return &RedisStorage{client: redis.NewClient(opts)}, nil
 }
 ```
 
 Usage:
 ```go
-storage, err := prompty.OpenStorage("postgres", "postgres://user:pass@host/db")
+storage, err := prompty.OpenStorage("redis", "redis://localhost:6379/0")
 ```
 
 ## Error Handling
@@ -477,6 +609,6 @@ wg.Wait()
 
 ## See Also
 
-- [Custom Storage Backends](CUSTOM_STORAGE.md) - Implementing PostgreSQL, MongoDB, Redis, etc.
+- [Custom Storage Backends](CUSTOM_STORAGE.md) - Implementing MongoDB, Redis, or other custom backends
 - [Thread Safety Guide](THREAD_SAFETY.md)
 - [README](../README.md)

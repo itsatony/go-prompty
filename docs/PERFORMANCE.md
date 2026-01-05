@@ -361,19 +361,39 @@ data := map[string]any{
 
 ## Storage Performance
 
-### Memory vs Filesystem Storage
+### Storage Driver Comparison
 
 | Storage | Read | Write | Best For |
 |---------|------|-------|----------|
 | Memory | ~100ns | ~200ns | Development, testing, small sets |
 | Filesystem | ~1ms | ~2ms | Persistence, moderate traffic |
+| PostgreSQL | ~2-5ms | ~5-10ms | Production, multi-tenant, high reliability |
+
+### PostgreSQL Configuration for Performance
+
+```go
+storage, _ := prompty.NewPostgresStorage(prompty.PostgresConfig{
+    ConnectionString: os.Getenv("DATABASE_URL"),
+    MaxOpenConns:     25,      // Match your expected concurrency
+    MaxIdleConns:     5,       // Keep warm connections
+    ConnMaxLifetime:  5 * time.Minute,
+    AutoMigrate:      true,
+    QueryTimeout:     30 * time.Second,
+})
+```
+
+**Performance tips for PostgreSQL:**
+- Use connection pooling (configure `MaxOpenConns` appropriately)
+- Enable `AutoMigrate` only in development; run migrations separately in production
+- Use caching layer for high-traffic templates (see below)
+- Tags queries use GIN indexes - efficient for `@>` containment queries
 
 ### Caching Storage
 
 Always wrap storage with caching for production:
 
 ```go
-storage := prompty.NewMemoryStorage()  // or FilesystemStorage
+storage := prompty.NewMemoryStorage()  // or FilesystemStorage or PostgresStorage
 cached := prompty.NewCachedStorage(storage, prompty.CacheConfig{
     TTL:         5 * time.Minute,
     MaxEntries:  1000,

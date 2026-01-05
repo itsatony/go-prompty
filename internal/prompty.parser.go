@@ -172,6 +172,11 @@ func (p *Parser) parseBlockTag(tagName string, attrs Attributes, pos Position, o
 		return p.parseSwitch(attrs, pos)
 	}
 
+	// Special handling for block (template inheritance)
+	if tagName == TagNameBlock {
+		return p.parseBlock(attrs, pos)
+	}
+
 	// Parse children
 	children, err := p.parseNodes()
 	if err != nil {

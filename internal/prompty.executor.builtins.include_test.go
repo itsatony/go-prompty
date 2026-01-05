@@ -46,6 +46,11 @@ func (m *mockTemplateExecutor) MaxDepth() int {
 	return m.maxDepth
 }
 
+func (m *mockTemplateExecutor) GetTemplateSource(name string) (string, bool) {
+	source, ok := m.templates[name]
+	return source, ok
+}
+
 func (m *mockTemplateExecutor) RegisterTemplate(name, result string) {
 	m.templates[name] = result
 }

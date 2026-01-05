@@ -24,6 +24,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runRender(cmdArgs, stdin, stdout, stderr)
 	case CmdNameValidate:
 		return runValidate(cmdArgs, stdin, stdout, stderr)
+	case CmdNameLint:
+		return runLint(cmdArgs, stdin, stdout, stderr)
+	case CmdNameDebug:
+		return runDebug(cmdArgs, stdin, stdout, stderr)
 	case CmdNameVersion:
 		return runVersion(cmdArgs, stdout, stderr)
 	case CmdNameHelp:

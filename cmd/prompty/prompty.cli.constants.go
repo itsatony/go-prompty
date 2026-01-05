@@ -4,6 +4,8 @@ package main
 const (
 	CmdNameRender   = "render"
 	CmdNameValidate = "validate"
+	CmdNameLint     = "lint"
+	CmdNameDebug    = "debug"
 	CmdNameVersion  = "version"
 	CmdNameHelp     = "help"
 )
@@ -17,6 +19,10 @@ const (
 	FlagQuiet      = "quiet"
 	FlagFormat     = "format"
 	FlagStrictMode = "strict"
+	FlagRules      = "rules"
+	FlagIgnore     = "ignore"
+	FlagTrace      = "trace"
+	FlagVerbose    = "verbose"
 )
 
 // Flag names - short form
@@ -27,6 +33,9 @@ const (
 	FlagOutputShort   = "o"
 	FlagQuietShort    = "q"
 	FlagFormatShort   = "F"
+	FlagRulesShort    = "r"
+	FlagIgnoreShort   = "i"
+	FlagVerboseShort  = "v"
 )
 
 // Flag default values
@@ -83,6 +92,8 @@ Usage:
 Commands:
     render      Render a template with data
     validate    Validate a template without executing
+    lint        Check template for style issues and best practices
+    debug       Analyze template without executing (dry-run)
     version     Show version information
     help        Show help for a command
 
@@ -137,7 +148,62 @@ Usage:
 Commands:
     render      Show help for render command
     validate    Show help for validate command
+    lint        Show help for lint command
+    debug       Show help for debug command
     version     Show help for version command`
+
+	HelpLintUsage = `Check template for style issues and best practices
+
+Usage:
+    prompty lint [options]
+
+Options:
+    -t, --template <file>   Template file (use "-" for stdin)
+    -F, --format <format>   Output format: text, json (default: text)
+    -r, --rules <rules>     Comma-separated list of rules to check
+    -i, --ignore <rules>    Comma-separated list of rules to ignore
+    --strict                Treat warnings as errors
+
+Lint Rules:
+    VAR001    Variable name uses non-standard casing
+    VAR002    Variable without default might be missing
+    TAG001    Unknown or unregistered tag
+    LOOP001   Loop without limit attribute
+    LOOP002   Deeply nested loops (> 2 levels)
+    EXPR001   Complex expression (> 3 operators)
+    INC001    Include references non-existent template
+
+Examples:
+    prompty lint -t template.txt
+    prompty lint -t template.txt --strict
+    prompty lint -t template.txt --ignore VAR002,LOOP001
+    prompty lint -t template.txt -F json`
+
+	HelpDebugUsage = `Analyze template without executing (dry-run)
+
+Usage:
+    prompty debug [options]
+
+Options:
+    -t, --template <file>   Template file (use "-" for stdin)
+    -d, --data <json>       JSON data string
+    -f, --data-file <file>  JSON data file
+    -F, --format <format>   Output format: text, json (default: text)
+    --trace                 Show execution trace
+    -v, --verbose           Show detailed analysis
+
+Output includes:
+    - Variables referenced (with existence check)
+    - Resolvers invoked
+    - Template includes and their resolution
+    - Missing variables with suggestions
+    - Unused data fields
+
+Examples:
+    prompty debug -t template.txt -d '{"name": "Alice"}'
+    prompty debug -t template.txt -f data.json
+    prompty debug -t template.txt -f data.json --trace
+    prompty debug -t template.txt -f data.json -F json`
 )
 
 // Version output format templates
@@ -152,6 +218,53 @@ const (
 	ValidationTextIssueHeader  = "Validation issues:"
 	ValidationTextIssueFormat  = "  [%s] %s at line %d, column %d"
 	ValidationTextErrorSummary = "%d error(s), %d warning(s)"
+)
+
+// Lint rule IDs
+const (
+	LintRuleVAR001  = "VAR001"  // Variable name non-standard casing
+	LintRuleVAR002  = "VAR002"  // Variable without default
+	LintRuleTAG001  = "TAG001"  // Unknown tag
+	LintRuleLOOP001 = "LOOP001" // Loop without limit
+	LintRuleLOOP002 = "LOOP002" // Deeply nested loops
+	LintRuleEXPR001 = "EXPR001" // Complex expression
+	LintRuleINC001  = "INC001"  // Include non-existent template
+)
+
+// Lint output format templates
+const (
+	LintTextNoIssues     = "No lint issues found"
+	LintTextIssueHeader  = "Lint issues:"
+	LintTextIssueFormat  = "  [%s] %s: %s (line %d, column %d)"
+	LintTextIssueSummary = "%d issue(s) found"
+)
+
+// Lint rule descriptions
+const (
+	LintDescVAR001  = "Variable name should use camelCase or snake_case"
+	LintDescVAR002  = "Variable without default value might cause errors"
+	LintDescTAG001  = "Unknown or unregistered tag"
+	LintDescLOOP001 = "Loop without limit attribute may cause performance issues"
+	LintDescLOOP002 = "Deeply nested loops (> 2 levels) reduce readability"
+	LintDescEXPR001 = "Complex expression with many operators may be hard to maintain"
+	LintDescINC001  = "Include references template that may not exist"
+)
+
+// Debug output format templates
+const (
+	DebugTextHeader          = "=== Template Debug Analysis ==="
+	DebugTextVariablesHeader = "Variables (%d found):"
+	DebugTextVarExists       = "  ✓ %-20s [line %d]  = %v"
+	DebugTextVarMissing      = "  ✗ %-20s [line %d]  MISSING"
+	DebugTextVarDefault      = " (default: %s)"
+	DebugTextResolversHeader = "Resolvers (%d invocations):"
+	DebugTextResolverFormat  = "  %-20s [line %s]"
+	DebugTextIncludesHeader  = "Includes (%d found):"
+	DebugTextIncludeExists   = "  ✓ %-20s [line %d]  exists"
+	DebugTextIncludeMissing  = "  ✗ %-20s [line %d]  NOT FOUND"
+	DebugTextUnusedHeader    = "Unused Data Fields:"
+	DebugTextUnusedFormat    = "  - %s"
+	DebugTextSummary         = "Issues: %d missing variable(s), %d unused field(s)"
 )
 
 // Severity names for output

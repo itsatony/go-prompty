@@ -5,6 +5,74 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-01-05
+
+### Added
+
+#### Template Inheritance System
+- Base template support with `prompty.extends` tag for template inheritance
+- Named block definitions with `prompty.block` for overridable sections
+- `prompty.parent` tag for including parent block content in overrides
+- Multi-level inheritance support (A extends B extends C)
+- Circular inheritance detection and prevention
+- Block-level override validation
+
+#### Date/Time Expression Functions
+- `now()` - Returns current timestamp
+- `formatDate(time, layout)` - Format time using Go layout strings
+- `parseDate(string, layout)` - Parse string to time
+- `addDays(t, n)`, `addHours(t, n)`, `addMinutes(t, n)` - Time arithmetic
+- `diffDays(t1, t2)` - Calculate days between times
+- `year(t)`, `month(t)`, `day(t)` - Extract date components
+- `weekday(t)` - Get day name
+- `isAfter(t1, t2)`, `isBefore(t1, t2)` - Time comparisons
+- Common format constants: `DateFormatISO`, `DateFormatUS`, `DateFormatEU`, etc.
+
+#### CLI Enhancements
+- New `prompty lint` command for template quality checks:
+  - `VAR001`: Variable name uses non-standard casing
+  - `VAR002`: Variable without default might be missing
+  - `TAG001`: Unknown or unregistered tag
+  - `LOOP001`: Loop without limit attribute
+  - `LOOP002`: Deeply nested loops (> 2 levels)
+  - `EXPR001`: Complex expression (> 3 operators)
+  - `INC001`: Include references non-existent template
+  - Supports `--rules` and `--ignore` flags for rule selection
+  - Supports `--strict` mode (warnings fail validation)
+  - JSON and text output formats
+- New `prompty debug` command for dry-run analysis:
+  - Shows all variables referenced with existence check
+  - Shows all resolvers invoked
+  - Shows template includes and their resolution
+  - Highlights missing variables with suggestions
+  - Shows unused data fields
+  - Supports `--trace` and `--verbose` modes
+  - JSON and text output formats
+
+#### PostgreSQL Storage Driver
+- Built-in PostgreSQL storage driver with full `TemplateStorage` interface implementation
+- Automatic schema migrations with version tracking
+- Connection pooling with configurable limits (MaxOpenConns, MaxIdleConns, ConnMaxLifetime)
+- JSONB storage for metadata, inference config, and tags with GIN indexes
+- SERIALIZABLE transaction isolation for safe version management
+- Context-aware query timeouts
+- Driver registration via `OpenStorage("postgres", connectionString)` or `NewPostgresStorage(config)`
+
+#### Examples
+- `examples/error_handling/main.go` - Demonstrates all 5 error strategies
+- `examples/debugging/main.go` - Demonstrates dry-run analysis usage
+- `examples/inheritance/main.go` - Demonstrates template inheritance
+
+### Technical Details
+
+- 13 new date/time functions with comprehensive tests
+- Full test coverage for CLI lint and debug commands
+- Template inheritance with depth limiting (max 10 levels)
+- Production-ready PostgreSQL storage with migrations and connection pooling
+- All string literals use constants (no magic strings)
+- Thread-safe for concurrent access
+- Backward compatible with existing templates
+
 ## [1.2.0] - 2024-12-28
 
 ### Added

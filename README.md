@@ -6,8 +6,13 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/itsatony/go-prompty)](https://goreportcard.com/report/github.com/itsatony/go-prompty)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Test Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen.svg)](https://github.com/itsatony/go-prompty)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/itsatony/go-prompty/releases/tag/v1.3.0)
 
 ```
+{~prompty.config~}
+{"model": {"name": "{~prompty.env name='MODEL' default='gpt-4' /~}", "parameters": {"temperature": 0.7}}}
+{~/prompty.config~}
+
 {~prompty.if eval="user.tier == 'enterprise'"~}
 You are assisting {~prompty.var name="user.company" /~}, an enterprise customer.
 {~prompty.else~}
@@ -23,8 +28,12 @@ You are assisting {~prompty.var name="user.name" default="a user" /~}.
 | **Content conflicts** | `{~...~}` delimiters avoid clashes with code, JSON, XML |
 | **Dynamic content** | Variables, conditionals, loops, and expressions |
 | **Reusability** | Nested templates with `prompty.include` |
+| **Template inheritance** | Base templates with overridable blocks (`extends`/`block`/`parent`) |
 | **Type safety** | Compile-time template validation |
 | **Extensibility** | Plugin architecture for custom tags and functions |
+| **Self-describing** | Embed model configuration with `prompty.config` blocks |
+| **Environment aware** | Access env vars with `prompty.env` |
+| **Production ready** | Access control, multi-tenancy, audit logging |
 
 ## Installation
 
@@ -79,15 +88,22 @@ Please respond in {~prompty.var name="language" default="English" /~}.`
 - [Core Concepts](#core-concepts)
 - [Template Syntax](#template-syntax)
 - [Built-in Tags](#built-in-tags)
+- [Template Inheritance](#promptyextends--promptyblock--promptyparent---template-inheritance)
 - [Expression Language](#expression-language)
+- [Inference Configuration](#inference-configuration)
 - [Custom Resolvers](#custom-resolvers)
 - [Custom Functions](#custom-functions)
+- [Storage & Persistence](#storage--persistence)
+- [Access Control](#access-control)
+- [Hooks System](#hooks-system)
 - [Production Patterns](#production-patterns)
 - [CLI Reference](#cli-reference)
 - [Configuration](#configuration)
 - [API Reference](#api-reference)
 - [Performance](#performance)
 - [Troubleshooting](#troubleshooting)
+- [Examples](#examples)
+- [Documentation](#documentation)
 
 ---
 
@@ -121,6 +137,7 @@ Please respond in {~prompty.var name="language" default="English" /~}.`
 | **Context** | Execution data with dot-notation path access |
 | **Resolver** | Plugin handler for custom tags |
 | **Func** | Custom function for expressions |
+| **InferenceConfig** | Embedded model configuration (v1.2.0+) |
 
 ### Parse Once, Execute Many
 
@@ -190,6 +207,38 @@ Access values from the execution context using dot-notation paths.
 | `name` | Yes | Dot-notation path (e.g., `user.settings.theme`) |
 | `default` | No | Fallback value if path not found |
 | `onerror` | No | Error strategy override |
+
+### `prompty.env` - Environment Variables
+
+Access environment variables with optional defaults.
+
+```
+{~prompty.env name="API_KEY" /~}
+{~prompty.env name="MODEL" default="gpt-4" /~}
+{~prompty.env name="SECRET" required="true" /~}
+```
+
+| Attribute | Required | Description |
+|-----------|----------|-------------|
+| `name` | Yes | Environment variable name |
+| `default` | No | Fallback value if not set |
+| `required` | No | Error if not set (and no default) |
+
+### `prompty.config` - Inference Configuration
+
+Embed model configuration at the start of templates. See [Inference Configuration](#inference-configuration) for full details.
+
+```
+{~prompty.config~}
+{
+  "name": "customer-support",
+  "model": {
+    "name": "gpt-4",
+    "parameters": {"temperature": 0.7, "max_tokens": 2048}
+  }
+}
+{~/prompty.config~}
+```
 
 ### `prompty.if` / `prompty.elseif` / `prompty.else` - Conditionals
 
@@ -297,6 +346,82 @@ Internal note: This section needs review
 {~/prompty.comment~}
 ```
 
+### `prompty.extends` / `prompty.block` / `prompty.parent` - Template Inheritance
+
+Create reusable base templates with overridable sections. Child templates can extend parents and selectively override blocks while optionally preserving parent content.
+
+**Base Template** (`base-prompt.prompty`):
+```
+{~prompty.block name="system"~}You are a helpful assistant.{~/prompty.block~}
+
+{~prompty.block name="context"~}{~/prompty.block~}
+
+{~prompty.block name="instructions"~}Please be concise and accurate.{~/prompty.block~}
+```
+
+**Child Template** (extends base):
+```
+{~prompty.extends template="base-prompt" /~}
+
+{~prompty.block name="system"~}You are a customer support agent for {~prompty.var name="company" /~}.{~/prompty.block~}
+
+{~prompty.block name="context"~}
+Customer: {~prompty.var name="customer.name" /~}
+Issue: {~prompty.var name="issue" /~}
+{~/prompty.block~}
+
+{~prompty.block name="instructions"~}
+{~prompty.parent /~}
+Additionally, always offer to escalate if the customer is frustrated.
+{~/prompty.block~}
+```
+
+**Result** (when executed):
+```
+You are a customer support agent for Acme Corp.
+
+Customer: Alice
+Issue: Billing question
+
+Please be concise and accurate.
+Additionally, always offer to escalate if the customer is frustrated.
+```
+
+| Tag | Description |
+|-----|-------------|
+| `prompty.extends` | Inherit from a parent template (must be first tag) |
+| `prompty.block` | Define an overridable named section |
+| `prompty.parent` | Insert parent's block content (call super) |
+
+| Attribute | Tag | Required | Description |
+|-----------|-----|----------|-------------|
+| `template` | extends | Yes | Name of registered parent template |
+| `name` | block | Yes | Unique block identifier |
+
+**Multi-level inheritance** is supported (A extends B extends C), with blocks resolved from most-derived to base.
+
+```go
+engine := prompty.MustNew()
+
+// Register base templates
+engine.MustRegisterTemplate("base-layout", `
+{~prompty.block name="header"~}Default Header{~/prompty.block~}
+{~prompty.block name="body"~}{~/prompty.block~}
+{~prompty.block name="footer"~}Default Footer{~/prompty.block~}
+`)
+
+engine.MustRegisterTemplate("page-layout", `
+{~prompty.extends template="base-layout" /~}
+{~prompty.block name="header"~}== {~prompty.var name="title" /~} =={~/prompty.block~}
+`)
+
+// Execute child that extends page-layout
+result, _ := engine.Execute(ctx, `
+{~prompty.extends template="page-layout" /~}
+{~prompty.block name="body"~}Page content here{~/prompty.block~}
+`, map[string]any{"title": "My Page"})
+```
+
 ---
 
 ## Expression Language
@@ -321,10 +446,10 @@ Expressions are used in `eval` attributes for conditionals and switch/case.
 | `slice/map` | non-empty | empty |
 | `nil` | - | always falsy |
 
-### Built-in Functions
+### Built-in Functions (37 total)
 
 <details>
-<summary><strong>String Functions</strong></summary>
+<summary><strong>String Functions (11)</strong></summary>
 
 | Function | Description |
 |----------|-------------|
@@ -343,7 +468,7 @@ Expressions are used in `eval` attributes for conditionals and switch/case.
 </details>
 
 <details>
-<summary><strong>Collection Functions</strong></summary>
+<summary><strong>Collection Functions (6)</strong></summary>
 
 | Function | Description |
 |----------|-------------|
@@ -353,12 +478,11 @@ Expressions are used in `eval` attributes for conditionals and switch/case.
 | `keys(map)` | Map keys (sorted) |
 | `values(map)` | Map values |
 | `has(map, key)` | Check map has key |
-| `contains(slice, item)` | Check slice contains item |
 
 </details>
 
 <details>
-<summary><strong>Type Functions</strong></summary>
+<summary><strong>Type Functions (5)</strong></summary>
 
 | Function | Description |
 |----------|-------------|
@@ -367,13 +491,11 @@ Expressions are used in `eval` attributes for conditionals and switch/case.
 | `toFloat(x)` | Convert to float |
 | `toBool(x)` | Convert to boolean |
 | `typeOf(x)` | Get type name |
-| `isNil(x)` | Check if nil |
-| `isEmpty(x)` | Check if empty |
 
 </details>
 
 <details>
-<summary><strong>Utility Functions</strong></summary>
+<summary><strong>Utility Functions (2)</strong></summary>
 
 | Function | Description |
 |----------|-------------|
@@ -382,10 +504,39 @@ Expressions are used in `eval` attributes for conditionals and switch/case.
 
 </details>
 
+<details>
+<summary><strong>Date/Time Functions (13)</strong></summary>
+
+| Function | Description |
+|----------|-------------|
+| `now()` | Current timestamp |
+| `formatDate(t, layout)` | Format time using Go layout |
+| `parseDate(s, [layout])` | Parse string to time (auto-detects format if no layout) |
+| `addDays(t, n)` | Add n days to time |
+| `addHours(t, n)` | Add n hours to time |
+| `addMinutes(t, n)` | Add n minutes to time |
+| `diffDays(t1, t2)` | Days between two times (t2 - t1) |
+| `year(t)` | Extract year |
+| `month(t)` | Extract month (1-12) |
+| `day(t)` | Extract day of month (1-31) |
+| `weekday(t)` | Day name (Monday, Tuesday, etc.) |
+| `isAfter(t1, t2)` | True if t1 is after t2 |
+| `isBefore(t1, t2)` | True if t1 is before t2 |
+
+**Common date format layouts:**
+- `2006-01-02` - ISO date (YYYY-MM-DD)
+- `01/02/2006` - US format (MM/DD/YYYY)
+- `02/01/2006` - EU format (DD/MM/YYYY)
+- `2006-01-02T15:04:05Z07:00` - ISO datetime with timezone
+- `15:04:05` - 24-hour time
+- `Jan 2, 2006` - Human-readable
+
+</details>
+
 ### Expression Examples
 
 ```
-// Simple
+// Simple comparison
 {~prompty.if eval="age >= 18"~}
 
 // Function calls
@@ -393,7 +544,89 @@ Expressions are used in `eval` attributes for conditionals and switch/case.
 
 // Complex logic
 {~prompty.if eval="(isAdmin || isModerator) && !isBanned && len(permissions) > 0"~}
+
+// Date/time operations
+{~prompty.var name="today" default="{~prompty.var name=\"formatDate(now(), '2006-01-02')\" /~}" /~}
+{~prompty.if eval="isAfter(expiryDate, now())"~}Still valid{~/prompty.if~}
+{~prompty.if eval="diffDays(startDate, now()) > 30"~}Over a month{~/prompty.if~}
 ```
+
+---
+
+## Inference Configuration
+
+Templates can embed model configuration using JSON-based config blocks. This makes templates self-describing with model parameters, input/output schemas, and sample data.
+
+### Config Block Format
+
+```
+{~prompty.config~}
+{
+  "name": "customer-support-agent",
+  "description": "Handles customer inquiries",
+  "version": "1.0.0",
+  "model": {
+    "api": "chat",
+    "provider": "openai",
+    "name": "{~prompty.env name='MODEL_NAME' default='gpt-4' /~}",
+    "parameters": {
+      "temperature": 0.7,
+      "max_tokens": 2048,
+      "top_p": 0.9
+    }
+  },
+  "inputs": {
+    "customer_name": {"type": "string", "required": true},
+    "query": {"type": "string", "required": true}
+  },
+  "sample": {
+    "customer_name": "Alice",
+    "query": "How do I reset my password?"
+  }
+}
+{~/prompty.config~}
+
+Hello {~prompty.var name="customer_name" /~}!
+```
+
+### Accessing Configuration
+
+```go
+tmpl, _ := engine.Parse(source)
+
+if tmpl.HasInferenceConfig() {
+    config := tmpl.InferenceConfig()
+
+    fmt.Println("Template:", config.Name)
+    fmt.Println("Model:", config.GetModelName())
+
+    if temp, ok := config.GetTemperature(); ok {
+        fmt.Println("Temperature:", temp)
+    }
+
+    // Validate inputs before execution
+    if err := config.ValidateInputs(data); err != nil {
+        log.Fatal("Invalid inputs:", err)
+    }
+
+    // Get parameters as map for LLM client
+    params := config.Model.Parameters.ToMap()
+}
+```
+
+### Model Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `temperature` | float | Sampling temperature (0.0-2.0) |
+| `max_tokens` | int | Maximum tokens to generate |
+| `top_p` | float | Nucleus sampling (0.0-1.0) |
+| `frequency_penalty` | float | Repetition penalty (-2.0-2.0) |
+| `presence_penalty` | float | Topic penalty (-2.0-2.0) |
+| `stop` | []string | Stop sequences |
+| `seed` | int | Reproducibility seed |
+
+**Deep Dive:** See [docs/INFERENCE_CONFIG.md](docs/INFERENCE_CONFIG.md) for complete documentation.
 
 ---
 
@@ -492,6 +725,168 @@ engine.MustRegisterFunc(&prompty.Func{
 
 ---
 
+## Storage & Persistence
+
+go-prompty includes a pluggable storage layer for managing templates with versioning, metadata, and multi-tenant support:
+
+- **Built-in drivers**: Memory (testing), Filesystem (persistent), and PostgreSQL (production)
+- **Custom backends**: Implement `TemplateStorage` for MongoDB, Redis, or other databases
+- **Caching**: Automatic caching wrapper for any storage backend
+- **InferenceConfig persistence**: Config blocks are automatically extracted and stored
+
+```go
+// PostgreSQL storage (production-ready with migrations)
+storage, _ := prompty.OpenStorage("postgres",
+    "postgres://user:pass@localhost/prompty?sslmode=disable")
+
+// Or with full configuration
+storage, _ := prompty.NewPostgresStorage(prompty.PostgresConfig{
+    ConnectionString: os.Getenv("DATABASE_URL"),
+    AutoMigrate:      true,
+})
+
+engine, _ := prompty.NewStorageEngine(prompty.StorageEngineConfig{
+    Storage: storage,
+})
+
+// Save with versioning - InferenceConfig automatically extracted
+engine.Save(ctx, &prompty.StoredTemplate{
+    Name:   "greeting",
+    Source: `{~prompty.config~}{"model":{"name":"gpt-4"}}{~/prompty.config~}Hello {~prompty.var name="user" /~}!`,
+    Tags:   []string{"production"},
+})
+
+// Execute
+result, _ := engine.Execute(ctx, "greeting", map[string]any{"user": "Alice"})
+
+// Retrieved templates include InferenceConfig
+tmpl, _ := engine.Get(ctx, "greeting")
+if tmpl.InferenceConfig != nil {
+    fmt.Println("Model:", tmpl.InferenceConfig.GetModelName())
+}
+```
+
+**Deep Dive:** See [docs/STORAGE.md](docs/STORAGE.md) for architecture (including PostgreSQL) and [docs/CUSTOM_STORAGE.md](docs/CUSTOM_STORAGE.md) for implementing custom backends.
+
+---
+
+## Access Control
+
+go-prompty provides a flexible, unopinionated access control system with RBAC support, multi-tenant isolation, and audit logging.
+
+### SecureStorageEngine
+
+```go
+// Create secure engine with access control
+engine, _ := prompty.NewSecureStorageEngine(prompty.SecureStorageEngineConfig{
+    StorageEngineConfig: prompty.StorageEngineConfig{
+        Storage: storage,
+    },
+    AccessChecker: &MyRBACChecker{},
+    Auditor:       prompty.NewMemoryAuditor(1000),
+})
+
+// Create subject from authenticated user
+subject := prompty.NewAccessSubject("usr_123").
+    WithTenant("org_456").
+    WithRoles("editor", "viewer")
+
+// All operations require subject
+result, err := engine.ExecuteSecure(ctx, "greeting", data, subject)
+tmpl, err := engine.GetSecure(ctx, "greeting", subject)
+err := engine.SaveSecure(ctx, tmpl, subject)
+```
+
+### Built-in Checkers
+
+| Checker | Description |
+|---------|-------------|
+| `AllowAllChecker` | Allows all access (development) |
+| `DenyAllChecker` | Denies all access (maintenance) |
+| `TenantChecker` | Enforces tenant isolation |
+| `RoleChecker` | Requires specific roles |
+| `ChainedChecker` | AND logic (all must allow) |
+| `AnyOfChecker` | OR logic (any can allow) |
+| `CachedChecker` | Caches decisions for performance |
+
+### RBAC Example
+
+```go
+type RBACChecker struct {
+    rolePermissions map[string][]string
+}
+
+func (c *RBACChecker) Check(ctx context.Context, req *prompty.AccessRequest) (*prompty.AccessDecision, error) {
+    for _, role := range req.Subject.Roles {
+        if perms := c.rolePermissions[role]; contains(perms, string(req.Operation)) {
+            return prompty.Allow("granted by role " + role), nil
+        }
+    }
+    return prompty.Deny("no permission"), nil
+}
+```
+
+**Deep Dive:** See [docs/ACCESS_CONTROL.md](docs/ACCESS_CONTROL.md) for complete documentation.
+
+---
+
+## Hooks System
+
+Hooks provide extension points at every operation stage for logging, metrics, validation, and custom logic.
+
+### Hook Points
+
+| Hook Point | When Called |
+|------------|-------------|
+| `HookBeforeLoad` | Before loading a template |
+| `HookAfterLoad` | After loading a template |
+| `HookBeforeExecute` | Before executing a template |
+| `HookAfterExecute` | After executing a template |
+| `HookBeforeSave` | Before saving a template |
+| `HookAfterSave` | After saving a template |
+| `HookBeforeDelete` | Before deleting a template |
+| `HookAfterDelete` | After deleting a template |
+| `HookBeforeValidate` | Before validating a template |
+| `HookAfterValidate` | After validating a template |
+
+### Registering Hooks
+
+```go
+// Register a logging hook
+engine.RegisterHook(prompty.HookBeforeExecute, func(ctx context.Context, point HookPoint, data *HookData) error {
+    log.Printf("Executing: %s by %s", data.TemplateName, data.Subject.ID)
+    return nil
+})
+
+// Before hooks can abort operations by returning an error
+engine.RegisterHook(prompty.HookBeforeSave, func(ctx context.Context, point HookPoint, data *HookData) error {
+    if len(data.Template.Source) > 100000 {
+        return errors.New("template too large")
+    }
+    return nil
+})
+```
+
+### Built-in Hooks
+
+```go
+// Logging hook
+hook := prompty.LoggingHook(logFunc)
+
+// Timing hook
+hook, getElapsed := prompty.TimingHook()
+
+// Access check hook
+hook := prompty.AccessCheckHook(checker)
+
+// Audit hook
+hook := prompty.AuditHook(auditor)
+```
+
+**Deep Dive:** See [docs/ACCESS_CONTROL.md](docs/ACCESS_CONTROL.md) for hooks documentation.
+
+---
+
 ## Production Patterns
 
 ### Prompt Registry Pattern
@@ -521,62 +916,6 @@ func NewPromptRegistry() *PromptRegistry {
         cache:  make(map[string]*prompty.Template),
     }
 }
-
-func (r *PromptRegistry) Execute(name string, data map[string]any) (string, error) {
-    r.mu.RLock()
-    tmpl, ok := r.cache[name]
-    r.mu.RUnlock()
-
-    if !ok {
-        return "", fmt.Errorf("unknown prompt: %s", name)
-    }
-
-    return tmpl.Execute(context.Background(), data)
-}
-
-func (r *PromptRegistry) Register(name, source string) error {
-    tmpl, err := r.engine.Parse(source)
-    if err != nil {
-        return err
-    }
-
-    r.mu.Lock()
-    r.cache[name] = tmpl
-    r.mu.Unlock()
-    return nil
-}
-```
-
-### Version Control for Prompts
-
-Store prompts as versioned files:
-
-```
-prompts/
-├── v1/
-│   ├── chat-system.prompty
-│   └── summarize.prompty
-└── v2/
-    ├── chat-system.prompty  # Updated version
-    └── summarize.prompty
-```
-
-Load at startup with version selection:
-
-```go
-func LoadPrompts(engine *prompty.Engine, version string) error {
-    pattern := fmt.Sprintf("prompts/%s/*.prompty", version)
-    files, _ := filepath.Glob(pattern)
-
-    for _, file := range files {
-        content, _ := os.ReadFile(file)
-        name := strings.TrimSuffix(filepath.Base(file), ".prompty")
-        if err := engine.RegisterTemplate(name, string(content)); err != nil {
-            return err
-        }
-    }
-    return nil
-}
 ```
 
 ### Error Strategy Selection
@@ -597,29 +936,26 @@ engine, _ := prompty.New(prompty.WithErrorStrategy(prompty.ErrorStrategyDefault)
 {~prompty.var name="optional.field" onerror="remove" /~}
 ```
 
-### Graceful Degradation
+**Deep Dive:** See [docs/ERROR_STRATEGIES.md](docs/ERROR_STRATEGIES.md) for detailed examples.
+
+### Debugging Templates
+
+Use DryRun and Explain for template debugging:
 
 ```go
-func ExecuteWithFallback(engine *prompty.Engine, primary, fallback string, data map[string]any) string {
-    result, err := engine.Execute(context.Background(), primary, data)
-    if err != nil {
-        log.Printf("Primary prompt failed: %v, using fallback", err)
-        result, _ = engine.Execute(context.Background(), fallback, data)
-    }
-    return result
-}
-```
+tmpl, _ := engine.Parse(source)
 
-### Context Timeout
+// DryRun - validate without execution
+result := tmpl.DryRun(ctx, data)
+fmt.Println(result.MissingVariables)  // Variables not in data
+fmt.Println(result.UnusedVariables)   // Data not used in template
+fmt.Println(result.Warnings)          // Potential issues
 
-```go
-ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-defer cancel()
-
-result, err := engine.Execute(ctx, template, data)
-if errors.Is(err, context.DeadlineExceeded) {
-    // Handle timeout
-}
+// Explain - detailed execution analysis
+explain := tmpl.Explain(ctx, data)
+fmt.Println(explain.AST)              // AST structure
+fmt.Println(explain.Variables)        // All variable accesses
+fmt.Println(explain.Timing)           // Execution timing
 ```
 
 ---
@@ -652,7 +988,7 @@ Check template syntax without executing.
 # Basic validation
 prompty validate -t prompt.txt
 
-# Strict mode (warnings → errors)
+# Strict mode (warnings become errors)
 prompty validate -t prompt.txt --strict
 
 # JSON output (for CI/CD)
@@ -741,6 +1077,33 @@ func (e *Engine) ListFuncs() []string
 func (t *Template) Execute(ctx context.Context, data map[string]any) (string, error)
 func (t *Template) ExecuteWithContext(ctx context.Context, execCtx *Context) (string, error)
 func (t *Template) Source() string
+func (t *Template) TemplateBody() string                    // Source without config block
+func (t *Template) HasInferenceConfig() bool
+func (t *Template) InferenceConfig() *InferenceConfig
+func (t *Template) DryRun(ctx context.Context, data map[string]any) *DryRunResult
+func (t *Template) Explain(ctx context.Context, data map[string]any) *ExplainResult
+```
+
+</details>
+
+<details>
+<summary><strong>InferenceConfig</strong></summary>
+
+```go
+func (c *InferenceConfig) HasModel() bool
+func (c *InferenceConfig) GetAPIType() string
+func (c *InferenceConfig) GetProvider() string
+func (c *InferenceConfig) GetModelName() string
+func (c *InferenceConfig) GetTemperature() (float64, bool)
+func (c *InferenceConfig) GetMaxTokens() (int, bool)
+func (c *InferenceConfig) GetTopP() (float64, bool)
+func (c *InferenceConfig) HasInputs() bool
+func (c *InferenceConfig) HasOutputs() bool
+func (c *InferenceConfig) HasSample() bool
+func (c *InferenceConfig) GetSampleData() map[string]any
+func (c *InferenceConfig) ValidateInputs(data map[string]any) error
+func (c *InferenceConfig) JSON() (string, error)
+func (c *InferenceConfig) JSONPretty() (string, error)
 ```
 
 </details>
@@ -787,10 +1150,10 @@ func (r *ValidationResult) Warnings() []ValidationIssue
 
 | Operation | Time | Allocations |
 |-----------|------|-------------|
-| Parse (small) | ~15μs | ~20 |
-| Parse (medium) | ~80μs | ~100 |
-| Execute (simple) | ~5μs | ~10 |
-| Execute (complex) | ~50μs | ~80 |
+| Parse (small) | ~15us | ~20 |
+| Parse (medium) | ~80us | ~100 |
+| Execute (simple) | ~5us | ~10 |
+| Execute (complex) | ~50us | ~80 |
 
 ### Optimization Tips
 
@@ -798,6 +1161,8 @@ func (r *ValidationResult) Warnings() []ValidationIssue
 2. **Limit loop iterations** - Use `limit` attribute
 3. **Avoid deep nesting** - Keep template depth reasonable
 4. **Use simple expressions** - Complex expressions add overhead
+
+**Deep Dive:** See [docs/PERFORMANCE.md](docs/PERFORMANCE.md) for detailed benchmarks.
 
 ---
 
@@ -856,35 +1221,44 @@ Use \{~ for literal delimiters.
 
 </details>
 
+**Deep Dive:** See [docs/COMMON_PITFALLS.md](docs/COMMON_PITFALLS.md) for more troubleshooting tips.
+
 ---
 
-## Storage & Persistence
+## Examples
 
-go-prompty includes a pluggable storage layer for managing templates with versioning, metadata, and multi-tenant support:
+| Example | Description |
+|---------|-------------|
+| [basic](examples/basic/) | Variable interpolation and defaults |
+| [conditionals](examples/conditionals/) | If/else branching |
+| [loops](examples/loops/) | For loop iteration |
+| [inheritance](examples/inheritance/) | Template inheritance with extends/block/parent |
+| [custom_functions](examples/custom_functions/) | Registering custom expression functions |
+| [custom_resolver](examples/custom_resolver/) | Creating custom tag handlers |
+| [storage](examples/storage/) | Template storage and versioning |
+| [storage_persistence](examples/storage_persistence/) | Filesystem storage |
+| [access_rbac](examples/access_rbac/) | RBAC access control |
+| [access_tenant](examples/access_tenant/) | Multi-tenant isolation |
+| [inference_config](examples/inference_config/) | Model configuration blocks |
+| [error_handling](examples/error_handling/) | All 5 error strategies |
+| [debugging](examples/debugging/) | DryRun and Explain features |
+| [custom_storage_postgres](examples/custom_storage_postgres/) | PostgreSQL backend (now built-in) |
 
-- **Built-in drivers**: Memory (testing) and Filesystem (persistent)
-- **Custom backends**: Implement `TemplateStorage` for PostgreSQL, MongoDB, Redis, etc.
-- **Caching**: Automatic caching wrapper for any storage backend
+---
 
-```go
-// Filesystem storage (persistent)
-storage, _ := prompty.NewFilesystemStorage("/path/to/templates")
-engine, _ := prompty.NewStorageEngine(prompty.StorageEngineConfig{
-    Storage: storage,
-})
+## Documentation
 
-// Save with versioning
-engine.Save(ctx, &prompty.StoredTemplate{
-    Name:   "greeting",
-    Source: `Hello {~prompty.var name="user" /~}!`,
-    Tags:   []string{"production"},
-})
-
-// Execute
-result, _ := engine.Execute(ctx, "greeting", map[string]any{"user": "Alice"})
-```
-
-See [docs/STORAGE.md](docs/STORAGE.md) for complete documentation, and [docs/CUSTOM_STORAGE.md](docs/CUSTOM_STORAGE.md) for implementing custom database backends like PostgreSQL.
+| Guide | Description |
+|-------|-------------|
+| [INFERENCE_CONFIG.md](docs/INFERENCE_CONFIG.md) | Model configuration, schemas, validation |
+| [STORAGE.md](docs/STORAGE.md) | Storage architecture, versioning, PostgreSQL |
+| [CUSTOM_STORAGE.md](docs/CUSTOM_STORAGE.md) | Implementing custom backends |
+| [ACCESS_CONTROL.md](docs/ACCESS_CONTROL.md) | RBAC, multi-tenancy, audit logging |
+| [ERROR_STRATEGIES.md](docs/ERROR_STRATEGIES.md) | Error handling patterns |
+| [PERFORMANCE.md](docs/PERFORMANCE.md) | Benchmarks and optimization |
+| [THREAD_SAFETY.md](docs/THREAD_SAFETY.md) | Concurrency patterns |
+| [TESTING_PATTERNS.md](docs/TESTING_PATTERNS.md) | Testing best practices |
+| [COMMON_PITFALLS.md](docs/COMMON_PITFALLS.md) | Troubleshooting guide |
 
 ---
 

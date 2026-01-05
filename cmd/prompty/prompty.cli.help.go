@@ -17,6 +17,10 @@ func runHelp(args []string, stdout io.Writer) int {
 		fmt.Fprintln(stdout, HelpRenderUsage)
 	case CmdNameValidate:
 		fmt.Fprintln(stdout, HelpValidateUsage)
+	case CmdNameLint:
+		fmt.Fprintln(stdout, HelpLintUsage)
+	case CmdNameDebug:
+		fmt.Fprintln(stdout, HelpDebugUsage)
 	case CmdNameVersion:
 		fmt.Fprintln(stdout, HelpVersionUsage)
 	case CmdNameHelp:

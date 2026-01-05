@@ -13,12 +13,16 @@ type Template struct {
 	ast             *internal.RootNode
 	executor        *internal.Executor
 	config          *engineConfig
-	engine          TemplateExecutor   // Engine reference for nested template execution
-	inferenceConfig *InferenceConfig   // Parsed inference configuration from config block
+	engine          TemplateExecutor       // Engine reference for nested template execution
+	inferenceConfig *InferenceConfig       // Parsed inference configuration from config block
+	inheritanceInfo *internal.InheritanceInfo // Inheritance info (nil if no extends)
 }
 
 // newTemplateWithConfig creates a new template with inference configuration (internal use).
 func newTemplateWithConfig(source, templateBody string, ast *internal.RootNode, executor *internal.Executor, config *engineConfig, engine TemplateExecutor, inferenceConfig *InferenceConfig) *Template {
+	// Extract inheritance info from AST
+	inheritanceInfo, _ := internal.ExtractInheritanceInfo(ast)
+
 	return &Template{
 		source:          source,
 		templateBody:    templateBody,
@@ -27,6 +31,7 @@ func newTemplateWithConfig(source, templateBody string, ast *internal.RootNode, 
 		config:          config,
 		engine:          engine,
 		inferenceConfig: inferenceConfig,
+		inheritanceInfo: inheritanceInfo,
 	}
 }
 
@@ -40,12 +45,36 @@ func (t *Template) Execute(ctx context.Context, data map[string]any) (string, er
 // ExecuteWithContext renders the template with the given execution context.
 // Use this when you need more control over the context (e.g., parent scoping).
 // The engine reference is injected into the context for nested template support.
+// If the template uses extends (template inheritance), inheritance is resolved before execution.
 func (t *Template) ExecuteWithContext(ctx context.Context, execCtx *Context) (string, error) {
 	// Inject engine reference into context for nested template resolution
 	if t.engine != nil && execCtx.Engine() == nil {
 		execCtx = execCtx.WithEngine(t.engine)
 	}
-	return t.executor.Execute(ctx, t.ast, execCtx)
+
+	// Resolve inheritance if the template extends another template
+	astToExecute := t.ast
+	if t.inheritanceInfo != nil && t.engine != nil {
+		// Create an adapter that wraps the engine for TemplateSourceResolver interface
+		sourceResolver := &engineSourceAdapter{engine: t.engine}
+		resolver := internal.NewInheritanceResolver(nil, sourceResolver, t.config.maxDepth)
+		resolvedAST, err := resolver.ResolveInheritance(ctx, t.ast, t.inheritanceInfo, 0)
+		if err != nil {
+			return "", err
+		}
+		astToExecute = resolvedAST
+	}
+
+	return t.executor.Execute(ctx, astToExecute, execCtx)
+}
+
+// engineSourceAdapter adapts TemplateExecutor to TemplateSourceResolver
+type engineSourceAdapter struct {
+	engine TemplateExecutor
+}
+
+func (a *engineSourceAdapter) GetTemplateSource(name string) (string, bool) {
+	return a.engine.GetTemplateSource(name)
 }
 
 // Source returns the original template source string (including config block if present).

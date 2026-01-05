@@ -250,6 +250,20 @@ func (e *Engine) GetTemplate(name string) (*Template, bool) {
 	return tmpl, ok
 }
 
+// GetTemplateSource retrieves the source string of a registered template by name.
+// This implements TemplateSourceResolver for template inheritance support.
+// Returns the source and true if found, or empty string and false if not.
+func (e *Engine) GetTemplateSource(name string) (string, bool) {
+	e.tmplMu.RLock()
+	defer e.tmplMu.RUnlock()
+
+	tmpl, ok := e.templates[name]
+	if !ok {
+		return "", false
+	}
+	return tmpl.Source(), true
+}
+
 // HasTemplate checks if a template is registered with the given name.
 func (e *Engine) HasTemplate(name string) bool {
 	e.tmplMu.RLock()

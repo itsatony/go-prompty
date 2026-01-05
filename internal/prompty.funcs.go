@@ -295,4 +295,5 @@ func RegisterBuiltinFuncs(r *FuncRegistry) {
 	registerCollectionFuncs(r)
 	registerTypeFuncs(r)
 	registerUtilFuncs(r)
+	registerDateTimeFuncs(r)
 }
