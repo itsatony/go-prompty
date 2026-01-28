@@ -468,6 +468,123 @@ versions, err := storage.ListVersions(ctx, "greeting")
 err := storage.DeleteVersion(ctx, "greeting", 1)
 ```
 
+## Deployment-Aware Versioning
+
+go-prompty supports deployment-aware versioning with labels and status for production workflows.
+
+### Labels
+
+Labels are named pointers to specific template versions, perfect for deployment workflows:
+
+```go
+// Set label to point to a specific version
+err := se.SetLabel(ctx, "greeting", "production", 2)
+err := se.SetLabel(ctx, "greeting", "staging", 3)
+err := se.SetLabel(ctx, "greeting", "canary", 4)
+
+// Execute template by label
+result, err := se.ExecuteLabeled(ctx, "greeting", "production", data)
+
+// Convenience: Execute the "production" labeled version
+result, err := se.ExecuteProduction(ctx, "greeting", data)
+
+// Get template by label
+tmpl, err := se.GetByLabel(ctx, "greeting", "production")
+tmpl, err := se.GetProduction(ctx, "greeting")
+
+// Promote version to production
+err := se.PromoteToProduction(ctx, "greeting", 5)
+
+// List all labels for a template
+labels, err := se.ListLabels(ctx, "greeting")
+for _, l := range labels {
+    fmt.Printf("  %s -> v%d (assigned by %s at %s)\n",
+        l.Label, l.Version, l.AssignedBy, l.AssignedAt)
+}
+```
+
+**Reserved Labels**:
+- `production` - The live production version
+- `staging` - Pre-production testing
+- `canary` - Limited production rollout
+
+**Label Rules**:
+- Must start with lowercase letter
+- Can contain lowercase letters, numbers, hyphens, underscores
+- Maximum 64 characters
+- Pattern: `^[a-z][a-z0-9_-]*$`
+
+### Deployment Status
+
+Status tracks the lifecycle of template versions:
+
+```go
+// Set status on a version
+err := se.SetStatus(ctx, "greeting", 2, prompty.DeploymentStatusDeprecated)
+
+// List templates by status
+deprecated, err := se.ListByStatus(ctx, prompty.DeploymentStatusDeprecated, nil)
+active, err := se.ListByStatus(ctx, prompty.DeploymentStatusActive, nil)
+```
+
+**Status Values**:
+- `draft` - Work in progress, not ready for use
+- `active` - Ready for production use (default for new templates)
+- `deprecated` - Usable but scheduled for removal
+- `archived` - No longer usable (terminal state)
+
+**Status Transitions**:
+| From | Allowed To |
+|------|------------|
+| draft | active, archived |
+| active | deprecated, archived |
+| deprecated | active, archived |
+| archived | (terminal - no transitions allowed) |
+
+### Version History with Labels
+
+```go
+history, err := se.GetVersionHistory(ctx, "greeting")
+
+fmt.Printf("Template: %s\n", history.TemplateName)
+fmt.Printf("Production version: %d\n", history.ProductionVersion)
+
+for _, v := range history.Versions {
+    fmt.Printf("  v%d: status=%s, labels=%v\n", v.Version, v.Status, v.Labels)
+}
+```
+
+### Rollback and Clone Behavior
+
+When rolling back or cloning, new versions start in `draft` status:
+
+```go
+// Rollback creates a new version with draft status
+rolled, err := se.RollbackToVersion(ctx, "greeting", 1)
+// rolled.Status == DeploymentStatusDraft
+
+// Clone also creates with draft status
+cloned, err := se.CloneVersion(ctx, "greeting", 1, "greeting-copy")
+// cloned.Status == DeploymentStatusDraft
+
+// Activate after review
+err = se.SetStatus(ctx, "greeting", rolled.Version, prompty.DeploymentStatusActive)
+```
+
+### Checking Feature Support
+
+```go
+// Check if storage supports labels
+if se.SupportsLabels() {
+    err := se.SetLabel(ctx, "greeting", "production", 1)
+}
+
+// Check if storage supports status
+if se.SupportsStatus() {
+    err := se.SetStatus(ctx, "greeting", 1, prompty.DeploymentStatusActive)
+}
+```
+
 ## Multi-Tenancy
 
 Templates support multi-tenant isolation via `TenantID`:

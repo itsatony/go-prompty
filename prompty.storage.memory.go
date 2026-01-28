@@ -13,11 +13,13 @@ import (
 // MemoryStorage is an in-memory implementation of TemplateStorage.
 // It is primarily intended for testing and development.
 // All data is lost when the process terminates.
+// MemoryStorage implements ExtendedTemplateStorage (includes LabelStorage and StatusStorage).
 type MemoryStorage struct {
-	mu       sync.RWMutex
-	templates map[string][]*StoredTemplate // name -> versions (sorted by version desc)
-	byID     map[TemplateID]*StoredTemplate
-	closed   bool
+	mu        sync.RWMutex
+	templates map[string][]*StoredTemplate          // name -> versions (sorted by version desc)
+	byID      map[TemplateID]*StoredTemplate        // id -> template
+	labels    map[string]map[string]*TemplateLabel  // templateName -> (label -> TemplateLabel)
+	closed    bool
 }
 
 // MemoryStorageDriver is the driver for creating MemoryStorage instances.
@@ -37,7 +39,8 @@ func (d *MemoryStorageDriver) Open(connectionString string) (TemplateStorage, er
 func NewMemoryStorage() *MemoryStorage {
 	return &MemoryStorage{
 		templates: make(map[string][]*StoredTemplate),
-		byID:     make(map[TemplateID]*StoredTemplate),
+		byID:      make(map[TemplateID]*StoredTemplate),
+		labels:    make(map[string]map[string]*TemplateLabel),
 	}
 }
 
@@ -137,12 +140,19 @@ func (s *MemoryStorage) Save(ctx context.Context, tmpl *StoredTemplate) error {
 		nextVersion = versions[0].Version + 1
 	}
 
+	// Determine status - default to active if not specified
+	status := tmpl.Status
+	if status == "" {
+		status = DeploymentStatusActive
+	}
+
 	// Create new stored template with generated fields
 	stored := &StoredTemplate{
 		ID:              generateTemplateID(),
 		Name:            tmpl.Name,
 		Source:          tmpl.Source,
 		Version:         nextVersion,
+		Status:          status,
 		Metadata:        copyStringMap(tmpl.Metadata),
 		InferenceConfig: tmpl.InferenceConfig, // InferenceConfig is immutable after parsing
 		CreatedAt:       now,
@@ -155,6 +165,7 @@ func (s *MemoryStorage) Save(ctx context.Context, tmpl *StoredTemplate) error {
 	// Update input template with generated values
 	tmpl.ID = stored.ID
 	tmpl.Version = stored.Version
+	tmpl.Status = stored.Status
 	tmpl.CreatedAt = stored.CreatedAt
 	tmpl.UpdatedAt = stored.UpdatedAt
 
@@ -189,6 +200,7 @@ func (s *MemoryStorage) Delete(ctx context.Context, name string) error {
 	}
 
 	delete(s.templates, name)
+	delete(s.labels, name) // Clean up labels for this template
 	return nil
 }
 
@@ -218,9 +230,23 @@ func (s *MemoryStorage) DeleteVersion(ctx context.Context, name string, version 
 			// Remove from versions slice
 			s.templates[name] = append(versions[:i], versions[i+1:]...)
 
+			// Remove any labels pointing to this version
+			if templateLabels, ok := s.labels[name]; ok {
+				for label, labelEntry := range templateLabels {
+					if labelEntry.Version == version {
+						delete(templateLabels, label)
+					}
+				}
+				// Clean up empty labels map
+				if len(templateLabels) == 0 {
+					delete(s.labels, name)
+				}
+			}
+
 			// Clean up if no versions left
 			if len(s.templates[name]) == 0 {
 				delete(s.templates, name)
+				delete(s.labels, name) // Also clean up labels
 			}
 
 			return nil
@@ -343,6 +369,7 @@ func (s *MemoryStorage) Close() error {
 	s.closed = true
 	s.templates = nil
 	s.byID = nil
+	s.labels = nil
 	return nil
 }
 
@@ -372,7 +399,27 @@ func matchesTemplateQuery(tmpl *StoredTemplate, query *TemplateQuery) bool {
 			}
 		}
 	}
+	// Filter by status (Statuses takes precedence over Status)
+	if len(query.Statuses) > 0 {
+		if !containsStatus(query.Statuses, tmpl.Status) {
+			return false
+		}
+	} else if query.Status != "" {
+		if tmpl.Status != query.Status {
+			return false
+		}
+	}
 	return true
+}
+
+// containsStatus checks if a slice contains a DeploymentStatus.
+func containsStatus(slice []DeploymentStatus, s DeploymentStatus) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
 }
 
 // containsString checks if a slice contains a string.
@@ -407,6 +454,7 @@ func copyStoredTemplate(tmpl *StoredTemplate) *StoredTemplate {
 		Name:            tmpl.Name,
 		Source:          tmpl.Source,
 		Version:         tmpl.Version,
+		Status:          tmpl.Status,
 		Metadata:        copyStringMap(tmpl.Metadata),
 		InferenceConfig: tmpl.InferenceConfig, // InferenceConfig is immutable after parsing
 		CreatedAt:       tmpl.CreatedAt,
@@ -438,3 +486,274 @@ func copyStringSlice(s []string) []string {
 	copy(result, s)
 	return result
 }
+
+// -----------------------------------------------------------------------------
+// LabelStorage Implementation
+// -----------------------------------------------------------------------------
+
+// SetLabel assigns a label to a specific template version.
+func (s *MemoryStorage) SetLabel(ctx context.Context, templateName, label string, version int, assignedBy string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Validate label
+	if err := ValidateLabel(label); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return NewStorageClosedError()
+	}
+
+	// Verify template and version exist
+	versions, ok := s.templates[templateName]
+	if !ok {
+		return NewStorageTemplateNotFoundError(templateName)
+	}
+
+	versionExists := false
+	for _, tmpl := range versions {
+		if tmpl.Version == version {
+			versionExists = true
+			break
+		}
+	}
+	if !versionExists {
+		return NewStorageVersionNotFoundError(templateName, version)
+	}
+
+	// Initialize template labels map if needed
+	if s.labels[templateName] == nil {
+		s.labels[templateName] = make(map[string]*TemplateLabel)
+	}
+
+	// Assign label to version with full TemplateLabel
+	s.labels[templateName][label] = &TemplateLabel{
+		TemplateName: templateName,
+		Label:        label,
+		Version:      version,
+		AssignedAt:   time.Now(),
+		AssignedBy:   assignedBy,
+	}
+
+	return nil
+}
+
+// RemoveLabel removes a label from a template.
+func (s *MemoryStorage) RemoveLabel(ctx context.Context, templateName, label string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return NewStorageClosedError()
+	}
+
+	// Check if label exists
+	templateLabels, ok := s.labels[templateName]
+	if !ok {
+		return NewStorageLabelNotFoundError(templateName, label)
+	}
+
+	if _, exists := templateLabels[label]; !exists {
+		return NewStorageLabelNotFoundError(templateName, label)
+	}
+
+	delete(templateLabels, label)
+
+	// Clean up empty map
+	if len(templateLabels) == 0 {
+		delete(s.labels, templateName)
+	}
+
+	return nil
+}
+
+// GetByLabel retrieves a template by its label.
+func (s *MemoryStorage) GetByLabel(ctx context.Context, templateName, label string) (*StoredTemplate, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, NewStorageClosedError()
+	}
+
+	// Get label version mapping
+	templateLabels, ok := s.labels[templateName]
+	if !ok {
+		return nil, NewStorageLabelNotFoundError(templateName, label)
+	}
+
+	labelEntry, exists := templateLabels[label]
+	if !exists {
+		return nil, NewStorageLabelNotFoundError(templateName, label)
+	}
+
+	// Get the version
+	versions, ok := s.templates[templateName]
+	if !ok {
+		return nil, NewStorageTemplateNotFoundError(templateName)
+	}
+
+	for _, tmpl := range versions {
+		if tmpl.Version == labelEntry.Version {
+			return copyStoredTemplate(tmpl), nil
+		}
+	}
+
+	return nil, NewStorageVersionNotFoundError(templateName, labelEntry.Version)
+}
+
+// ListLabels returns all labels for a template.
+func (s *MemoryStorage) ListLabels(ctx context.Context, templateName string) ([]*TemplateLabel, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, NewStorageClosedError()
+	}
+
+	templateLabels, ok := s.labels[templateName]
+	if !ok || len(templateLabels) == 0 {
+		return []*TemplateLabel{}, nil
+	}
+
+	result := make([]*TemplateLabel, 0, len(templateLabels))
+	for _, labelEntry := range templateLabels {
+		// Return a copy to prevent external modification
+		result = append(result, &TemplateLabel{
+			TemplateName: labelEntry.TemplateName,
+			Label:        labelEntry.Label,
+			Version:      labelEntry.Version,
+			AssignedAt:   labelEntry.AssignedAt,
+			AssignedBy:   labelEntry.AssignedBy,
+		})
+	}
+
+	return result, nil
+}
+
+// GetVersionLabels returns all labels assigned to a specific version.
+func (s *MemoryStorage) GetVersionLabels(ctx context.Context, templateName string, version int) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, NewStorageClosedError()
+	}
+
+	templateLabels, ok := s.labels[templateName]
+	if !ok {
+		return []string{}, nil
+	}
+
+	var result []string
+	for label, labelEntry := range templateLabels {
+		if labelEntry.Version == version {
+			result = append(result, label)
+		}
+	}
+
+	if result == nil {
+		result = []string{}
+	}
+
+	return result, nil
+}
+
+// -----------------------------------------------------------------------------
+// StatusStorage Implementation
+// -----------------------------------------------------------------------------
+
+// SetStatus updates the deployment status of a specific version.
+func (s *MemoryStorage) SetStatus(ctx context.Context, templateName string, version int, status DeploymentStatus, changedBy string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Validate status
+	if !status.IsValid() {
+		return NewInvalidDeploymentStatusError(string(status))
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return NewStorageClosedError()
+	}
+
+	// Find the template version
+	versions, ok := s.templates[templateName]
+	if !ok {
+		return NewStorageTemplateNotFoundError(templateName)
+	}
+
+	var target *StoredTemplate
+	for _, tmpl := range versions {
+		if tmpl.Version == version {
+			target = tmpl
+			break
+		}
+	}
+
+	if target == nil {
+		return NewStorageVersionNotFoundError(templateName, version)
+	}
+
+	// Check if current status is archived (terminal state)
+	if target.Status == DeploymentStatusArchived {
+		return NewArchivedVersionError(templateName, version)
+	}
+
+	// Validate status transition
+	if target.Status != "" && !CanTransitionStatus(target.Status, status) {
+		return NewInvalidStatusTransitionError(target.Status, status)
+	}
+
+	// Update status
+	target.Status = status
+	target.UpdatedAt = time.Now()
+
+	return nil
+}
+
+// ListByStatus returns templates matching the given deployment status.
+func (s *MemoryStorage) ListByStatus(ctx context.Context, status DeploymentStatus, query *TemplateQuery) ([]*StoredTemplate, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Create a query with the status filter
+	if query == nil {
+		query = &TemplateQuery{}
+	}
+
+	// Create a copy of query with status set
+	queryCopy := *query
+	queryCopy.Status = status
+
+	return s.List(ctx, &queryCopy)
+}
+
+// Ensure MemoryStorage implements ExtendedTemplateStorage
+var _ ExtendedTemplateStorage = (*MemoryStorage)(nil)

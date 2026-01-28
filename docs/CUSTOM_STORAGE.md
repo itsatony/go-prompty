@@ -279,6 +279,147 @@ func (s *DynamoStorage) Get(ctx context.Context, name string) (*prompty.StoredTe
 }
 ```
 
+## Implementing Extended Interfaces
+
+For full deployment-aware versioning support, implement the optional interfaces:
+
+### LabelStorage Interface
+
+```go
+type LabelStorage interface {
+    SetLabel(ctx context.Context, templateName, label string, version int, assignedBy string) error
+    RemoveLabel(ctx context.Context, templateName, label string) error
+    GetByLabel(ctx context.Context, templateName, label string) (*StoredTemplate, error)
+    ListLabels(ctx context.Context, templateName string) ([]*TemplateLabel, error)
+    GetVersionLabels(ctx context.Context, templateName string, version int) ([]string, error)
+}
+```
+
+Example implementation:
+
+```go
+func (s *MyStorage) SetLabel(ctx context.Context, templateName, label string, version int, assignedBy string) error {
+    // Validate label format
+    if err := prompty.ValidateLabel(label); err != nil {
+        return err
+    }
+
+    // Verify template and version exist
+    _, err := s.GetVersion(ctx, templateName, version)
+    if err != nil {
+        return err
+    }
+
+    // Upsert label
+    _, err = s.db.ExecContext(ctx, `
+        INSERT INTO template_labels (template_name, label, version, assigned_at, assigned_by)
+        VALUES ($1, $2, $3, NOW(), $4)
+        ON CONFLICT (template_name, label)
+        DO UPDATE SET version = $3, assigned_at = NOW(), assigned_by = $4
+    `, templateName, label, version, assignedBy)
+
+    return err
+}
+
+func (s *MyStorage) GetByLabel(ctx context.Context, templateName, label string) (*prompty.StoredTemplate, error) {
+    var version int
+    err := s.db.QueryRowContext(ctx, `
+        SELECT version FROM template_labels
+        WHERE template_name = $1 AND label = $2
+    `, templateName, label).Scan(&version)
+
+    if err == sql.ErrNoRows {
+        return nil, prompty.NewStorageLabelNotFoundError(templateName, label)
+    }
+    if err != nil {
+        return nil, err
+    }
+
+    return s.GetVersion(ctx, templateName, version)
+}
+```
+
+### StatusStorage Interface
+
+```go
+type StatusStorage interface {
+    SetStatus(ctx context.Context, templateName string, version int, status DeploymentStatus, changedBy string) error
+    ListByStatus(ctx context.Context, status DeploymentStatus, query *TemplateQuery) ([]*StoredTemplate, error)
+}
+```
+
+Example implementation:
+
+```go
+func (s *MyStorage) SetStatus(ctx context.Context, templateName string, version int, status prompty.DeploymentStatus, changedBy string) error {
+    // Validate status
+    if !status.IsValid() {
+        return prompty.NewInvalidDeploymentStatusError(string(status))
+    }
+
+    // Get current status for transition validation
+    tmpl, err := s.GetVersion(ctx, templateName, version)
+    if err != nil {
+        return err
+    }
+
+    // Check if archived (terminal state)
+    if tmpl.Status == prompty.DeploymentStatusArchived {
+        return prompty.NewArchivedVersionError(templateName, version)
+    }
+
+    // Validate transition
+    if tmpl.Status != "" && !prompty.CanTransitionStatus(tmpl.Status, status) {
+        return prompty.NewInvalidStatusTransitionError(tmpl.Status, status)
+    }
+
+    // Update status
+    _, err = s.db.ExecContext(ctx, `
+        UPDATE templates SET status = $1, updated_at = NOW()
+        WHERE name = $2 AND version = $3
+    `, status, templateName, version)
+
+    return err
+}
+```
+
+### ExtendedTemplateStorage
+
+Combine all interfaces for full support:
+
+```go
+// Verify your storage implements all interfaces
+var _ prompty.ExtendedTemplateStorage = (*MyStorage)(nil)
+```
+
+### Label Cleanup on Delete
+
+When implementing `Delete()` and `DeleteVersion()`, ensure labels are cleaned up:
+
+```go
+func (s *MyStorage) Delete(ctx context.Context, name string) error {
+    tx, err := s.db.BeginTx(ctx, nil)
+    if err != nil {
+        return err
+    }
+    defer tx.Rollback()
+
+    // Delete labels first
+    _, err = tx.ExecContext(ctx, `DELETE FROM template_labels WHERE template_name = $1`, name)
+    if err != nil {
+        return err
+    }
+
+    // Delete templates
+    _, err = tx.ExecContext(ctx, `DELETE FROM templates WHERE name = $1`, name)
+    if err != nil {
+        return err
+    }
+
+    return tx.Commit()
+}
+```
+
 ## Using with StorageEngine
 
 Wrap your custom storage with `StorageEngine` for template execution:

@@ -14,6 +14,7 @@ import (
 // FilesystemStorage stores templates as files on the filesystem.
 // Each template is stored as a JSON file with metadata.
 // Versioning is supported through separate files per version.
+// Labels are stored in a labels.json file per template directory.
 //
 // Directory structure:
 //
@@ -21,11 +22,29 @@ import (
 //	  <template-name>/
 //	    v1.json
 //	    v2.json
+//	    labels.json  # maps label names to version numbers
 //	    ...
+//
+// FilesystemStorage implements ExtendedTemplateStorage (includes LabelStorage and StatusStorage).
 type FilesystemStorage struct {
-	mu       sync.RWMutex
-	root     string
-	closed   bool
+	mu     sync.RWMutex
+	root   string
+	closed bool
+}
+
+// filesystemLabelsFile is the name of the labels file in each template directory.
+const filesystemLabelsFile = "labels.json"
+
+// filesystemLabelData represents the structure of the labels.json file.
+type filesystemLabelData struct {
+	Labels map[string]filesystemLabelEntry `json:"labels"`
+}
+
+// filesystemLabelEntry represents a single label in the labels.json file.
+type filesystemLabelEntry struct {
+	Version    int       `json:"version"`
+	AssignedAt time.Time `json:"assigned_at"`
+	AssignedBy string    `json:"assigned_by,omitempty"`
 }
 
 // FilesystemStorageDriver is the driver for creating FilesystemStorage instances.
@@ -189,12 +208,19 @@ func (s *FilesystemStorage) Save(ctx context.Context, tmpl *StoredTemplate) erro
 
 	now := time.Now()
 
+	// Determine status - default to active if not specified
+	status := tmpl.Status
+	if status == "" {
+		status = DeploymentStatusActive
+	}
+
 	// Create stored template with generated fields
 	stored := &StoredTemplate{
 		ID:              generateTemplateID(),
 		Name:            tmpl.Name,
 		Source:          tmpl.Source,
 		Version:         nextVersion,
+		Status:          status,
 		Metadata:        copyStringMap(tmpl.Metadata),
 		InferenceConfig: tmpl.InferenceConfig, // InferenceConfig is immutable after parsing
 		CreatedAt:       now,
@@ -218,6 +244,7 @@ func (s *FilesystemStorage) Save(ctx context.Context, tmpl *StoredTemplate) erro
 	// Update input template with generated values
 	tmpl.ID = stored.ID
 	tmpl.Version = stored.Version
+	tmpl.Status = stored.Status
 	tmpl.CreatedAt = stored.CreatedAt
 	tmpl.UpdatedAt = stored.UpdatedAt
 
@@ -281,14 +308,56 @@ func (s *FilesystemStorage) DeleteVersion(ctx context.Context, name string, vers
 		return &StorageError{Message: ErrMsgDeleteTemplate, Name: filename, Cause: err}
 	}
 
-	// Remove directory if empty
+	// Clean up labels pointing to this version
+	s.cleanupLabelsForVersion(name, version)
+
+	// Remove directory if empty (only version files remain, not labels.json)
 	templateDir := filepath.Join(s.root, name)
 	entries, err := os.ReadDir(templateDir)
-	if err == nil && len(entries) == 0 {
-		_ = os.Remove(templateDir)
+	if err == nil {
+		// Count non-label files
+		versionFileCount := 0
+		for _, entry := range entries {
+			if !entry.IsDir() && entry.Name() != filesystemLabelsFile {
+				versionFileCount++
+			}
+		}
+		// If no version files remain, remove the entire directory (including labels.json)
+		if versionFileCount == 0 {
+			_ = os.RemoveAll(templateDir)
+		}
 	}
 
 	return nil
+}
+
+// cleanupLabelsForVersion removes any labels pointing to a specific version.
+// Called internally with lock held.
+func (s *FilesystemStorage) cleanupLabelsForVersion(templateName string, version int) {
+	labels, err := s.loadLabels(templateName)
+	if err != nil {
+		return // No labels file or error reading it
+	}
+
+	modified := false
+	for label, entry := range labels.Labels {
+		if entry.Version == version {
+			delete(labels.Labels, label)
+			modified = true
+		}
+	}
+
+	if !modified {
+		return
+	}
+
+	// Save updated labels or remove file if empty
+	if len(labels.Labels) == 0 {
+		labelsPath := filepath.Join(s.root, templateName, filesystemLabelsFile)
+		_ = os.Remove(labelsPath)
+	} else {
+		_ = s.saveLabels(templateName, labels)
+	}
 }
 
 // List returns templates matching the query.
@@ -492,6 +561,331 @@ func parseVersionNumber(s string) int {
 	return result
 }
 
+// -----------------------------------------------------------------------------
+// LabelStorage Implementation
+// -----------------------------------------------------------------------------
+
+// SetLabel assigns a label to a specific template version.
+func (s *FilesystemStorage) SetLabel(ctx context.Context, templateName, label string, version int, assignedBy string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Validate label
+	if err := ValidateLabel(label); err != nil {
+		return err
+	}
+
+	// Validate template name for security
+	if err := validateTemplateNameForFilesystem(templateName); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return NewStorageClosedError()
+	}
+
+	// Verify template and version exist
+	_, err := s.loadTemplate(templateName, version)
+	if err != nil {
+		return err
+	}
+
+	// Load existing labels
+	labels, err := s.loadLabels(templateName)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if labels == nil {
+		labels = &filesystemLabelData{Labels: make(map[string]filesystemLabelEntry)}
+	}
+
+	// Update label
+	labels.Labels[label] = filesystemLabelEntry{
+		Version:    version,
+		AssignedAt: time.Now(),
+		AssignedBy: assignedBy,
+	}
+
+	// Save labels
+	return s.saveLabels(templateName, labels)
+}
+
+// RemoveLabel removes a label from a template.
+func (s *FilesystemStorage) RemoveLabel(ctx context.Context, templateName, label string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Validate template name for security
+	if err := validateTemplateNameForFilesystem(templateName); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return NewStorageClosedError()
+	}
+
+	// Load existing labels
+	labels, err := s.loadLabels(templateName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return NewStorageLabelNotFoundError(templateName, label)
+		}
+		return err
+	}
+
+	if _, exists := labels.Labels[label]; !exists {
+		return NewStorageLabelNotFoundError(templateName, label)
+	}
+
+	delete(labels.Labels, label)
+
+	// Save labels (or remove file if empty)
+	if len(labels.Labels) == 0 {
+		labelsPath := filepath.Join(s.root, templateName, filesystemLabelsFile)
+		_ = os.Remove(labelsPath)
+		return nil
+	}
+
+	return s.saveLabels(templateName, labels)
+}
+
+// GetByLabel retrieves a template by its label.
+func (s *FilesystemStorage) GetByLabel(ctx context.Context, templateName, label string) (*StoredTemplate, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Validate template name for security
+	if err := validateTemplateNameForFilesystem(templateName); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, NewStorageClosedError()
+	}
+
+	// Load labels
+	labels, err := s.loadLabels(templateName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, NewStorageLabelNotFoundError(templateName, label)
+		}
+		return nil, err
+	}
+
+	entry, exists := labels.Labels[label]
+	if !exists {
+		return nil, NewStorageLabelNotFoundError(templateName, label)
+	}
+
+	return s.loadTemplate(templateName, entry.Version)
+}
+
+// ListLabels returns all labels for a template.
+func (s *FilesystemStorage) ListLabels(ctx context.Context, templateName string) ([]*TemplateLabel, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Validate template name for security
+	if err := validateTemplateNameForFilesystem(templateName); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, NewStorageClosedError()
+	}
+
+	labels, err := s.loadLabels(templateName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []*TemplateLabel{}, nil
+		}
+		return nil, err
+	}
+
+	result := make([]*TemplateLabel, 0, len(labels.Labels))
+	for label, entry := range labels.Labels {
+		result = append(result, &TemplateLabel{
+			TemplateName: templateName,
+			Label:        label,
+			Version:      entry.Version,
+			AssignedAt:   entry.AssignedAt,
+			AssignedBy:   entry.AssignedBy,
+		})
+	}
+
+	return result, nil
+}
+
+// GetVersionLabels returns all labels assigned to a specific version.
+func (s *FilesystemStorage) GetVersionLabels(ctx context.Context, templateName string, version int) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Validate template name for security
+	if err := validateTemplateNameForFilesystem(templateName); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, NewStorageClosedError()
+	}
+
+	labels, err := s.loadLabels(templateName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	var result []string
+	for label, entry := range labels.Labels {
+		if entry.Version == version {
+			result = append(result, label)
+		}
+	}
+
+	if result == nil {
+		result = []string{}
+	}
+
+	return result, nil
+}
+
+// loadLabels loads labels from the labels.json file.
+func (s *FilesystemStorage) loadLabels(templateName string) (*filesystemLabelData, error) {
+	labelsPath := filepath.Join(s.root, templateName, filesystemLabelsFile)
+	data, err := os.ReadFile(labelsPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var labels filesystemLabelData
+	if err := json.Unmarshal(data, &labels); err != nil {
+		return nil, &StorageError{Message: ErrMsgUnmarshalLabels, Name: labelsPath, Cause: err}
+	}
+
+	return &labels, nil
+}
+
+// saveLabels saves labels to the labels.json file.
+func (s *FilesystemStorage) saveLabels(templateName string, labels *filesystemLabelData) error {
+	labelsPath := filepath.Join(s.root, templateName, filesystemLabelsFile)
+
+	data, err := json.MarshalIndent(labels, "", "  ")
+	if err != nil {
+		return &StorageError{Message: ErrMsgMarshalLabels, Name: templateName, Cause: err}
+	}
+
+	if err := os.WriteFile(labelsPath, data, 0644); err != nil {
+		return &StorageError{Message: ErrMsgWriteLabels, Name: labelsPath, Cause: err}
+	}
+
+	return nil
+}
+
+// -----------------------------------------------------------------------------
+// StatusStorage Implementation
+// -----------------------------------------------------------------------------
+
+// SetStatus updates the deployment status of a specific version.
+func (s *FilesystemStorage) SetStatus(ctx context.Context, templateName string, version int, status DeploymentStatus, changedBy string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Validate status
+	if !status.IsValid() {
+		return NewInvalidDeploymentStatusError(string(status))
+	}
+
+	// Validate template name for security
+	if err := validateTemplateNameForFilesystem(templateName); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return NewStorageClosedError()
+	}
+
+	// Load the template
+	tmpl, err := s.loadTemplate(templateName, version)
+	if err != nil {
+		return err
+	}
+
+	// Check if current status is archived (terminal state)
+	if tmpl.Status == DeploymentStatusArchived {
+		return NewArchivedVersionError(templateName, version)
+	}
+
+	// Validate status transition
+	if tmpl.Status != "" && !CanTransitionStatus(tmpl.Status, status) {
+		return NewInvalidStatusTransitionError(tmpl.Status, status)
+	}
+
+	// Update status
+	tmpl.Status = status
+	tmpl.UpdatedAt = time.Now()
+
+	// Save back to file
+	filename := filepath.Join(s.root, templateName, "v"+intToStr(version)+".json")
+	data, err := json.MarshalIndent(tmpl, "", "  ")
+	if err != nil {
+		return &StorageError{Message: ErrMsgMarshalTemplate, Name: templateName, Cause: err}
+	}
+
+	if err := os.WriteFile(filename, data, 0644); err != nil {
+		return &StorageError{Message: ErrMsgWriteTemplate, Name: filename, Cause: err}
+	}
+
+	return nil
+}
+
+// ListByStatus returns templates matching the given deployment status.
+func (s *FilesystemStorage) ListByStatus(ctx context.Context, status DeploymentStatus, query *TemplateQuery) ([]*StoredTemplate, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Create a query with the status filter
+	if query == nil {
+		query = &TemplateQuery{}
+	}
+
+	// Create a copy of query with status set
+	queryCopy := *query
+	queryCopy.Status = status
+
+	return s.List(ctx, &queryCopy)
+}
+
+// Ensure FilesystemStorage implements ExtendedTemplateStorage
+var _ ExtendedTemplateStorage = (*FilesystemStorage)(nil)
+
 // Additional storage error messages
 const (
 	ErrMsgInvalidStorageRoot = "invalid storage root path"
@@ -502,6 +896,9 @@ const (
 	ErrMsgWriteTemplate      = "failed to write template file"
 	ErrMsgReadTemplate       = "failed to read template file"
 	ErrMsgDeleteTemplate     = "failed to delete template"
+	ErrMsgMarshalLabels      = "failed to marshal labels"
+	ErrMsgUnmarshalLabels    = "failed to unmarshal labels"
+	ErrMsgWriteLabels        = "failed to write labels file"
 )
 
 // validateTemplateNameForFilesystem validates a template name for filesystem safety.

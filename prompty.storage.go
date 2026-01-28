@@ -25,6 +25,10 @@ type StoredTemplate struct {
 	// Higher versions are newer.
 	Version int `json:"version"`
 
+	// Status is the deployment lifecycle status (draft, active, deprecated, archived).
+	// Defaults to "active" when not specified.
+	Status DeploymentStatus `json:"status,omitempty"`
+
 	// Metadata contains arbitrary key-value pairs for user-defined data.
 	Metadata map[string]string `json:"metadata,omitempty"`
 
@@ -65,6 +69,13 @@ type TemplateQuery struct {
 
 	// NameContains filters to names containing this substring.
 	NameContains string
+
+	// Status filters by a single deployment status.
+	Status DeploymentStatus
+
+	// Statuses filters by multiple deployment statuses (OR logic).
+	// If both Status and Statuses are set, Statuses takes precedence.
+	Statuses []DeploymentStatus
 
 	// Limit is the maximum number of results (0 = no limit).
 	Limit int
@@ -131,6 +142,67 @@ type StorageDriver interface {
 	// Open creates a new storage instance with the given connection string.
 	// The format of the connection string is driver-specific.
 	Open(connectionString string) (TemplateStorage, error)
+}
+
+// TemplateLabel represents a named pointer to a specific template version.
+// Labels are mutable and can be reassigned to different versions.
+type TemplateLabel struct {
+	// TemplateName is the name of the template this label belongs to.
+	TemplateName string `json:"template_name"`
+
+	// Label is the label name (e.g., "production", "staging").
+	Label string `json:"label"`
+
+	// Version is the version number this label points to.
+	Version int `json:"version"`
+
+	// AssignedAt is when this label was assigned to this version.
+	AssignedAt time.Time `json:"assigned_at"`
+
+	// AssignedBy identifies who assigned this label (optional).
+	AssignedBy string `json:"assigned_by,omitempty"`
+}
+
+// LabelStorage is the interface for managing named labels on template versions.
+// Implementations must be safe for concurrent use.
+type LabelStorage interface {
+	// SetLabel assigns a label to a specific template version.
+	// If the label already exists, it is reassigned to the new version.
+	// Returns error if the template or version doesn't exist.
+	SetLabel(ctx context.Context, templateName, label string, version int, assignedBy string) error
+
+	// RemoveLabel removes a label from a template.
+	// Returns ErrLabelNotFound if the label doesn't exist.
+	RemoveLabel(ctx context.Context, templateName, label string) error
+
+	// GetByLabel retrieves a template by its label.
+	// Returns ErrLabelNotFound if the label doesn't exist.
+	GetByLabel(ctx context.Context, templateName, label string) (*StoredTemplate, error)
+
+	// ListLabels returns all labels for a template.
+	ListLabels(ctx context.Context, templateName string) ([]*TemplateLabel, error)
+
+	// GetVersionLabels returns all labels assigned to a specific version.
+	GetVersionLabels(ctx context.Context, templateName string, version int) ([]string, error)
+}
+
+// StatusStorage is the interface for managing deployment status on template versions.
+// Implementations must be safe for concurrent use.
+type StatusStorage interface {
+	// SetStatus updates the deployment status of a specific version.
+	// Returns error if the transition is not allowed or the version doesn't exist.
+	SetStatus(ctx context.Context, templateName string, version int, status DeploymentStatus, changedBy string) error
+
+	// ListByStatus returns templates matching the given deployment status.
+	ListByStatus(ctx context.Context, status DeploymentStatus, query *TemplateQuery) ([]*StoredTemplate, error)
+}
+
+// ExtendedTemplateStorage combines all storage interfaces.
+// Implementations that support labels and status should implement this interface.
+type ExtendedTemplateStorage interface {
+	TemplateStorage
+	LabelStorage
+	StatusStorage
 }
 
 // Storage driver registry
@@ -281,4 +353,12 @@ func intToStr(i int) string {
 	}
 
 	return string(buf[pos:])
+}
+
+// NewStorageLabelNotFoundError creates an error for label not found in storage.
+func NewStorageLabelNotFoundError(templateName, label string) error {
+	return &StorageError{
+		Message: ErrMsgLabelNotFound,
+		Name:    templateName + ":" + label,
+	}
 }

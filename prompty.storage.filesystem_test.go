@@ -531,3 +531,368 @@ func TestParseVersionNumber(t *testing.T) {
 		assert.Equal(t, tt.expected, result, "input: %q", tt.input)
 	}
 }
+
+// -----------------------------------------------------------------------------
+// LabelStorage Tests
+// -----------------------------------------------------------------------------
+
+func TestFilesystemStorage_Labels(t *testing.T) {
+	dir := t.TempDir()
+	storage, err := NewFilesystemStorage(dir)
+	require.NoError(t, err)
+	defer storage.Close()
+
+	ctx := context.Background()
+
+	// Create a template
+	tmpl := &StoredTemplate{
+		Name:   "test-template",
+		Source: "Hello {~prompty.var name=\"name\" /~}",
+	}
+	err = storage.Save(ctx, tmpl)
+	require.NoError(t, err)
+	assert.Equal(t, 1, tmpl.Version)
+
+	// Set a label
+	err = storage.SetLabel(ctx, "test-template", "production", 1, "user1")
+	require.NoError(t, err)
+
+	// Get by label
+	got, err := storage.GetByLabel(ctx, "test-template", "production")
+	require.NoError(t, err)
+	assert.Equal(t, 1, got.Version)
+
+	// List labels
+	labels, err := storage.ListLabels(ctx, "test-template")
+	require.NoError(t, err)
+	assert.Len(t, labels, 1)
+	assert.Equal(t, "production", labels[0].Label)
+	assert.Equal(t, 1, labels[0].Version)
+	assert.Equal(t, "user1", labels[0].AssignedBy)
+
+	// Get version labels
+	versionLabels, err := storage.GetVersionLabels(ctx, "test-template", 1)
+	require.NoError(t, err)
+	assert.Contains(t, versionLabels, "production")
+
+	// Reassign label to new version
+	tmpl2 := &StoredTemplate{
+		Name:   "test-template",
+		Source: "Updated: Hello {~prompty.var name=\"name\" /~}",
+	}
+	err = storage.Save(ctx, tmpl2)
+	require.NoError(t, err)
+	assert.Equal(t, 2, tmpl2.Version)
+
+	err = storage.SetLabel(ctx, "test-template", "production", 2, "user2")
+	require.NoError(t, err)
+
+	got, err = storage.GetByLabel(ctx, "test-template", "production")
+	require.NoError(t, err)
+	assert.Equal(t, 2, got.Version)
+
+	// Remove label
+	err = storage.RemoveLabel(ctx, "test-template", "production")
+	require.NoError(t, err)
+
+	_, err = storage.GetByLabel(ctx, "test-template", "production")
+	assert.Error(t, err)
+}
+
+func TestFilesystemStorage_LabelPersistence(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+
+	// Create storage and save template with label
+	storage1, err := NewFilesystemStorage(dir)
+	require.NoError(t, err)
+
+	err = storage1.Save(ctx, &StoredTemplate{
+		Name:   "persistent",
+		Source: "content",
+	})
+	require.NoError(t, err)
+
+	err = storage1.SetLabel(ctx, "persistent", "production", 1, "deploy-user")
+	require.NoError(t, err)
+
+	err = storage1.Close()
+	require.NoError(t, err)
+
+	// Create new storage instance and verify label persists
+	storage2, err := NewFilesystemStorage(dir)
+	require.NoError(t, err)
+	defer storage2.Close()
+
+	// Verify label exists
+	tmpl, err := storage2.GetByLabel(ctx, "persistent", "production")
+	require.NoError(t, err)
+	assert.Equal(t, 1, tmpl.Version)
+
+	// Verify label details
+	labels, err := storage2.ListLabels(ctx, "persistent")
+	require.NoError(t, err)
+	require.Len(t, labels, 1)
+	assert.Equal(t, "production", labels[0].Label)
+	assert.Equal(t, "deploy-user", labels[0].AssignedBy)
+}
+
+func TestFilesystemStorage_LabelValidation(t *testing.T) {
+	dir := t.TempDir()
+	storage, err := NewFilesystemStorage(dir)
+	require.NoError(t, err)
+	defer storage.Close()
+
+	ctx := context.Background()
+
+	// Create a template
+	tmpl := &StoredTemplate{
+		Name:   "test-template",
+		Source: "Hello",
+	}
+	err = storage.Save(ctx, tmpl)
+	require.NoError(t, err)
+
+	// Invalid label - uppercase
+	err = storage.SetLabel(ctx, "test-template", "Production", 1, "")
+	assert.Error(t, err)
+
+	// Invalid label - empty
+	err = storage.SetLabel(ctx, "test-template", "", 1, "")
+	assert.Error(t, err)
+
+	// Label for non-existent version
+	err = storage.SetLabel(ctx, "test-template", "production", 999, "")
+	assert.Error(t, err)
+
+	// Label for non-existent template
+	err = storage.SetLabel(ctx, "non-existent", "production", 1, "")
+	assert.Error(t, err)
+}
+
+func TestFilesystemStorage_LabelCleanupOnDelete(t *testing.T) {
+	dir := t.TempDir()
+	storage, err := NewFilesystemStorage(dir)
+	require.NoError(t, err)
+	defer storage.Close()
+
+	ctx := context.Background()
+
+	// Create template and versions
+	err = storage.Save(ctx, &StoredTemplate{Name: "delete-test", Source: "v1"})
+	require.NoError(t, err)
+	err = storage.Save(ctx, &StoredTemplate{Name: "delete-test", Source: "v2"})
+	require.NoError(t, err)
+
+	// Set labels
+	err = storage.SetLabel(ctx, "delete-test", "production", 1, "")
+	require.NoError(t, err)
+	err = storage.SetLabel(ctx, "delete-test", "staging", 2, "")
+	require.NoError(t, err)
+
+	// Delete template
+	err = storage.Delete(ctx, "delete-test")
+	require.NoError(t, err)
+
+	// Verify labels are gone (by checking that labels.json doesn't exist)
+	labelsFile := filepath.Join(dir, "delete-test", "labels.json")
+	_, err = os.Stat(labelsFile)
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestFilesystemStorage_LabelCleanupOnDeleteVersion(t *testing.T) {
+	dir := t.TempDir()
+	storage, err := NewFilesystemStorage(dir)
+	require.NoError(t, err)
+	defer storage.Close()
+
+	ctx := context.Background()
+
+	// Create template with multiple versions
+	err = storage.Save(ctx, &StoredTemplate{Name: "version-delete", Source: "v1"})
+	require.NoError(t, err)
+	err = storage.Save(ctx, &StoredTemplate{Name: "version-delete", Source: "v2"})
+	require.NoError(t, err)
+	err = storage.Save(ctx, &StoredTemplate{Name: "version-delete", Source: "v3"})
+	require.NoError(t, err)
+
+	// Set labels on different versions
+	err = storage.SetLabel(ctx, "version-delete", "production", 1, "")
+	require.NoError(t, err)
+	err = storage.SetLabel(ctx, "version-delete", "staging", 2, "")
+	require.NoError(t, err)
+	err = storage.SetLabel(ctx, "version-delete", "canary", 3, "")
+	require.NoError(t, err)
+
+	// Delete version 2 (which has staging label)
+	err = storage.DeleteVersion(ctx, "version-delete", 2)
+	require.NoError(t, err)
+
+	// Verify staging label is gone
+	_, err = storage.GetByLabel(ctx, "version-delete", "staging")
+	assert.Error(t, err)
+
+	// Verify other labels still exist
+	labels, err := storage.ListLabels(ctx, "version-delete")
+	require.NoError(t, err)
+	assert.Len(t, labels, 2)
+
+	labelMap := make(map[string]int)
+	for _, l := range labels {
+		labelMap[l.Label] = l.Version
+	}
+	assert.Equal(t, 1, labelMap["production"])
+	assert.Equal(t, 3, labelMap["canary"])
+}
+
+func TestFilesystemStorage_DeleteVersionCleansAllLabels(t *testing.T) {
+	dir := t.TempDir()
+	storage, err := NewFilesystemStorage(dir)
+	require.NoError(t, err)
+	defer storage.Close()
+
+	ctx := context.Background()
+
+	// Create template with single version
+	err = storage.Save(ctx, &StoredTemplate{Name: "single-version", Source: "content"})
+	require.NoError(t, err)
+
+	// Set multiple labels on the same version
+	err = storage.SetLabel(ctx, "single-version", "production", 1, "")
+	require.NoError(t, err)
+	err = storage.SetLabel(ctx, "single-version", "staging", 1, "")
+	require.NoError(t, err)
+
+	// Delete the only version
+	err = storage.DeleteVersion(ctx, "single-version", 1)
+	require.NoError(t, err)
+
+	// Verify directory is completely gone (including labels.json)
+	templateDir := filepath.Join(dir, "single-version")
+	_, err = os.Stat(templateDir)
+	assert.True(t, os.IsNotExist(err))
+}
+
+// -----------------------------------------------------------------------------
+// StatusStorage Tests
+// -----------------------------------------------------------------------------
+
+func TestFilesystemStorage_Status(t *testing.T) {
+	dir := t.TempDir()
+	storage, err := NewFilesystemStorage(dir)
+	require.NoError(t, err)
+	defer storage.Close()
+
+	ctx := context.Background()
+
+	// Create a template - should default to active
+	tmpl := &StoredTemplate{
+		Name:   "test-template",
+		Source: "Hello",
+	}
+	err = storage.Save(ctx, tmpl)
+	require.NoError(t, err)
+	assert.Equal(t, DeploymentStatusActive, tmpl.Status)
+
+	// Verify stored status
+	got, err := storage.Get(ctx, "test-template")
+	require.NoError(t, err)
+	assert.Equal(t, DeploymentStatusActive, got.Status)
+
+	// Transition to deprecated
+	err = storage.SetStatus(ctx, "test-template", 1, DeploymentStatusDeprecated, "user1")
+	require.NoError(t, err)
+
+	got, err = storage.Get(ctx, "test-template")
+	require.NoError(t, err)
+	assert.Equal(t, DeploymentStatusDeprecated, got.Status)
+
+	// Transition back to active (allowed)
+	err = storage.SetStatus(ctx, "test-template", 1, DeploymentStatusActive, "user1")
+	require.NoError(t, err)
+
+	// Transition to archived
+	err = storage.SetStatus(ctx, "test-template", 1, DeploymentStatusArchived, "user1")
+	require.NoError(t, err)
+
+	// Try to transition from archived (should fail)
+	err = storage.SetStatus(ctx, "test-template", 1, DeploymentStatusActive, "user1")
+	assert.Error(t, err)
+
+	// List by status
+	results, err := storage.ListByStatus(ctx, DeploymentStatusArchived, nil)
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, "test-template", results[0].Name)
+}
+
+func TestFilesystemStorage_StatusPersistence(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+
+	// Create storage and save template
+	storage1, err := NewFilesystemStorage(dir)
+	require.NoError(t, err)
+
+	err = storage1.Save(ctx, &StoredTemplate{
+		Name:   "persistent",
+		Source: "content",
+	})
+	require.NoError(t, err)
+
+	err = storage1.SetStatus(ctx, "persistent", 1, DeploymentStatusDeprecated, "admin")
+	require.NoError(t, err)
+
+	err = storage1.Close()
+	require.NoError(t, err)
+
+	// Create new storage instance and verify status persists
+	storage2, err := NewFilesystemStorage(dir)
+	require.NoError(t, err)
+	defer storage2.Close()
+
+	tmpl, err := storage2.Get(ctx, "persistent")
+	require.NoError(t, err)
+	assert.Equal(t, DeploymentStatusDeprecated, tmpl.Status)
+}
+
+func TestFilesystemStorage_StatusWithDraft(t *testing.T) {
+	dir := t.TempDir()
+	storage, err := NewFilesystemStorage(dir)
+	require.NoError(t, err)
+	defer storage.Close()
+
+	ctx := context.Background()
+
+	// Create a template with draft status
+	tmpl := &StoredTemplate{
+		Name:   "draft-template",
+		Source: "WIP content",
+		Status: DeploymentStatusDraft,
+	}
+	err = storage.Save(ctx, tmpl)
+	require.NoError(t, err)
+	assert.Equal(t, DeploymentStatusDraft, tmpl.Status)
+
+	// Verify stored status
+	got, err := storage.Get(ctx, "draft-template")
+	require.NoError(t, err)
+	assert.Equal(t, DeploymentStatusDraft, got.Status)
+
+	// Draft to active is allowed
+	err = storage.SetStatus(ctx, "draft-template", 1, DeploymentStatusActive, "reviewer")
+	require.NoError(t, err)
+
+	// Create another draft and try invalid transition
+	tmpl2 := &StoredTemplate{
+		Name:   "draft-template",
+		Source: "WIP content v2",
+		Status: DeploymentStatusDraft,
+	}
+	err = storage.Save(ctx, tmpl2)
+	require.NoError(t, err)
+
+	// Draft to deprecated is NOT allowed
+	err = storage.SetStatus(ctx, "draft-template", 2, DeploymentStatusDeprecated, "reviewer")
+	assert.Error(t, err)
+}

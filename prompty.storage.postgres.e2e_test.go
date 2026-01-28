@@ -1042,6 +1042,297 @@ func TestPostgres_E2E_EdgeCases(t *testing.T) {
 }
 
 // =============================================================================
+// Label Storage Tests
+// =============================================================================
+
+func TestPostgres_E2E_Labels(t *testing.T) {
+	storage, cleanup := setupPostgresContainer(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Create a template
+	tmpl := &StoredTemplate{
+		Name:   "label-test",
+		Source: "Hello {~prompty.var name=\"name\" /~}",
+	}
+	err := storage.Save(ctx, tmpl)
+	require.NoError(t, err)
+	assert.Equal(t, 1, tmpl.Version)
+
+	t.Run("SetAndGetLabel", func(t *testing.T) {
+		err := storage.SetLabel(ctx, "label-test", "production", 1, "deploy-user")
+		require.NoError(t, err)
+
+		got, err := storage.GetByLabel(ctx, "label-test", "production")
+		require.NoError(t, err)
+		assert.Equal(t, 1, got.Version)
+	})
+
+	t.Run("ListLabels", func(t *testing.T) {
+		// Add another label
+		err := storage.SetLabel(ctx, "label-test", "staging", 1, "deploy-user")
+		require.NoError(t, err)
+
+		labels, err := storage.ListLabels(ctx, "label-test")
+		require.NoError(t, err)
+		assert.Len(t, labels, 2)
+
+		labelNames := make([]string, len(labels))
+		for i, l := range labels {
+			labelNames[i] = l.Label
+		}
+		assert.Contains(t, labelNames, "production")
+		assert.Contains(t, labelNames, "staging")
+	})
+
+	t.Run("GetVersionLabels", func(t *testing.T) {
+		versionLabels, err := storage.GetVersionLabels(ctx, "label-test", 1)
+		require.NoError(t, err)
+		assert.Contains(t, versionLabels, "production")
+		assert.Contains(t, versionLabels, "staging")
+	})
+
+	t.Run("ReassignLabel", func(t *testing.T) {
+		// Save new version
+		tmpl2 := &StoredTemplate{
+			Name:   "label-test",
+			Source: "Updated: Hello {~prompty.var name=\"name\" /~}",
+		}
+		err := storage.Save(ctx, tmpl2)
+		require.NoError(t, err)
+		assert.Equal(t, 2, tmpl2.Version)
+
+		// Reassign production label
+		err = storage.SetLabel(ctx, "label-test", "production", 2, "new-user")
+		require.NoError(t, err)
+
+		got, err := storage.GetByLabel(ctx, "label-test", "production")
+		require.NoError(t, err)
+		assert.Equal(t, 2, got.Version)
+	})
+
+	t.Run("RemoveLabel", func(t *testing.T) {
+		err := storage.RemoveLabel(ctx, "label-test", "staging")
+		require.NoError(t, err)
+
+		_, err = storage.GetByLabel(ctx, "label-test", "staging")
+		assert.Error(t, err)
+	})
+
+	t.Run("LabelValidation", func(t *testing.T) {
+		// Invalid label - uppercase
+		err := storage.SetLabel(ctx, "label-test", "Production", 1, "")
+		assert.Error(t, err)
+
+		// Invalid label - empty
+		err = storage.SetLabel(ctx, "label-test", "", 1, "")
+		assert.Error(t, err)
+
+		// Label for non-existent version
+		err = storage.SetLabel(ctx, "label-test", "test", 999, "")
+		assert.Error(t, err)
+	})
+}
+
+func TestPostgres_E2E_LabelCleanupOnDelete(t *testing.T) {
+	storage, cleanup := setupPostgresContainer(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Create template with versions and labels
+	err := storage.Save(ctx, &StoredTemplate{Name: "delete-label-test", Source: "v1"})
+	require.NoError(t, err)
+	err = storage.Save(ctx, &StoredTemplate{Name: "delete-label-test", Source: "v2"})
+	require.NoError(t, err)
+
+	err = storage.SetLabel(ctx, "delete-label-test", "production", 1, "")
+	require.NoError(t, err)
+	err = storage.SetLabel(ctx, "delete-label-test", "staging", 2, "")
+	require.NoError(t, err)
+
+	// Delete template
+	err = storage.Delete(ctx, "delete-label-test")
+	require.NoError(t, err)
+
+	// Labels should be cleaned up - trying to list should return empty
+	// since the template no longer exists
+	labels, err := storage.ListLabels(ctx, "delete-label-test")
+	require.NoError(t, err)
+	assert.Empty(t, labels)
+}
+
+// =============================================================================
+// Status Storage Tests
+// =============================================================================
+
+func TestPostgres_E2E_Status(t *testing.T) {
+	storage, cleanup := setupPostgresContainer(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	t.Run("DefaultStatus", func(t *testing.T) {
+		tmpl := &StoredTemplate{
+			Name:   "status-test",
+			Source: "Hello",
+		}
+		err := storage.Save(ctx, tmpl)
+		require.NoError(t, err)
+		assert.Equal(t, DeploymentStatusActive, tmpl.Status)
+
+		got, err := storage.Get(ctx, "status-test")
+		require.NoError(t, err)
+		assert.Equal(t, DeploymentStatusActive, got.Status)
+	})
+
+	t.Run("StatusTransitions", func(t *testing.T) {
+		// Transition to deprecated
+		err := storage.SetStatus(ctx, "status-test", 1, DeploymentStatusDeprecated, "user1")
+		require.NoError(t, err)
+
+		got, err := storage.Get(ctx, "status-test")
+		require.NoError(t, err)
+		assert.Equal(t, DeploymentStatusDeprecated, got.Status)
+
+		// Transition back to active (allowed)
+		err = storage.SetStatus(ctx, "status-test", 1, DeploymentStatusActive, "user1")
+		require.NoError(t, err)
+
+		// Transition to archived
+		err = storage.SetStatus(ctx, "status-test", 1, DeploymentStatusArchived, "user1")
+		require.NoError(t, err)
+
+		// Try to transition from archived (should fail)
+		err = storage.SetStatus(ctx, "status-test", 1, DeploymentStatusActive, "user1")
+		assert.Error(t, err)
+	})
+
+	t.Run("ListByStatus", func(t *testing.T) {
+		// Create templates with different statuses
+		tmpl1 := &StoredTemplate{Name: "active-1", Source: "active"}
+		err := storage.Save(ctx, tmpl1)
+		require.NoError(t, err)
+
+		tmpl2 := &StoredTemplate{Name: "active-2", Source: "active"}
+		err = storage.Save(ctx, tmpl2)
+		require.NoError(t, err)
+
+		tmpl3 := &StoredTemplate{Name: "deprecated-1", Source: "deprecated"}
+		err = storage.Save(ctx, tmpl3)
+		require.NoError(t, err)
+		err = storage.SetStatus(ctx, "deprecated-1", 1, DeploymentStatusDeprecated, "user")
+		require.NoError(t, err)
+
+		// List active
+		results, err := storage.ListByStatus(ctx, DeploymentStatusActive, nil)
+		require.NoError(t, err)
+		assert.Len(t, results, 2) // active-1 and active-2
+
+		// List deprecated
+		results, err = storage.ListByStatus(ctx, DeploymentStatusDeprecated, nil)
+		require.NoError(t, err)
+		assert.Len(t, results, 1)
+		assert.Equal(t, "deprecated-1", results[0].Name)
+
+		// List archived
+		results, err = storage.ListByStatus(ctx, DeploymentStatusArchived, nil)
+		require.NoError(t, err)
+		assert.Len(t, results, 1) // status-test from previous test
+	})
+
+	t.Run("DraftStatus", func(t *testing.T) {
+		tmpl := &StoredTemplate{
+			Name:   "draft-template",
+			Source: "WIP content",
+			Status: DeploymentStatusDraft,
+		}
+		err := storage.Save(ctx, tmpl)
+		require.NoError(t, err)
+		assert.Equal(t, DeploymentStatusDraft, tmpl.Status)
+
+		got, err := storage.Get(ctx, "draft-template")
+		require.NoError(t, err)
+		assert.Equal(t, DeploymentStatusDraft, got.Status)
+
+		// Draft to active is allowed
+		err = storage.SetStatus(ctx, "draft-template", 1, DeploymentStatusActive, "reviewer")
+		require.NoError(t, err)
+
+		// Create another draft
+		tmpl2 := &StoredTemplate{
+			Name:   "draft-template",
+			Source: "WIP content v2",
+			Status: DeploymentStatusDraft,
+		}
+		err = storage.Save(ctx, tmpl2)
+		require.NoError(t, err)
+
+		// Draft to deprecated is NOT allowed
+		err = storage.SetStatus(ctx, "draft-template", 2, DeploymentStatusDeprecated, "reviewer")
+		assert.Error(t, err)
+	})
+}
+
+func TestPostgres_E2E_StatusPersistence(t *testing.T) {
+	ctx := context.Background()
+
+	container, err := postgres.Run(ctx, "postgres:15",
+		postgres.WithDatabase("status_persist_test"),
+		postgres.WithUsername("test"),
+		postgres.WithPassword("test"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(60*time.Second),
+		),
+	)
+	require.NoError(t, err)
+	defer func() { _ = container.Terminate(ctx) }()
+
+	connStr, err := container.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	// First storage instance
+	storage1, err := NewPostgresStorage(PostgresConfig{
+		ConnectionString: connStr,
+		AutoMigrate:      true,
+	})
+	require.NoError(t, err)
+
+	err = storage1.Save(ctx, &StoredTemplate{
+		Name:   "persist-test",
+		Source: "content",
+	})
+	require.NoError(t, err)
+
+	err = storage1.SetStatus(ctx, "persist-test", 1, DeploymentStatusDeprecated, "admin")
+	require.NoError(t, err)
+
+	err = storage1.SetLabel(ctx, "persist-test", "production", 1, "deploy-bot")
+	require.NoError(t, err)
+
+	err = storage1.Close()
+	require.NoError(t, err)
+
+	// Second storage instance - verify persistence
+	storage2, err := NewPostgresStorage(PostgresConfig{
+		ConnectionString: connStr,
+		AutoMigrate:      false,
+	})
+	require.NoError(t, err)
+	defer storage2.Close()
+
+	// Status should persist
+	tmpl, err := storage2.Get(ctx, "persist-test")
+	require.NoError(t, err)
+	assert.Equal(t, DeploymentStatusDeprecated, tmpl.Status)
+
+	// Label should persist
+	got, err := storage2.GetByLabel(ctx, "persist-test", "production")
+	require.NoError(t, err)
+	assert.Equal(t, 1, got.Version)
+}
+
+// =============================================================================
 // Integration with StorageEngine
 // =============================================================================
 

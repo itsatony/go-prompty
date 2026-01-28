@@ -340,6 +340,196 @@ func (se *StorageEngine) MustRegisterFunc(f *Func) {
 
 // Storage error messages
 const (
-	ErrMsgNilStorage            = "storage is nil"
-	ErrMsgInvalidTemplateSource = "template source is invalid"
+	ErrMsgNilStorage                  = "storage is nil"
+	ErrMsgInvalidTemplateSource       = "template source is invalid"
+	ErrMsgStorageDoesNotSupportLabels = "storage backend does not support labels"
+	ErrMsgStorageDoesNotSupportStatus = "storage backend does not support status"
 )
+
+// -----------------------------------------------------------------------------
+// Label Operations
+// -----------------------------------------------------------------------------
+
+// labelStorage returns the storage as LabelStorage, or an error if unsupported.
+func (se *StorageEngine) labelStorage() (LabelStorage, error) {
+	if ls, ok := se.storage.(LabelStorage); ok {
+		return ls, nil
+	}
+	return nil, &StorageError{Message: ErrMsgStorageDoesNotSupportLabels}
+}
+
+// statusStorage returns the storage as StatusStorage, or an error if unsupported.
+func (se *StorageEngine) statusStorage() (StatusStorage, error) {
+	if ss, ok := se.storage.(StatusStorage); ok {
+		return ss, nil
+	}
+	return nil, &StorageError{Message: ErrMsgStorageDoesNotSupportStatus}
+}
+
+// SetLabel assigns a label to a specific template version.
+func (se *StorageEngine) SetLabel(ctx context.Context, templateName, label string, version int) error {
+	return se.SetLabelBy(ctx, templateName, label, version, "")
+}
+
+// SetLabelBy assigns a label to a specific template version with assignedBy metadata.
+func (se *StorageEngine) SetLabelBy(ctx context.Context, templateName, label string, version int, assignedBy string) error {
+	ls, err := se.labelStorage()
+	if err != nil {
+		return err
+	}
+	return ls.SetLabel(ctx, templateName, label, version, assignedBy)
+}
+
+// RemoveLabel removes a label from a template.
+func (se *StorageEngine) RemoveLabel(ctx context.Context, templateName, label string) error {
+	ls, err := se.labelStorage()
+	if err != nil {
+		return err
+	}
+	return ls.RemoveLabel(ctx, templateName, label)
+}
+
+// GetByLabel retrieves a template by its label.
+func (se *StorageEngine) GetByLabel(ctx context.Context, templateName, label string) (*StoredTemplate, error) {
+	ls, err := se.labelStorage()
+	if err != nil {
+		return nil, err
+	}
+	return ls.GetByLabel(ctx, templateName, label)
+}
+
+// ExecuteLabeled executes a template using a labeled version.
+func (se *StorageEngine) ExecuteLabeled(ctx context.Context, templateName, label string, data map[string]any) (string, error) {
+	ls, err := se.labelStorage()
+	if err != nil {
+		return "", err
+	}
+
+	// Get the labeled version
+	stored, err := ls.GetByLabel(ctx, templateName, label)
+	if err != nil {
+		return "", err
+	}
+
+	// Parse and execute
+	tmpl, err := se.engine.Parse(stored.Source)
+	if err != nil {
+		return "", err
+	}
+
+	return tmpl.Execute(ctx, data)
+}
+
+// ListLabels returns all labels for a template.
+func (se *StorageEngine) ListLabels(ctx context.Context, templateName string) ([]*TemplateLabel, error) {
+	ls, err := se.labelStorage()
+	if err != nil {
+		return nil, err
+	}
+	return ls.ListLabels(ctx, templateName)
+}
+
+// GetVersionLabels returns all labels assigned to a specific version.
+func (se *StorageEngine) GetVersionLabels(ctx context.Context, templateName string, version int) ([]string, error) {
+	ls, err := se.labelStorage()
+	if err != nil {
+		return nil, err
+	}
+	return ls.GetVersionLabels(ctx, templateName, version)
+}
+
+// -----------------------------------------------------------------------------
+// Status Operations
+// -----------------------------------------------------------------------------
+
+// SetStatus updates the deployment status of a specific template version.
+func (se *StorageEngine) SetStatus(ctx context.Context, templateName string, version int, status DeploymentStatus) error {
+	return se.SetStatusBy(ctx, templateName, version, status, "")
+}
+
+// SetStatusBy updates the deployment status with changedBy metadata.
+func (se *StorageEngine) SetStatusBy(ctx context.Context, templateName string, version int, status DeploymentStatus, changedBy string) error {
+	ss, err := se.statusStorage()
+	if err != nil {
+		return err
+	}
+	return ss.SetStatus(ctx, templateName, version, status, changedBy)
+}
+
+// ListByStatus returns templates matching the given deployment status.
+func (se *StorageEngine) ListByStatus(ctx context.Context, status DeploymentStatus, query *TemplateQuery) ([]*StoredTemplate, error) {
+	ss, err := se.statusStorage()
+	if err != nil {
+		return nil, err
+	}
+	return ss.ListByStatus(ctx, status, query)
+}
+
+// -----------------------------------------------------------------------------
+// Convenience Methods
+// -----------------------------------------------------------------------------
+
+// ExecuteProduction executes a template's "production" labeled version.
+// This is a convenience wrapper around ExecuteLabeled with LabelProduction.
+func (se *StorageEngine) ExecuteProduction(ctx context.Context, templateName string, data map[string]any) (string, error) {
+	return se.ExecuteLabeled(ctx, templateName, LabelProduction, data)
+}
+
+// PromoteToProduction assigns the "production" label to a specific version.
+// This is a convenience wrapper around SetLabel with LabelProduction.
+func (se *StorageEngine) PromoteToProduction(ctx context.Context, templateName string, version int) error {
+	return se.SetLabel(ctx, templateName, LabelProduction, version)
+}
+
+// PromoteToProductionBy assigns the "production" label with audit information.
+func (se *StorageEngine) PromoteToProductionBy(ctx context.Context, templateName string, version int, promotedBy string) error {
+	return se.SetLabelBy(ctx, templateName, LabelProduction, version, promotedBy)
+}
+
+// GetProduction retrieves a template's "production" labeled version.
+// This is a convenience wrapper around GetByLabel with LabelProduction.
+func (se *StorageEngine) GetProduction(ctx context.Context, templateName string) (*StoredTemplate, error) {
+	return se.GetByLabel(ctx, templateName, LabelProduction)
+}
+
+// PromoteToStaging assigns the "staging" label to a specific version.
+func (se *StorageEngine) PromoteToStaging(ctx context.Context, templateName string, version int) error {
+	return se.SetLabel(ctx, templateName, LabelStaging, version)
+}
+
+// ExecuteStaging executes a template's "staging" labeled version.
+func (se *StorageEngine) ExecuteStaging(ctx context.Context, templateName string, data map[string]any) (string, error) {
+	return se.ExecuteLabeled(ctx, templateName, LabelStaging, data)
+}
+
+// GetActiveTemplates returns all templates with "active" status.
+func (se *StorageEngine) GetActiveTemplates(ctx context.Context, query *TemplateQuery) ([]*StoredTemplate, error) {
+	return se.ListByStatus(ctx, DeploymentStatusActive, query)
+}
+
+// ArchiveVersion marks a template version as archived.
+func (se *StorageEngine) ArchiveVersion(ctx context.Context, templateName string, version int) error {
+	return se.SetStatus(ctx, templateName, version, DeploymentStatusArchived)
+}
+
+// DeprecateVersion marks a template version as deprecated.
+func (se *StorageEngine) DeprecateVersion(ctx context.Context, templateName string, version int) error {
+	return se.SetStatus(ctx, templateName, version, DeploymentStatusDeprecated)
+}
+
+// ActivateVersion marks a template version as active.
+func (se *StorageEngine) ActivateVersion(ctx context.Context, templateName string, version int) error {
+	return se.SetStatus(ctx, templateName, version, DeploymentStatusActive)
+}
+
+// SupportsLabels returns true if the underlying storage supports labels.
+func (se *StorageEngine) SupportsLabels() bool {
+	_, ok := se.storage.(LabelStorage)
+	return ok
+}
+
+// SupportsStatus returns true if the underlying storage supports deployment status.
+func (se *StorageEngine) SupportsStatus() bool {
+	_, ok := se.storage.(StatusStorage)
+	return ok
+}

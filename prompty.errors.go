@@ -114,6 +114,19 @@ const (
 
 	// YAML frontmatter size limits
 	ErrMsgFrontmatterTooLarge = "YAML frontmatter exceeds maximum size limit"
+
+	// Deployment status messages
+	ErrMsgInvalidDeploymentStatus = "invalid deployment status"
+	ErrMsgStatusTransitionDenied  = "status transition not allowed"
+	ErrMsgArchivedVersionReadOnly = "archived versions are read-only"
+
+	// Label messages
+	ErrMsgInvalidLabelName   = "invalid label name"
+	ErrMsgLabelNotFound      = "label not found"
+	ErrMsgLabelNameTooLong   = "label name exceeds maximum length"
+	ErrMsgLabelNameEmpty     = "label name cannot be empty"
+	ErrMsgLabelVersionError  = "label version mismatch"
+	ErrMsgInvalidLabelFormat = "must start with lowercase letter and contain only lowercase letters, digits, underscores, or hyphens"
 )
 
 // Error code constants for categorization
@@ -126,6 +139,8 @@ const (
 	ErrCodeFunc       = "PROMPTY_FUNC"
 	ErrCodeConfig     = "PROMPTY_CONFIG"
 	ErrCodeEnv        = "PROMPTY_ENV"
+	ErrCodeLabel      = "PROMPTY_LABEL"
+	ErrCodeStatus     = "PROMPTY_STATUS"
 )
 
 // Position represents a location in the source template
@@ -364,4 +379,38 @@ func NewMessageTagError(msg string, tagPos Position) error {
 		WithMetadata(MetaKeyTag, TagNameMessage).
 		WithMetadata(MetaKeyLine, strconv.Itoa(tagPos.Line)).
 		WithMetadata(MetaKeyColumn, strconv.Itoa(tagPos.Column))
+}
+
+// NewLabelNotFoundError creates an error for label not found.
+func NewLabelNotFoundError(templateName, label string) error {
+	return cuserr.NewNotFoundError(ErrCodeLabel, ErrMsgLabelNotFound).
+		WithMetadata(MetaKeyTemplateName, templateName).
+		WithMetadata("label", label)
+}
+
+// NewInvalidLabelNameError creates an error for invalid label name.
+func NewInvalidLabelNameError(label, reason string) error {
+	return cuserr.NewValidationError(ErrCodeLabel, ErrMsgInvalidLabelName).
+		WithMetadata("label", label).
+		WithMetadata(MetaKeyReason, reason)
+}
+
+// NewInvalidStatusTransitionError creates an error for invalid status transition.
+func NewInvalidStatusTransitionError(from, to DeploymentStatus) error {
+	return cuserr.NewValidationError(ErrCodeStatus, ErrMsgStatusTransitionDenied).
+		WithMetadata("from_status", string(from)).
+		WithMetadata("to_status", string(to))
+}
+
+// NewArchivedVersionError creates an error for operations on archived versions.
+func NewArchivedVersionError(templateName string, version int) error {
+	return cuserr.NewValidationError(ErrCodeStatus, ErrMsgArchivedVersionReadOnly).
+		WithMetadata(MetaKeyTemplateName, templateName).
+		WithMetadata("version", strconv.Itoa(version))
+}
+
+// NewInvalidDeploymentStatusError creates an error for invalid deployment status value.
+func NewInvalidDeploymentStatusError(status string) error {
+	return cuserr.NewValidationError(ErrCodeStatus, ErrMsgInvalidDeploymentStatus).
+		WithMetadata("status", status)
 }

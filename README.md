@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/itsatony/go-prompty)](https://goreportcard.com/report/github.com/itsatony/go-prompty)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Test Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen.svg)](https://github.com/itsatony/go-prompty)
-[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](https://github.com/itsatony/go-prompty/releases/tag/v1.4.0)
+[![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)](https://github.com/itsatony/go-prompty/releases/tag/v1.5.0)
 
 ```yaml
 ---
@@ -100,6 +100,7 @@ Please respond in {~prompty.var name="language" default="English" /~}.`
 - [Custom Resolvers](#custom-resolvers)
 - [Custom Functions](#custom-functions)
 - [Storage & Persistence](#storage--persistence)
+- [Deployment-Aware Versioning](#deployment-aware-versioning)
 - [Access Control](#access-control)
 - [Hooks System](#hooks-system)
 - [Production Patterns](#production-patterns)
@@ -813,6 +814,71 @@ if tmpl.InferenceConfig != nil {
 ```
 
 **Deep Dive:** See [docs/STORAGE.md](docs/STORAGE.md) for architecture (including PostgreSQL) and [docs/CUSTOM_STORAGE.md](docs/CUSTOM_STORAGE.md) for implementing custom backends.
+
+---
+
+## Deployment-Aware Versioning
+
+go-prompty supports deployment-aware versioning with **labels** and **status** tracking for production workflows.
+
+### Labels
+
+Named pointers to specific template versions:
+
+```go
+// Set labels for deployment stages
+engine.SetLabel(ctx, "greeting", "staging", 2)
+engine.SetLabel(ctx, "greeting", "production", 1)
+
+// Execute by label instead of version number
+result, _ := engine.ExecuteLabeled(ctx, "greeting", "production", data)
+
+// Convenience method for production
+result, _ := engine.ExecuteProduction(ctx, "greeting", data)
+
+// Promote staging to production
+engine.PromoteToProduction(ctx, "greeting", 2)
+
+// List all labels for a template
+labels, _ := engine.ListLabels(ctx, "greeting")
+// []*TemplateLabel{{Label: "production", Version: 2}, {Label: "staging", Version: 2}}
+```
+
+**Reserved labels**: `production`, `staging`, `canary`
+
+**Custom labels**: lowercase alphanumeric with hyphens/underscores (e.g., `beta-test`, `a_b_testing`)
+
+### Deployment Status
+
+Lifecycle states for template versions:
+
+| Status | Description | Transitions To |
+|--------|-------------|----------------|
+| `draft` | Not yet active, needs review | `active`, `archived` |
+| `active` | In use (default for new templates) | `deprecated`, `archived` |
+| `deprecated` | Scheduled for removal | `active`, `archived` |
+| `archived` | Read-only, terminal state | (none) |
+
+```go
+// Set status
+engine.SetStatus(ctx, "greeting", 1, prompty.DeploymentStatusDeprecated)
+
+// Query by status
+deprecated, _ := engine.ListByStatus(ctx, prompty.DeploymentStatusDeprecated, nil)
+
+// Get version history with labels and status
+history, _ := engine.GetVersionHistory(ctx, "greeting")
+for _, v := range history.Versions {
+    fmt.Printf("v%d: status=%s labels=%v\n", v.Version, v.Status, v.Labels)
+}
+```
+
+### Rollback and Clone Behavior
+
+- `RollbackToVersion()` creates a new version with `draft` status (requires review before activation)
+- `CloneVersion()` creates a new template with `draft` status
+
+**Deep Dive:** See [docs/STORAGE.md](docs/STORAGE.md#deployment-aware-versioning) for complete documentation.
 
 ---
 

@@ -3,6 +3,7 @@
 // This example shows:
 // - Using StorageEngine for template management
 // - Template versioning
+// - Deployment-aware versioning (labels and status)
 // - Caching for performance
 // - Querying templates
 package main
@@ -116,8 +117,111 @@ func main() {
 	}
 	fmt.Printf("   Version 1:   %s\n", result)
 
+	// Deployment-aware versioning: Labels
+	fmt.Println("\n4. Deployment labels...")
+
+	// Check if storage supports labels (MemoryStorage does)
+	if se.SupportsLabels() {
+		// Set "staging" label to v2 (the latest)
+		err = se.SetLabel(ctx, "greeting", "staging", 2)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("   Set 'staging' label on version 2")
+
+		// Set "production" label to v1 (the stable version)
+		err = se.SetLabel(ctx, "greeting", "production", 1)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("   Set 'production' label on version 1")
+
+		// Execute using labels instead of version numbers
+		result, err = se.ExecuteLabeled(ctx, "greeting", "production", map[string]any{"user": "Customer", "app": "Prompty"})
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("   Production result: %s\n", result)
+
+		result, err = se.ExecuteLabeled(ctx, "greeting", "staging", map[string]any{"user": "Tester", "app": "Prompty"})
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("   Staging result:    %s\n", result)
+
+		// Convenience method for production
+		result, err = se.ExecuteProduction(ctx, "greeting", map[string]any{"user": "VIP", "app": "Prompty"})
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("   ExecuteProduction: %s\n", result)
+
+		// List labels for template
+		labels, err := se.ListLabels(ctx, "greeting")
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("   Labels: ")
+		for _, l := range labels {
+			fmt.Printf("%s->v%d ", l.Label, l.Version)
+		}
+		fmt.Println()
+
+		// Promote staging to production (move label)
+		fmt.Println("\n   Promoting v2 to production...")
+		err = se.PromoteToProduction(ctx, "greeting", 2)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Verify production now points to v2
+		prodTemplate, err := se.GetProduction(ctx, "greeting")
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("   Production is now version %d\n", prodTemplate.Version)
+	}
+
+	// Deployment-aware versioning: Status
+	fmt.Println("\n5. Deployment status...")
+
+	if se.SupportsStatus() {
+		// Deprecate the old v1
+		err = se.SetStatus(ctx, "greeting", 1, prompty.DeploymentStatusDeprecated)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("   Deprecated version 1")
+
+		// Get version history to see status
+		history, err := se.GetVersionHistory(ctx, "greeting")
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("   Version history:")
+		for _, v := range history.Versions {
+			labels := ""
+			if len(v.Labels) > 0 {
+				labels = fmt.Sprintf(" [%v]", v.Labels)
+			}
+			fmt.Printf("      v%d: status=%s%s\n", v.Version, v.Status, labels)
+		}
+		if history.ProductionVersion > 0 {
+			fmt.Printf("   Production version: %d\n", history.ProductionVersion)
+		}
+
+		// List templates by status (including all versions to find deprecated ones)
+		deprecated, err := se.ListByStatus(ctx, prompty.DeploymentStatusDeprecated, &prompty.TemplateQuery{
+			IncludeAllVersions: true,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("   Deprecated versions: %d\n", len(deprecated))
+	}
+
 	// Query templates
-	fmt.Println("\n4. Querying templates...")
+	fmt.Println("\n7. Querying templates...")
 
 	// List all templates
 	all, err := se.List(ctx, nil)
@@ -141,7 +245,7 @@ func main() {
 	fmt.Printf("   Templates starting with 'notification': %d\n", len(notifications))
 
 	// Validation
-	fmt.Println("\n5. Template validation...")
+	fmt.Println("\n8. Template validation...")
 	validResult, err := se.Validate(ctx, "greeting")
 	if err != nil {
 		log.Fatal(err)
@@ -149,7 +253,7 @@ func main() {
 	fmt.Printf("   'greeting' is valid: %v\n", validResult.IsValid())
 
 	// Demonstrate caching with CachedStorage
-	fmt.Println("\n6. Demonstrating caching...")
+	fmt.Println("\n9. Demonstrating caching...")
 	cachedStorage := prompty.NewCachedStorage(prompty.NewMemoryStorage(), prompty.CacheConfig{
 		TTL:              1 * time.Hour,
 		MaxEntries:       100,

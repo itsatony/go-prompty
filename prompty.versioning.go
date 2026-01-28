@@ -9,16 +9,18 @@ import (
 
 // VersionInfo provides detailed information about a template version.
 type VersionInfo struct {
-	Version     int
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	CreatedBy   string
-	Source      string
-	SourceLen   int
-	Tags        []string
-	Metadata    map[string]string
-	IsCurrent   bool
+	Version       int
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	CreatedBy     string
+	Source        string
+	SourceLen     int
+	Tags          []string
+	Metadata      map[string]string
+	IsCurrent     bool
 	TokenEstimate *TokenEstimate
+	Status        DeploymentStatus // Deployment status (draft, active, deprecated, archived)
+	Labels        []string         // Labels assigned to this version (e.g., "production", "staging")
 }
 
 // VersionDiff represents differences between two template versions.
@@ -37,12 +39,14 @@ type VersionDiff struct {
 
 // VersionHistory contains the complete version history for a template.
 type VersionHistory struct {
-	TemplateName string
-	CurrentVersion int
-	TotalVersions int
-	Versions     []VersionInfo
-	OldestVersion *VersionInfo
-	NewestVersion *VersionInfo
+	TemplateName      string
+	CurrentVersion    int
+	TotalVersions     int
+	Versions          []VersionInfo
+	OldestVersion     *VersionInfo
+	NewestVersion     *VersionInfo
+	ProductionVersion int            // Version labeled as "production", 0 if not set
+	LabeledVersions   map[string]int // All label -> version mappings
 }
 
 // GetVersionHistory retrieves the complete version history for a template.
@@ -64,10 +68,31 @@ func (se *StorageEngine) GetVersionHistory(ctx context.Context, name string) (*V
 	}
 
 	history := &VersionHistory{
-		TemplateName:   name,
-		CurrentVersion: current.Version,
-		TotalVersions:  len(versions),
-		Versions:       make([]VersionInfo, 0, len(versions)),
+		TemplateName:    name,
+		CurrentVersion:  current.Version,
+		TotalVersions:   len(versions),
+		Versions:        make([]VersionInfo, 0, len(versions)),
+		LabeledVersions: make(map[string]int),
+	}
+
+	// Get labels if storage supports them
+	labelStorage, hasLabels := se.storage.(LabelStorage)
+	if hasLabels {
+		labels, err := labelStorage.ListLabels(ctx, name)
+		if err == nil {
+			for _, lbl := range labels {
+				history.LabeledVersions[lbl.Label] = lbl.Version
+				if lbl.Label == LabelProduction {
+					history.ProductionVersion = lbl.Version
+				}
+			}
+		}
+	}
+
+	// Create version labels map for quick lookup
+	versionLabelsMap := make(map[int][]string)
+	for label, version := range history.LabeledVersions {
+		versionLabelsMap[version] = append(versionLabelsMap[version], label)
 	}
 
 	// Load each version
@@ -78,16 +103,21 @@ func (se *StorageEngine) GetVersionHistory(ctx context.Context, name string) (*V
 		}
 
 		info := VersionInfo{
-			Version:     tmpl.Version,
-			CreatedAt:   tmpl.CreatedAt,
-			UpdatedAt:   tmpl.UpdatedAt,
-			CreatedBy:   tmpl.CreatedBy,
-			Source:      tmpl.Source,
-			SourceLen:   len(tmpl.Source),
-			Tags:        tmpl.Tags,
-			Metadata:    tmpl.Metadata,
-			IsCurrent:   tmpl.Version == current.Version,
+			Version:       tmpl.Version,
+			CreatedAt:     tmpl.CreatedAt,
+			UpdatedAt:     tmpl.UpdatedAt,
+			CreatedBy:     tmpl.CreatedBy,
+			Source:        tmpl.Source,
+			SourceLen:     len(tmpl.Source),
+			Tags:          tmpl.Tags,
+			Metadata:      tmpl.Metadata,
+			IsCurrent:     tmpl.Version == current.Version,
 			TokenEstimate: EstimateTokens(tmpl.Source),
+			Status:        tmpl.Status,
+			Labels:        versionLabelsMap[tmpl.Version],
+		}
+		if info.Labels == nil {
+			info.Labels = []string{}
 		}
 		history.Versions = append(history.Versions, info)
 	}
@@ -128,11 +158,13 @@ func (se *StorageEngine) RollbackToVersion(ctx context.Context, name string, tar
 	}
 
 	// Create new template from target
+	// Status is set to draft - rollbacks should be reviewed before activation
 	newTmpl := &StoredTemplate{
 		Name:     name,
 		Source:   targetTmpl.Source,
 		Tags:     targetTmpl.Tags,
 		TenantID: targetTmpl.TenantID,
+		Status:   DeploymentStatusDraft,
 		Metadata: make(map[string]string),
 	}
 
@@ -166,11 +198,13 @@ func (se *StorageEngine) CloneVersion(ctx context.Context, sourceName string, so
 	}
 
 	// Create clone
+	// Status is set to draft - cloned templates may need customization before activation
 	clone := &StoredTemplate{
 		Name:     newName,
 		Source:   sourceTmpl.Source,
 		Tags:     sourceTmpl.Tags,
 		TenantID: sourceTmpl.TenantID,
+		Status:   DeploymentStatusDraft,
 		Metadata: make(map[string]string),
 	}
 
@@ -332,7 +366,11 @@ func (h *VersionHistory) String() string {
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("=== Version History: %s ===\n", h.TemplateName))
-	sb.WriteString(fmt.Sprintf("Current: v%d | Total: %d versions\n\n", h.CurrentVersion, h.TotalVersions))
+	sb.WriteString(fmt.Sprintf("Current: v%d | Total: %d versions\n", h.CurrentVersion, h.TotalVersions))
+	if h.ProductionVersion > 0 {
+		sb.WriteString(fmt.Sprintf("Production: v%d\n", h.ProductionVersion))
+	}
+	sb.WriteString("\n")
 
 	for _, v := range h.Versions {
 		current := ""
@@ -343,6 +381,12 @@ func (h *VersionHistory) String() string {
 		sb.WriteString(fmt.Sprintf("  Created: %s\n", v.CreatedAt.Format(time.RFC3339)))
 		if v.CreatedBy != "" {
 			sb.WriteString(fmt.Sprintf("  By: %s\n", v.CreatedBy))
+		}
+		if v.Status != "" {
+			sb.WriteString(fmt.Sprintf("  Status: %s\n", v.Status))
+		}
+		if len(v.Labels) > 0 {
+			sb.WriteString(fmt.Sprintf("  Labels: %s\n", strings.Join(v.Labels, ", ")))
 		}
 		sb.WriteString(fmt.Sprintf("  Size: %d chars (~%d tokens)\n", v.SourceLen, v.TokenEstimate.EstimatedGeneric))
 		if len(v.Tags) > 0 {

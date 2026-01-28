@@ -301,6 +301,51 @@ const (
 	ErrMsgPathTraversalDetected = "invalid template name: path traversal characters detected"
 )
 
+// DeploymentStatus represents the lifecycle status of a template version.
+type DeploymentStatus string
+
+// Deployment status values - lifecycle of a template version.
+const (
+	// DeploymentStatusDraft is the initial status for new versions not yet ready for use.
+	DeploymentStatusDraft DeploymentStatus = "draft"
+	// DeploymentStatusActive indicates the version is ready for production use.
+	DeploymentStatusActive DeploymentStatus = "active"
+	// DeploymentStatusDeprecated marks the version as still functional but discouraged.
+	DeploymentStatusDeprecated DeploymentStatus = "deprecated"
+	// DeploymentStatusArchived is a terminal state - version is read-only and preserved for history.
+	DeploymentStatusArchived DeploymentStatus = "archived"
+)
+
+// Reserved label names - commonly used deployment targets.
+const (
+	LabelProduction = "production"
+	LabelStaging    = "staging"
+	LabelCanary     = "canary"
+)
+
+// Label validation constraints.
+const (
+	// LabelMaxLength is the maximum length of a label name.
+	LabelMaxLength = 64
+	// LabelNamePattern is the regex pattern for valid label names.
+	// Must start with lowercase letter, followed by lowercase letters, digits, underscores, or hyphens.
+	LabelNamePattern = `^[a-z][a-z0-9_-]*$`
+)
+
+// Metadata keys for deployment audit trail.
+const (
+	// MetaKeyLabelPrefix prefixes label-related metadata entries.
+	MetaKeyLabelPrefix = "label:"
+	// MetaKeyStatusChangedAt records when status was last changed.
+	MetaKeyStatusChangedAt = "status_changed_at"
+	// MetaKeyStatusChangedBy records who changed the status.
+	MetaKeyStatusChangedBy = "status_changed_by"
+	// MetaKeyLabelAssignedAt records when a label was assigned.
+	MetaKeyLabelAssignedAt = "label_assigned_at"
+	// MetaKeyLabelAssignedBy records who assigned a label.
+	MetaKeyLabelAssignedBy = "label_assigned_by"
+)
+
 // PostgreSQL storage error messages
 const (
 	ErrMsgPostgresConnectionFailed  = "failed to connect to PostgreSQL"

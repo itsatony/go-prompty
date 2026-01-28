@@ -247,6 +247,42 @@ func TestRollbackToVersion_InvalidVersion(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestRollbackToVersion_StatusIsDraft(t *testing.T) {
+	storage := NewMemoryStorage()
+	engine, err := NewStorageEngine(StorageEngineConfig{Storage: storage})
+	require.NoError(t, err)
+	defer engine.Close()
+
+	ctx := context.Background()
+
+	// Create v1 with active status (default)
+	err = engine.Save(ctx, &StoredTemplate{
+		Name:   "test",
+		Source: "Original content",
+	})
+	require.NoError(t, err)
+
+	// Create v2
+	err = engine.Save(ctx, &StoredTemplate{
+		Name:   "test",
+		Source: "Modified content",
+	})
+	require.NoError(t, err)
+
+	// Rollback to v1
+	rolled, err := engine.RollbackToVersion(ctx, "test", 1)
+	require.NoError(t, err)
+
+	// Verify status is draft (rollbacks need review before activation)
+	assert.Equal(t, DeploymentStatusDraft, rolled.Status)
+
+	// Verify stored version also has draft status
+	current, err := engine.Get(ctx, "test")
+	require.NoError(t, err)
+	assert.Equal(t, 3, current.Version)
+	assert.Equal(t, DeploymentStatusDraft, current.Status)
+}
+
 func TestCloneVersion(t *testing.T) {
 	storage := NewMemoryStorage()
 	engine, err := NewStorageEngine(StorageEngineConfig{Storage: storage})
@@ -312,6 +348,34 @@ func TestCloneVersion_TargetExists(t *testing.T) {
 	_, err = engine.CloneVersion(ctx, "source", 1, "target")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "already exists")
+}
+
+func TestCloneVersion_StatusIsDraft(t *testing.T) {
+	storage := NewMemoryStorage()
+	engine, err := NewStorageEngine(StorageEngineConfig{Storage: storage})
+	require.NoError(t, err)
+	defer engine.Close()
+
+	ctx := context.Background()
+
+	// Create source template with active status (default)
+	err = engine.Save(ctx, &StoredTemplate{
+		Name:   "source",
+		Source: "Template content",
+	})
+	require.NoError(t, err)
+
+	// Clone to new template
+	cloned, err := engine.CloneVersion(ctx, "source", 1, "cloned")
+	require.NoError(t, err)
+
+	// Verify status is draft (clones may need customization before activation)
+	assert.Equal(t, DeploymentStatusDraft, cloned.Status)
+
+	// Verify stored template also has draft status
+	retrieved, err := engine.Get(ctx, "cloned")
+	require.NoError(t, err)
+	assert.Equal(t, DeploymentStatusDraft, retrieved.Status)
 }
 
 func TestPruneOldVersions(t *testing.T) {

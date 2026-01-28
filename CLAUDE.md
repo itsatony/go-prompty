@@ -279,6 +279,83 @@ All resolver and plugin function execution uses isolated goroutines with:
 - Context cancellation propagation
 - Resource limits: max loop iterations (10000), max output size (10MB), max depth (10)
 
+## Deployment-Aware Versioning
+
+Templates support deployment status and named labels for production workflows.
+
+### Deployment Status
+
+Templates have a lifecycle status that tracks their deployment readiness:
+
+| Status | Description |
+|--------|-------------|
+| `draft` | Initial state for new versions not yet ready for use |
+| `active` | Ready for production use (default for new templates) |
+| `deprecated` | Still functional but discouraged |
+| `archived` | Terminal state - read-only, preserved for history |
+
+### Status Transitions
+
+```
+draft ────────────────→ active ────────────────→ deprecated
+   │                       │                          │
+   │                       │                          │
+   └───────────┬───────────┴───────────┬──────────────┘
+               │                       │
+               ↓                       ↓
+           archived ←─────────────────-┘
+```
+
+| From | Allowed To |
+|------|------------|
+| draft | active, archived |
+| active | deprecated, archived |
+| deprecated | active, archived |
+| archived | (terminal - no transitions) |
+
+### Labels
+
+Labels are named pointers to specific versions (e.g., "production" → v42):
+- `production` - The version currently running in production
+- `staging` - The version being tested before production
+- `canary` - The version for gradual rollout testing
+- Custom labels (lowercase, alphanumeric with underscores/hyphens)
+
+### Usage
+
+```go
+// Create engine with storage
+engine := prompty.MustNewStorageEngine(prompty.StorageEngineConfig{
+    Storage: prompty.NewMemoryStorage(),
+})
+
+// Save template (defaults to "active" status)
+engine.Save(ctx, &prompty.StoredTemplate{
+    Name:   "greeting",
+    Source: "Hello {~prompty.var name=\"name\" /~}!",
+})
+
+// Label operations
+engine.SetLabel(ctx, "greeting", "production", 1)    // Assign label
+engine.ExecuteLabeled(ctx, "greeting", "production", data)  // Execute by label
+engine.ExecuteProduction(ctx, "greeting", data)      // Convenience method
+engine.PromoteToProduction(ctx, "greeting", 2)       // Promote new version
+
+// Status operations
+engine.SetStatus(ctx, "greeting", 1, prompty.DeploymentStatusDeprecated)
+engine.ArchiveVersion(ctx, "greeting", 1)  // Convenience method
+engine.GetActiveTemplates(ctx, nil)        // List active templates
+
+// Check feature support (storage backend dependent)
+if engine.SupportsLabels() {
+    labels, _ := engine.ListLabels(ctx, "greeting")
+}
+```
+
+### Storage Backend Support
+
+All built-in storage backends (Memory, Filesystem, PostgreSQL) support labels and status.
+
 ## Key Dependencies
 
 | Package | Purpose |

@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - Unreleased
+
+### Added
+
+#### Deployment-Aware Versioning
+- **Labels**: Named pointers to specific template versions for deployment workflows
+  - Reserved labels: `production`, `staging`, `canary`
+  - Custom labels with validation (lowercase, alphanumeric with hyphens/underscores)
+  - Label assignment tracking (AssignedAt, AssignedBy metadata)
+- **Deployment Status**: Template version lifecycle management
+  - Status values: `draft` → `active` → `deprecated` → `archived`
+  - Status transition validation (archived is terminal state)
+  - Status filtering in queries
+- **Convenience Methods** for common workflows:
+  - `ExecuteLabeled()` - Execute template by label
+  - `ExecuteProduction()` - Execute the "production" labeled version
+  - `PromoteToProduction()` - Move production label to specific version
+  - `GetProduction()` - Get template with production label
+  - `GetByLabel()` - Get template by any label
+  - `ListByStatus()` - Query templates by deployment status
+- **Storage Interface Extensions**:
+  - `LabelStorage` interface for label operations
+  - `StatusStorage` interface for status management
+  - `ExtendedTemplateStorage` combining all storage interfaces
+- **Version History Enhancement**:
+  - Labels displayed in version history
+  - Production version tracking
+  - Status tracking per version
+
+#### Storage Updates
+- Memory, Filesystem, and PostgreSQL storage all implement `ExtendedTemplateStorage`
+- PostgreSQL Migration V2: Added `status` column and `prompty_template_labels` table
+- PostgreSQL Migration V3: Added trigger for automatic label cleanup on template deletion
+- Label cleanup on template deletion (prevents orphaned labels)
+- AssignedAt and AssignedBy tracking for label audit trails
+
+### Changed
+- `RollbackToVersion()` now creates rolled-back version with `draft` status (requires review before activation)
+- `CloneVersion()` now creates cloned template with `draft` status (requires customization before activation)
+- Default status for new templates is `active` (not `draft`) to maintain backward compatibility
+
+### Technical Details
+- All storage backends implement LabelStorage and StatusStorage interfaces
+- Thread-safe label operations with proper locking
+- Label validation with regex pattern `^[a-z][a-z0-9_-]*$`
+- Maximum label length: 64 characters
+- Comprehensive E2E tests for all storage backends
+- Zero magic strings - all constants in prompty.constants.go
+
 ## [1.4.0] - Unreleased
 
 ### Added

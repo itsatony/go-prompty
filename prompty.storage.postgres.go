@@ -172,6 +172,11 @@ func (s *PostgresStorage) migrationsTableName() string {
 	return s.config.TablePrefix + "schema_migrations"
 }
 
+// labelsTableName returns the labels table name with prefix.
+func (s *PostgresStorage) labelsTableName() string {
+	return s.config.TablePrefix + "template_labels"
+}
+
 // Get retrieves the latest version of a template by name.
 func (s *PostgresStorage) Get(ctx context.Context, name string) (*StoredTemplate, error) {
 	if err := ctx.Err(); err != nil {
@@ -189,7 +194,7 @@ func (s *PostgresStorage) Get(ctx context.Context, name string) (*StoredTemplate
 	defer cancel()
 
 	query := fmt.Sprintf(`
-		SELECT id, name, source, version, metadata, inference_config,
+		SELECT id, name, source, version, status, metadata, inference_config,
 		       created_at, updated_at, created_by, tenant_id, tags
 		FROM %s
 		WHERE name = $1
@@ -229,7 +234,7 @@ func (s *PostgresStorage) GetByID(ctx context.Context, id TemplateID) (*StoredTe
 	defer cancel()
 
 	query := fmt.Sprintf(`
-		SELECT id, name, source, version, metadata, inference_config,
+		SELECT id, name, source, version, status, metadata, inference_config,
 		       created_at, updated_at, created_by, tenant_id, tags
 		FROM %s
 		WHERE id = $1`, s.tableName())
@@ -267,7 +272,7 @@ func (s *PostgresStorage) GetVersion(ctx context.Context, name string, version i
 	defer cancel()
 
 	query := fmt.Sprintf(`
-		SELECT id, name, source, version, metadata, inference_config,
+		SELECT id, name, source, version, status, metadata, inference_config,
 		       created_at, updated_at, created_by, tenant_id, tags
 		FROM %s
 		WHERE name = $1 AND version = $2`, s.tableName())
@@ -342,6 +347,12 @@ func (s *PostgresStorage) Save(ctx context.Context, tmpl *StoredTemplate) error 
 	now := time.Now()
 	newID := generateTemplateID()
 
+	// Determine status - default to active if not specified
+	status := tmpl.Status
+	if status == "" {
+		status = DeploymentStatusActive
+	}
+
 	// Serialize JSONB fields
 	metadataJSON, err := json.Marshal(tmpl.Metadata)
 	if err != nil {
@@ -376,13 +387,13 @@ func (s *PostgresStorage) Save(ctx context.Context, tmpl *StoredTemplate) error 
 	// Insert template
 	insertQuery := fmt.Sprintf(`
 		INSERT INTO %s
-		(id, name, source, version, metadata, inference_config,
+		(id, name, source, version, status, metadata, inference_config,
 		 created_at, updated_at, created_by, tenant_id, tags)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		s.tableName())
 
 	_, err = tx.ExecContext(ctx, insertQuery,
-		string(newID), tmpl.Name, tmpl.Source, nextVersion,
+		string(newID), tmpl.Name, tmpl.Source, nextVersion, string(status),
 		metadataJSON, inferenceConfigJSON,
 		now, now, nullString(tmpl.CreatedBy), nullString(tmpl.TenantID), tagsJSON)
 	if err != nil {
@@ -405,6 +416,7 @@ func (s *PostgresStorage) Save(ctx context.Context, tmpl *StoredTemplate) error 
 	// Update input template with generated values
 	tmpl.ID = newID
 	tmpl.Version = nextVersion
+	tmpl.Status = status
 	tmpl.CreatedAt = now
 	tmpl.UpdatedAt = now
 
@@ -554,6 +566,21 @@ func (s *PostgresStorage) List(ctx context.Context, query *TemplateQuery) ([]*St
 		argIdx++
 	}
 
+	// Add status filter
+	if len(query.Statuses) > 0 {
+		placeholders := make([]string, len(query.Statuses))
+		for i, st := range query.Statuses {
+			placeholders[i] = fmt.Sprintf("$%d", argIdx)
+			args = append(args, string(st))
+			argIdx++
+		}
+		conditions = append(conditions, fmt.Sprintf("status IN (%s)", strings.Join(placeholders, ", ")))
+	} else if query.Status != "" {
+		conditions = append(conditions, fmt.Sprintf("status = $%d", argIdx))
+		args = append(args, string(query.Status))
+		// argIdx not needed after this point
+	}
+
 	// Build WHERE clause
 	whereClause := ""
 	if len(conditions) > 0 {
@@ -564,7 +591,7 @@ func (s *PostgresStorage) List(ctx context.Context, query *TemplateQuery) ([]*St
 	var sqlQuery string
 	if query.IncludeAllVersions {
 		sqlQuery = fmt.Sprintf(`
-			SELECT id, name, source, version, metadata, inference_config,
+			SELECT id, name, source, version, status, metadata, inference_config,
 			       created_at, updated_at, created_by, tenant_id, tags
 			FROM %s
 			%s
@@ -573,7 +600,7 @@ func (s *PostgresStorage) List(ctx context.Context, query *TemplateQuery) ([]*St
 	} else {
 		// Only latest version per name using DISTINCT ON
 		sqlQuery = fmt.Sprintf(`
-			SELECT DISTINCT ON (name) id, name, source, version, metadata, inference_config,
+			SELECT DISTINCT ON (name) id, name, source, version, status, metadata, inference_config,
 			       created_at, updated_at, created_by, tenant_id, tags
 			FROM %s
 			%s
@@ -882,6 +909,69 @@ func (s *PostgresStorage) getMigrations() []postgresMigration {
 				s.config.TablePrefix+"templates",
 			),
 		},
+		{
+			Version:     2,
+			Description: "Add deployment status and labels support",
+			SQL: fmt.Sprintf(`
+				-- Add status column to templates table
+				ALTER TABLE %s
+				ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';
+
+				-- Create index on status
+				CREATE INDEX IF NOT EXISTS idx_%s_status ON %s(status);
+
+				-- Create labels table
+				CREATE TABLE IF NOT EXISTS %s (
+					template_name VARCHAR(255) NOT NULL,
+					label         VARCHAR(64) NOT NULL,
+					version       INTEGER NOT NULL,
+					assigned_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+					assigned_by   VARCHAR(255),
+					tenant_id     VARCHAR(255),
+					PRIMARY KEY (template_name, label)
+				);
+
+				-- Create indexes for labels table
+				CREATE INDEX IF NOT EXISTS idx_%s_version
+				ON %s(template_name, version);
+
+				CREATE INDEX IF NOT EXISTS idx_%s_tenant
+				ON %s(tenant_id) WHERE tenant_id IS NOT NULL;
+			`,
+				s.tableName(),
+				s.config.TablePrefix+"templates", s.tableName(),
+				s.labelsTableName(),
+				s.config.TablePrefix+"template_labels", s.labelsTableName(),
+				s.config.TablePrefix+"template_labels", s.labelsTableName(),
+			),
+		},
+		{
+			Version:     3,
+			Description: "Add label cleanup on template deletion",
+			SQL: fmt.Sprintf(`
+				-- Add trigger function to clean up labels when templates are deleted
+				CREATE OR REPLACE FUNCTION %s_cleanup_labels()
+				RETURNS TRIGGER AS $$
+				BEGIN
+					DELETE FROM %s WHERE template_name = OLD.name AND version = OLD.version;
+					RETURN OLD;
+				END;
+				$$ LANGUAGE plpgsql;
+
+				-- Create trigger on template deletion
+				DROP TRIGGER IF EXISTS %s_cleanup_labels_trigger ON %s;
+				CREATE TRIGGER %s_cleanup_labels_trigger
+					BEFORE DELETE ON %s
+					FOR EACH ROW
+					EXECUTE FUNCTION %s_cleanup_labels();
+			`,
+				s.config.TablePrefix+"template_labels",
+				s.labelsTableName(),
+				s.config.TablePrefix+"template_labels", s.tableName(),
+				s.config.TablePrefix+"template_labels", s.tableName(),
+				s.config.TablePrefix+"template_labels",
+			),
+		},
 	}
 }
 
@@ -892,6 +982,7 @@ func (s *PostgresStorage) scanTemplate(row *sql.Row) (*StoredTemplate, error) {
 		name             string
 		source           string
 		version          int
+		status           sql.NullString
 		metadataJSON     []byte
 		inferenceJSON    sql.NullString
 		createdAt        time.Time
@@ -901,13 +992,13 @@ func (s *PostgresStorage) scanTemplate(row *sql.Row) (*StoredTemplate, error) {
 		tagsJSON         []byte
 	)
 
-	err := row.Scan(&id, &name, &source, &version, &metadataJSON, &inferenceJSON,
+	err := row.Scan(&id, &name, &source, &version, &status, &metadataJSON, &inferenceJSON,
 		&createdAt, &updatedAt, &createdBy, &tenantID, &tagsJSON)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.unmarshalTemplate(id, name, source, version, metadataJSON, inferenceJSON,
+	return s.unmarshalTemplate(id, name, source, version, status, metadataJSON, inferenceJSON,
 		createdAt, updatedAt, createdBy, tenantID, tagsJSON)
 }
 
@@ -918,6 +1009,7 @@ func (s *PostgresStorage) scanTemplateRow(rows *sql.Rows) (*StoredTemplate, erro
 		name             string
 		source           string
 		version          int
+		status           sql.NullString
 		metadataJSON     []byte
 		inferenceJSON    sql.NullString
 		createdAt        time.Time
@@ -927,19 +1019,19 @@ func (s *PostgresStorage) scanTemplateRow(rows *sql.Rows) (*StoredTemplate, erro
 		tagsJSON         []byte
 	)
 
-	err := rows.Scan(&id, &name, &source, &version, &metadataJSON, &inferenceJSON,
+	err := rows.Scan(&id, &name, &source, &version, &status, &metadataJSON, &inferenceJSON,
 		&createdAt, &updatedAt, &createdBy, &tenantID, &tagsJSON)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.unmarshalTemplate(id, name, source, version, metadataJSON, inferenceJSON,
+	return s.unmarshalTemplate(id, name, source, version, status, metadataJSON, inferenceJSON,
 		createdAt, updatedAt, createdBy, tenantID, tagsJSON)
 }
 
 // unmarshalTemplate converts scanned values into a StoredTemplate.
 func (s *PostgresStorage) unmarshalTemplate(id, name, source string, version int,
-	metadataJSON []byte, inferenceJSON sql.NullString,
+	status sql.NullString, metadataJSON []byte, inferenceJSON sql.NullString,
 	createdAt, updatedAt time.Time, createdBy, tenantID sql.NullString,
 	tagsJSON []byte) (*StoredTemplate, error) {
 
@@ -950,6 +1042,11 @@ func (s *PostgresStorage) unmarshalTemplate(id, name, source string, version int
 		Version:   version,
 		CreatedAt: createdAt,
 		UpdatedAt: updatedAt,
+	}
+
+	// Handle status
+	if status.Valid && status.String != "" {
+		tmpl.Status = DeploymentStatus(status.String)
 	}
 
 	// Unmarshal metadata
@@ -993,3 +1090,345 @@ func nullString(s string) sql.NullString {
 	}
 	return sql.NullString{String: s, Valid: true}
 }
+
+// -----------------------------------------------------------------------------
+// LabelStorage Implementation
+// -----------------------------------------------------------------------------
+
+// SetLabel assigns a label to a specific template version.
+func (s *PostgresStorage) SetLabel(ctx context.Context, templateName, label string, version int, assignedBy string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Validate label
+	if err := ValidateLabel(label); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return NewStorageClosedError()
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.config.QueryTimeout)
+	defer cancel()
+
+	// Begin transaction with SERIALIZABLE isolation
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return &StorageError{
+			Message: ErrMsgPostgresTransactionFailed,
+			Name:    templateName,
+			Cause:   err,
+		}
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Verify template version exists
+	var exists bool
+	err = tx.QueryRowContext(ctx,
+		fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM %s WHERE name = $1 AND version = $2)", s.tableName()),
+		templateName, version).Scan(&exists)
+	if err != nil {
+		return &StorageError{Message: ErrMsgPostgresQueryFailed, Name: templateName, Cause: err}
+	}
+	if !exists {
+		return NewStorageVersionNotFoundError(templateName, version)
+	}
+
+	// Upsert label (insert or update)
+	upsertQuery := fmt.Sprintf(`
+		INSERT INTO %s (template_name, label, version, assigned_at, assigned_by)
+		VALUES ($1, $2, $3, NOW(), $4)
+		ON CONFLICT (template_name, label)
+		DO UPDATE SET version = $3, assigned_at = NOW(), assigned_by = $4`,
+		s.labelsTableName())
+
+	_, err = tx.ExecContext(ctx, upsertQuery, templateName, label, version, nullString(assignedBy))
+	if err != nil {
+		return &StorageError{Message: ErrMsgPostgresQueryFailed, Name: templateName, Cause: err}
+	}
+
+	return tx.Commit()
+}
+
+// RemoveLabel removes a label from a template.
+func (s *PostgresStorage) RemoveLabel(ctx context.Context, templateName, label string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return NewStorageClosedError()
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.config.QueryTimeout)
+	defer cancel()
+
+	query := fmt.Sprintf("DELETE FROM %s WHERE template_name = $1 AND label = $2", s.labelsTableName())
+	result, err := s.db.ExecContext(ctx, query, templateName, label)
+	if err != nil {
+		return &StorageError{Message: ErrMsgPostgresQueryFailed, Name: templateName, Cause: err}
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return &StorageError{Message: ErrMsgPostgresQueryFailed, Name: templateName, Cause: err}
+	}
+
+	if rowsAffected == 0 {
+		return NewStorageLabelNotFoundError(templateName, label)
+	}
+
+	return nil
+}
+
+// GetByLabel retrieves a template by its label.
+func (s *PostgresStorage) GetByLabel(ctx context.Context, templateName, label string) (*StoredTemplate, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, NewStorageClosedError()
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.config.QueryTimeout)
+	defer cancel()
+
+	// Get version from label
+	var version int
+	err := s.db.QueryRowContext(ctx,
+		fmt.Sprintf("SELECT version FROM %s WHERE template_name = $1 AND label = $2", s.labelsTableName()),
+		templateName, label).Scan(&version)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, NewStorageLabelNotFoundError(templateName, label)
+		}
+		return nil, &StorageError{Message: ErrMsgPostgresQueryFailed, Name: templateName, Cause: err}
+	}
+
+	// Get template by version
+	query := fmt.Sprintf(`
+		SELECT id, name, source, version, status, metadata, inference_config,
+		       created_at, updated_at, created_by, tenant_id, tags
+		FROM %s
+		WHERE name = $1 AND version = $2`, s.tableName())
+
+	row := s.db.QueryRowContext(ctx, query, templateName, version)
+	return s.scanTemplate(row)
+}
+
+// ListLabels returns all labels for a template.
+func (s *PostgresStorage) ListLabels(ctx context.Context, templateName string) ([]*TemplateLabel, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, NewStorageClosedError()
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.config.QueryTimeout)
+	defer cancel()
+
+	query := fmt.Sprintf(`
+		SELECT template_name, label, version, assigned_at, assigned_by
+		FROM %s
+		WHERE template_name = $1
+		ORDER BY label`, s.labelsTableName())
+
+	rows, err := s.db.QueryContext(ctx, query, templateName)
+	if err != nil {
+		return nil, &StorageError{Message: ErrMsgPostgresQueryFailed, Name: templateName, Cause: err}
+	}
+	defer rows.Close()
+
+	var results []*TemplateLabel
+	for rows.Next() {
+		var (
+			name       string
+			label      string
+			version    int
+			assignedAt time.Time
+			assignedBy sql.NullString
+		)
+
+		if err := rows.Scan(&name, &label, &version, &assignedAt, &assignedBy); err != nil {
+			return nil, &StorageError{Message: ErrMsgPostgresScanFailed, Cause: err}
+		}
+
+		tl := &TemplateLabel{
+			TemplateName: name,
+			Label:        label,
+			Version:      version,
+			AssignedAt:   assignedAt,
+		}
+		if assignedBy.Valid {
+			tl.AssignedBy = assignedBy.String
+		}
+		results = append(results, tl)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, &StorageError{Message: ErrMsgPostgresQueryFailed, Cause: err}
+	}
+
+	if results == nil {
+		results = []*TemplateLabel{}
+	}
+
+	return results, nil
+}
+
+// GetVersionLabels returns all labels assigned to a specific version.
+func (s *PostgresStorage) GetVersionLabels(ctx context.Context, templateName string, version int) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, NewStorageClosedError()
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.config.QueryTimeout)
+	defer cancel()
+
+	query := fmt.Sprintf(`
+		SELECT label
+		FROM %s
+		WHERE template_name = $1 AND version = $2
+		ORDER BY label`, s.labelsTableName())
+
+	rows, err := s.db.QueryContext(ctx, query, templateName, version)
+	if err != nil {
+		return nil, &StorageError{Message: ErrMsgPostgresQueryFailed, Name: templateName, Cause: err}
+	}
+	defer rows.Close()
+
+	var results []string
+	for rows.Next() {
+		var label string
+		if err := rows.Scan(&label); err != nil {
+			return nil, &StorageError{Message: ErrMsgPostgresScanFailed, Cause: err}
+		}
+		results = append(results, label)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, &StorageError{Message: ErrMsgPostgresQueryFailed, Cause: err}
+	}
+
+	if results == nil {
+		results = []string{}
+	}
+
+	return results, nil
+}
+
+// -----------------------------------------------------------------------------
+// StatusStorage Implementation
+// -----------------------------------------------------------------------------
+
+// SetStatus updates the deployment status of a specific version.
+func (s *PostgresStorage) SetStatus(ctx context.Context, templateName string, version int, status DeploymentStatus, changedBy string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Validate status
+	if !status.IsValid() {
+		return NewInvalidDeploymentStatusError(string(status))
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return NewStorageClosedError()
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.config.QueryTimeout)
+	defer cancel()
+
+	// Begin transaction
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return &StorageError{Message: ErrMsgPostgresTransactionFailed, Name: templateName, Cause: err}
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Get current status
+	var currentStatus sql.NullString
+	err = tx.QueryRowContext(ctx,
+		fmt.Sprintf("SELECT status FROM %s WHERE name = $1 AND version = $2", s.tableName()),
+		templateName, version).Scan(&currentStatus)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return NewStorageVersionNotFoundError(templateName, version)
+		}
+		return &StorageError{Message: ErrMsgPostgresQueryFailed, Name: templateName, Cause: err}
+	}
+
+	// Check if current status is archived (terminal state)
+	if currentStatus.Valid && currentStatus.String == string(DeploymentStatusArchived) {
+		return NewArchivedVersionError(templateName, version)
+	}
+
+	// Validate status transition
+	if currentStatus.Valid && currentStatus.String != "" {
+		from := DeploymentStatus(currentStatus.String)
+		if !CanTransitionStatus(from, status) {
+			return NewInvalidStatusTransitionError(from, status)
+		}
+	}
+
+	// Update status
+	updateQuery := fmt.Sprintf(`
+		UPDATE %s
+		SET status = $1, updated_at = NOW()
+		WHERE name = $2 AND version = $3`, s.tableName())
+
+	_, err = tx.ExecContext(ctx, updateQuery, string(status), templateName, version)
+	if err != nil {
+		return &StorageError{Message: ErrMsgPostgresQueryFailed, Name: templateName, Cause: err}
+	}
+
+	return tx.Commit()
+}
+
+// ListByStatus returns templates matching the given deployment status.
+func (s *PostgresStorage) ListByStatus(ctx context.Context, status DeploymentStatus, query *TemplateQuery) ([]*StoredTemplate, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Create a query with the status filter
+	if query == nil {
+		query = &TemplateQuery{}
+	}
+
+	// Create a copy of query with status set
+	queryCopy := *query
+	queryCopy.Status = status
+
+	return s.List(ctx, &queryCopy)
+}
+
+// Ensure PostgresStorage implements ExtendedTemplateStorage
+var _ ExtendedTemplateStorage = (*PostgresStorage)(nil)
