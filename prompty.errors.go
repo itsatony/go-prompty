@@ -91,7 +91,7 @@ const (
 	ErrMsgEnvVarNotFound = "environment variable not found"
 	ErrMsgEnvVarRequired = "required environment variable not set"
 
-	// Config block messages
+	// Config block messages (legacy JSON - kept for backward compatibility)
 	ErrMsgConfigBlockExtract    = "failed to extract config block"
 	ErrMsgConfigBlockParse      = "failed to parse config block JSON"
 	ErrMsgConfigBlockInvalid    = "invalid config block format"
@@ -99,6 +99,21 @@ const (
 	ErrMsgInputValidationFailed = "input validation failed"
 	ErrMsgRequiredInputMissing  = "required input missing"
 	ErrMsgInputTypeMismatch     = "input type mismatch"
+
+	// YAML frontmatter messages
+	ErrMsgFrontmatterExtract       = "failed to extract YAML frontmatter"
+	ErrMsgFrontmatterParse         = "failed to parse YAML frontmatter"
+	ErrMsgFrontmatterInvalid       = "invalid YAML frontmatter format"
+	ErrMsgFrontmatterUnclosed      = "YAML frontmatter not properly closed"
+	ErrMsgLegacyJSONConfigDetected = "legacy JSON config block detected - please migrate to YAML frontmatter with --- delimiters"
+
+	// Message tag messages
+	ErrMsgMessageMissingRole      = "missing required 'role' attribute"
+	ErrMsgMessageInvalidRole      = "invalid role - must be system, user, assistant, or tool"
+	ErrMsgMessageNestedNotAllowed = "nested message tags are not allowed"
+
+	// YAML frontmatter size limits
+	ErrMsgFrontmatterTooLarge = "YAML frontmatter exceeds maximum size limit"
 )
 
 // Error code constants for categorization
@@ -322,4 +337,31 @@ func NewInputValidationError(inputName, reason string) error {
 func NewRequiredInputMissingError(inputName string) error {
 	return cuserr.NewValidationError(ErrCodeConfig, ErrMsgRequiredInputMissing).
 		WithMetadata(MetaKeyInputName, inputName)
+}
+
+// NewFrontmatterError creates an error for YAML frontmatter extraction failures
+func NewFrontmatterError(msg string, pos Position, cause error) error {
+	var err *cuserr.CustomError
+	if cause != nil {
+		err = cuserr.WrapStdError(cause, ErrCodeConfig, msg)
+	} else {
+		err = cuserr.NewValidationError(ErrCodeConfig, msg)
+	}
+	return err.
+		WithMetadata(MetaKeyLine, strconv.Itoa(pos.Line)).
+		WithMetadata(MetaKeyColumn, strconv.Itoa(pos.Column)).
+		WithMetadata(MetaKeyOffset, strconv.Itoa(pos.Offset))
+}
+
+// NewFrontmatterParseError creates an error for YAML frontmatter parsing failures
+func NewFrontmatterParseError(cause error) error {
+	return cuserr.WrapStdError(cause, ErrCodeConfig, ErrMsgFrontmatterParse)
+}
+
+// NewMessageTagError creates an error for message tag validation failures
+func NewMessageTagError(msg string, tagPos Position) error {
+	return cuserr.NewValidationError(ErrCodeValidation, msg).
+		WithMetadata(MetaKeyTag, TagNameMessage).
+		WithMetadata(MetaKeyLine, strconv.Itoa(tagPos.Line)).
+		WithMetadata(MetaKeyColumn, strconv.Itoa(tagPos.Column))
 }

@@ -83,6 +83,7 @@ const (
 	CharSpace        = ' '
 	CharTab          = '\t'
 	CharCarriageRet  = '\r'
+	CharNullByte     = "\x00" // String for use with strings.ReplaceAll (security: marker sanitization)
 )
 
 // String constants for delimiter matching
@@ -155,10 +156,11 @@ const (
 	TagNameCase        = "prompty.case"        // Phase 5
 	TagNameCaseDefault = "prompty.casedefault" // Phase 5
 	TagNameEnv         = "prompty.env"         // Environment variable resolver
-	TagNameConfig      = "prompty.config"      // Inference configuration block
+	TagNameConfig      = "prompty.config"      // Legacy inference configuration block (JSON)
 	TagNameExtends     = "prompty.extends"     // Template inheritance - extends parent
 	TagNameBlock       = "prompty.block"       // Template inheritance - overridable block
 	TagNameParent      = "prompty.parent"      // Template inheritance - call parent block content
+	// TagNameMessage is defined separately in the message tag constants section
 )
 
 // Attribute name constants
@@ -405,12 +407,64 @@ const (
 	MetaKeyEnvVar = "env_var"
 )
 
-// Error messages for config block
+// Error messages for config block (legacy JSON - kept for migration hints)
 const (
 	ErrMsgConfigBlockExtract  = "failed to extract config block"
 	ErrMsgConfigBlockParse    = "failed to parse config block JSON"
 	ErrMsgConfigBlockInvalid  = "invalid config block format"
 	ErrMsgConfigBlockUnclosed = "config block not properly closed"
+)
+
+// YAML frontmatter constants
+const (
+	// YAMLFrontmatterDelimiter is the standard YAML frontmatter delimiter
+	YAMLFrontmatterDelimiter = "---"
+	// YAMLFrontmatterDelimiterWithNewline is the delimiter followed by newline
+	YAMLFrontmatterDelimiterWithNewline = "---\n"
+	// YAMLFrontmatterDelimiterWithCRLF is the delimiter followed by CRLF
+	YAMLFrontmatterDelimiterWithCRLF = "---\r\n"
+)
+
+// Error messages for YAML frontmatter
+const (
+	ErrMsgFrontmatterExtract       = "failed to extract YAML frontmatter"
+	ErrMsgFrontmatterParse         = "failed to parse YAML frontmatter"
+	ErrMsgFrontmatterInvalid       = "invalid YAML frontmatter format"
+	ErrMsgFrontmatterUnclosed      = "YAML frontmatter not properly closed"
+	ErrMsgFrontmatterNotAtStart    = "YAML frontmatter must be at start of template"
+	ErrMsgLegacyJSONConfigDetected = "legacy JSON config block detected - please migrate to YAML frontmatter with --- delimiters"
+)
+
+// Message tag constants
+const (
+	TagNameMessage = "prompty.message"
+)
+
+// Message role constants
+const (
+	RoleSystem    = "system"
+	RoleUser      = "user"
+	RoleAssistant = "assistant"
+	RoleTool      = "tool"
+)
+
+// Message attribute constants
+const (
+	AttrRole  = "role"
+	AttrCache = "cache"
+)
+
+// Error messages for message tag
+const (
+	ErrMsgMessageMissingRole   = "missing required 'role' attribute"
+	ErrMsgMessageInvalidRole   = "invalid role - must be system, user, assistant, or tool"
+	ErrMsgMessageNestedNotAllowed = "nested message tags are not allowed"
+)
+
+// Log messages for message tag
+const (
+	LogMsgMessageExtracted = "message extracted"
+	LogMsgMessageRole      = "message_role"
 )
 
 // Error messages for template inheritance

@@ -1,17 +1,22 @@
 // Package main demonstrates go-prompty inference configuration.
 //
 // This example shows how to:
-// - Parse templates with embedded config blocks
+// - Parse templates with YAML frontmatter configuration
 // - Access model configuration and parameters
 // - Validate inputs against schemas
 // - Use environment variables in config
-// - Work with sample data
+// - Work with message tags for conversations
+// - Extract messages for LLM API calls
+// - Use response_format for structured outputs (v1.4.0+)
+// - Use tools/function calling (v1.4.0+)
+// - Configure retry and cache behavior (v1.4.0+)
 package main
 
 import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/itsatony/go-prompty"
 )
@@ -27,54 +32,60 @@ func main() {
 		return
 	}
 
-	// Template with full inference configuration
-	// Note: In JSON strings within config blocks, use single quotes for prompty tag attributes
-	// to avoid JSON escaping issues, or properly escape double quotes.
-	source := `{~prompty.config~}
-{
-  "name": "customer-support-agent",
-  "description": "Handles customer inquiries with empathetic responses",
-  "version": "1.2.0",
-  "authors": ["support-team@example.com"],
-  "tags": ["production", "customer-service"],
-  "model": {
-    "api": "chat",
-    "provider": "openai",
-    "name": "{~prompty.env name='MODEL_NAME' default='gpt-4' /~}",
-    "parameters": {
-      "temperature": 0.7,
-      "max_tokens": 2048,
-      "top_p": 0.9
-    }
-  },
-  "inputs": {
-    "customer_name": {"type": "string", "required": true, "description": "Customer's name"},
-    "query": {"type": "string", "required": true, "description": "Customer's question"},
-    "priority": {"type": "string", "required": false, "description": "Request priority"}
-  },
-  "outputs": {
-    "response": {"type": "string", "description": "Support response"}
-  },
-  "sample": {
-    "customer_name": "Alice",
-    "query": "How do I reset my password?",
-    "priority": "normal"
-  }
-}
-{~/prompty.config~}
-Hello {~prompty.var name="customer_name" /~},
+	// Template with full YAML frontmatter configuration
+	// Note: Use single quotes for YAML values containing prompty tags
+	// to avoid escaping issues with double-quoted strings
+	source := `---
+name: customer-support-agent
+description: Handles customer inquiries with empathetic responses
+version: 1.4.0
+authors:
+  - support-team@example.com
+tags:
+  - production
+  - customer-service
+model:
+  api: chat
+  provider: openai
+  name: '{~prompty.env name="MODEL_NAME" default="gpt-4" /~}'
+  parameters:
+    temperature: 0.7
+    max_tokens: 2048
+    top_p: 0.9
+inputs:
+  customer_name:
+    type: string
+    required: true
+    description: Customer's name
+  query:
+    type: string
+    required: true
+    description: Customer's question
+  priority:
+    type: string
+    required: false
+    description: Request priority
+outputs:
+  response:
+    type: string
+    description: Support response
+sample:
+  customer_name: Alice
+  query: How do I reset my password?
+  priority: normal
+---
+{~prompty.message role="system"~}
+You are a helpful customer support agent. Be empathetic and professional.
+{~/prompty.message~}
 
-Thank you for reaching out. I understand you need help with:
-{~prompty.var name="query" /~}
+{~prompty.message role="user"~}
+Customer: {~prompty.var name="customer_name" /~}
+Query: {~prompty.var name="query" /~}
 
 {~prompty.if eval="priority == 'high'"~}
-I'm treating this as a priority request and will ensure quick resolution.
-{~prompty.else~}
-I'll do my best to help you today.
+Note: This is a high-priority request requiring immediate attention.
 {~/prompty.if~}
-
-Best regards,
-Customer Support Team`
+{~/prompty.message~}`
 
 	// Parse template
 	tmpl, err := engine.Parse(source)
@@ -156,14 +167,17 @@ Customer Support Team`
 		}
 		fmt.Println("Sample data validation: PASSED")
 
-		// Execute template
-		result, err := tmpl.Execute(context.Background(), sample)
+		// Execute and extract messages
+		messages, err := tmpl.ExecuteAndExtractMessages(context.Background(), sample)
 		if err != nil {
 			fmt.Println("Execution error:", err)
 			return
 		}
-		fmt.Println("\nRendered output:")
-		fmt.Println(result)
+
+		fmt.Println("\nExtracted messages for LLM API:")
+		for i, msg := range messages {
+			fmt.Printf("  [%d] %s: %s\n", i, msg.Role, truncate(msg.Content, 60))
+		}
 	}
 
 	// Test with high priority data
@@ -179,21 +193,210 @@ Customer Support Team`
 		return
 	}
 
-	result, err := tmpl.Execute(context.Background(), highPriorityData)
+	messages, err := tmpl.ExecuteAndExtractMessages(context.Background(), highPriorityData)
 	if err != nil {
 		fmt.Println("Execution error:", err)
 		return
 	}
-	fmt.Println("Rendered output:")
-	fmt.Println(result)
 
-	// Demonstrate JSON serialization
-	fmt.Println("\n=== JSON Serialization ===")
-	jsonStr, err := config.JSONPretty()
+	fmt.Println("Extracted messages:")
+	for _, msg := range messages {
+		fmt.Printf("  [%s]: %s\n", msg.Role, msg.Content)
+	}
+
+	// Demonstrate YAML serialization
+	fmt.Println("\n=== YAML Serialization ===")
+	yamlStr, err := config.YAML()
 	if err != nil {
-		fmt.Println("JSON error:", err)
+		fmt.Println("YAML error:", err)
 		return
 	}
-	fmt.Println("Config as JSON:")
-	fmt.Println(jsonStr)
+	fmt.Println("Config as YAML:")
+	fmt.Println(yamlStr)
+
+	// Run advanced features demo
+	demonstrateAdvancedFeatures()
+}
+
+// truncate truncates a string to maxLen characters
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+// demonstrateAdvancedFeatures shows v1.4.0 features like response_format, tools, retry, and cache
+func demonstrateAdvancedFeatures() {
+	fmt.Println("\n" + strings.Repeat("=", 60))
+	fmt.Println("=== Advanced v1.4.0 Features Demo ===")
+	fmt.Println(strings.Repeat("=", 60))
+
+	engine, _ := prompty.New()
+
+	// Template demonstrating structured outputs and function calling
+	advancedSource := `---
+name: entity-extractor
+description: Extract structured entities with function calling
+version: 1.4.0
+model:
+  api: chat
+  provider: openai
+  name: gpt-4
+  parameters:
+    temperature: 0
+    max_tokens: 1024
+  response_format:
+    type: json_schema
+    json_schema:
+      name: entities
+      description: Extracted entities from text
+      strict: true
+      schema:
+        type: object
+        properties:
+          people:
+            type: array
+            items:
+              type: string
+          places:
+            type: array
+            items:
+              type: string
+          organizations:
+            type: array
+            items:
+              type: string
+        required:
+          - people
+          - places
+          - organizations
+  tools:
+    - type: function
+      function:
+        name: search_database
+        description: Search for additional entity information
+        parameters:
+          type: object
+          properties:
+            entity_name:
+              type: string
+              description: Name of the entity to search
+            entity_type:
+              type: string
+              enum:
+                - person
+                - place
+                - organization
+          required:
+            - entity_name
+            - entity_type
+        strict: true
+  tool_choice: auto
+  streaming:
+    enabled: false
+  context_window: 8192
+retry:
+  max_attempts: 3
+  backoff: exponential
+cache:
+  system_prompt: true
+  ttl: 3600
+inputs:
+  text:
+    type: string
+    required: true
+    description: Text to extract entities from
+sample:
+  text: John Smith met with Microsoft CEO at New York headquarters.
+---
+{~prompty.message role="system"~}
+You are an entity extraction assistant. Extract all people, places, and organizations.
+Respond ONLY with valid JSON matching the schema.
+{~/prompty.message~}
+
+{~prompty.message role="user"~}
+Extract entities from: {~prompty.var name="text" /~}
+{~/prompty.message~}`
+
+	tmpl, err := engine.Parse(advancedSource)
+	if err != nil {
+		fmt.Println("Failed to parse advanced template:", err)
+		return
+	}
+
+	config := tmpl.InferenceConfig()
+
+	// Demonstrate response_format access
+	fmt.Println("\n--- Response Format ---")
+	if config.HasResponseFormat() {
+		rf := config.GetResponseFormat()
+		fmt.Println("Type:", rf.Type)
+		if rf.JSONSchema != nil {
+			fmt.Println("Schema Name:", rf.JSONSchema.Name)
+			fmt.Println("Schema Strict:", rf.JSONSchema.Strict)
+			fmt.Println("Schema Description:", rf.JSONSchema.Description)
+		}
+	}
+
+	// Demonstrate tools access
+	fmt.Println("\n--- Tools (Function Calling) ---")
+	if config.HasTools() {
+		tools := config.GetTools()
+		for i, tool := range tools {
+			fmt.Printf("Tool %d: %s\n", i+1, tool.Function.Name)
+			fmt.Printf("  Description: %s\n", tool.Function.Description)
+			fmt.Printf("  Strict: %v\n", tool.Function.Strict)
+		}
+	}
+
+	// Demonstrate tool_choice access
+	fmt.Println("\n--- Tool Choice ---")
+	tc := config.GetToolChoice()
+	if tc != nil {
+		fmt.Printf("Tool Choice: %v\n", tc)
+	}
+
+	// Demonstrate streaming access
+	fmt.Println("\n--- Streaming Config ---")
+	if config.HasStreaming() {
+		streaming := config.GetStreaming()
+		fmt.Println("Streaming Enabled:", streaming.Enabled)
+	}
+
+	// Demonstrate context_window access
+	fmt.Println("\n--- Context Window ---")
+	if cw, ok := config.GetContextWindow(); ok {
+		fmt.Println("Context Window:", cw)
+	}
+
+	// Demonstrate retry config
+	fmt.Println("\n--- Retry Config ---")
+	if config.HasRetry() {
+		retry := config.GetRetry()
+		fmt.Println("Max Attempts:", retry.MaxAttempts)
+		fmt.Println("Backoff Strategy:", retry.Backoff)
+	}
+
+	// Demonstrate cache config
+	fmt.Println("\n--- Cache Config ---")
+	if config.HasCache() {
+		cache := config.GetCache()
+		fmt.Println("Cache System Prompt:", cache.SystemPrompt)
+		fmt.Println("Cache TTL:", cache.TTL, "seconds")
+	}
+
+	// Execute with sample data
+	fmt.Println("\n--- Execution with Sample Data ---")
+	sample := config.GetSampleData()
+	messages, err := tmpl.ExecuteAndExtractMessages(context.Background(), sample)
+	if err != nil {
+		fmt.Println("Execution error:", err)
+		return
+	}
+	for _, msg := range messages {
+		fmt.Printf("[%s]: %s\n", msg.Role, truncate(msg.Content, 80))
+	}
+
+	fmt.Println("\n" + strings.Repeat("=", 60))
 }

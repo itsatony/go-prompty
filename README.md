@@ -8,16 +8,21 @@
 [![Test Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen.svg)](https://github.com/itsatony/go-prompty)
 [![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/itsatony/go-prompty/releases/tag/v1.3.0)
 
-```
-{~prompty.config~}
-{"model": {"name": "{~prompty.env name='MODEL' default='gpt-4' /~}", "parameters": {"temperature": 0.7}}}
-{~/prompty.config~}
-
+```yaml
+---
+name: enterprise-assistant
+model:
+  name: '{~prompty.env name="MODEL" default="gpt-4" /~}'
+  parameters:
+    temperature: 0.7
+---
+{~prompty.message role="system"~}
 {~prompty.if eval="user.tier == 'enterprise'"~}
 You are assisting {~prompty.var name="user.company" /~}, an enterprise customer.
 {~prompty.else~}
 You are assisting {~prompty.var name="user.name" default="a user" /~}.
 {~/prompty.if~}
+{~/prompty.message~}
 ```
 
 ## Why go-prompty?
@@ -31,8 +36,9 @@ You are assisting {~prompty.var name="user.name" default="a user" /~}.
 | **Template inheritance** | Base templates with overridable blocks (`extends`/`block`/`parent`) |
 | **Type safety** | Compile-time template validation |
 | **Extensibility** | Plugin architecture for custom tags and functions |
-| **Self-describing** | Embed model configuration with `prompty.config` blocks |
+| **Self-describing** | Embed model configuration with YAML frontmatter |
 | **Environment aware** | Access env vars with `prompty.env` |
+| **Conversation support** | Message tags for chat/LLM API integration |
 | **Production ready** | Access control, multi-tenancy, audit logging |
 
 ## Installation
@@ -224,21 +230,39 @@ Access environment variables with optional defaults.
 | `default` | No | Fallback value if not set |
 | `required` | No | Error if not set (and no default) |
 
-### `prompty.config` - Inference Configuration
+### YAML Frontmatter - Inference Configuration
 
-Embed model configuration at the start of templates. See [Inference Configuration](#inference-configuration) for full details.
+Embed model configuration at the start of templates using YAML frontmatter. See [Inference Configuration](#inference-configuration) for full details.
+
+```yaml
+---
+name: customer-support
+model:
+  name: gpt-4
+  parameters:
+    temperature: 0.7
+    max_tokens: 2048
+---
+```
+
+### `prompty.message` - Conversation Messages
+
+Define messages for chat/LLM API calls:
 
 ```
-{~prompty.config~}
-{
-  "name": "customer-support",
-  "model": {
-    "name": "gpt-4",
-    "parameters": {"temperature": 0.7, "max_tokens": 2048}
-  }
-}
-{~/prompty.config~}
+{~prompty.message role="system"~}
+You are a helpful assistant.
+{~/prompty.message~}
+
+{~prompty.message role="user"~}
+{~prompty.var name="query" /~}
+{~/prompty.message~}
 ```
+
+| Attribute | Required | Description |
+|-----------|----------|-------------|
+| `role` | Yes | Message role: "system", "user", "assistant", "tool" |
+| `cache` | No | Cache hint for this message |
 
 ### `prompty.if` / `prompty.elseif` / `prompty.else` - Conditionals
 
@@ -555,39 +579,45 @@ Expressions are used in `eval` attributes for conditionals and switch/case.
 
 ## Inference Configuration
 
-Templates can embed model configuration using JSON-based config blocks. This makes templates self-describing with model parameters, input/output schemas, and sample data.
+Templates can embed model configuration using YAML frontmatter with `---` delimiters. This makes templates self-describing with model parameters, input/output schemas, and sample data.
 
-### Config Block Format
+### YAML Frontmatter Format
 
+```yaml
+---
+name: customer-support-agent
+description: Handles customer inquiries
+version: 1.0.0
+model:
+  api: chat
+  provider: openai
+  name: '{~prompty.env name="MODEL_NAME" default="gpt-4" /~}'
+  parameters:
+    temperature: 0.7
+    max_tokens: 2048
+    top_p: 0.9
+inputs:
+  customer_name:
+    type: string
+    required: true
+  query:
+    type: string
+    required: true
+sample:
+  customer_name: Alice
+  query: How do I reset my password?
+---
+{~prompty.message role="system"~}
+You are a helpful customer support agent.
+{~/prompty.message~}
+
+{~prompty.message role="user"~}
+Customer: {~prompty.var name="customer_name" /~}
+Query: {~prompty.var name="query" /~}
+{~/prompty.message~}
 ```
-{~prompty.config~}
-{
-  "name": "customer-support-agent",
-  "description": "Handles customer inquiries",
-  "version": "1.0.0",
-  "model": {
-    "api": "chat",
-    "provider": "openai",
-    "name": "{~prompty.env name='MODEL_NAME' default='gpt-4' /~}",
-    "parameters": {
-      "temperature": 0.7,
-      "max_tokens": 2048,
-      "top_p": 0.9
-    }
-  },
-  "inputs": {
-    "customer_name": {"type": "string", "required": true},
-    "query": {"type": "string", "required": true}
-  },
-  "sample": {
-    "customer_name": "Alice",
-    "query": "How do I reset my password?"
-  }
-}
-{~/prompty.config~}
 
-Hello {~prompty.var name="customer_name" /~}!
-```
+**IMPORTANT:** Use YAML single quotes for values containing prompty tags to avoid escaping issues.
 
 ### Accessing Configuration
 
@@ -614,6 +644,20 @@ if tmpl.HasInferenceConfig() {
 }
 ```
 
+### Extracting Messages
+
+Execute and extract structured messages for LLM API calls:
+
+```go
+messages, err := tmpl.ExecuteAndExtractMessages(ctx, data)
+// messages is []prompty.Message{{Role: "system", Content: "..."}, ...}
+
+// Use with your LLM client
+for _, msg := range messages {
+    fmt.Printf("[%s]: %s\n", msg.Role, msg.Content)
+}
+```
+
 ### Model Parameters
 
 | Parameter | Type | Description |
@@ -625,6 +669,8 @@ if tmpl.HasInferenceConfig() {
 | `presence_penalty` | float | Topic penalty (-2.0-2.0) |
 | `stop` | []string | Stop sequences |
 | `seed` | int | Reproducibility seed |
+| `response_format` | object | Structured output format (v1.4.0+) |
+| `tools` | array | Function/tool calling definitions (v1.4.0+) |
 
 **Deep Dive:** See [docs/INFERENCE_CONFIG.md](docs/INFERENCE_CONFIG.md) for complete documentation.
 
@@ -752,7 +798,7 @@ engine, _ := prompty.NewStorageEngine(prompty.StorageEngineConfig{
 // Save with versioning - InferenceConfig automatically extracted
 engine.Save(ctx, &prompty.StoredTemplate{
     Name:   "greeting",
-    Source: `{~prompty.config~}{"model":{"name":"gpt-4"}}{~/prompty.config~}Hello {~prompty.var name="user" /~}!`,
+    Source: "---\nmodel:\n  name: gpt-4\n---\nHello {~prompty.var name=\"user\" /~}!",
     Tags:   []string{"production"},
 })
 

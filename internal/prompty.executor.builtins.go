@@ -166,6 +166,7 @@ func RegisterBuiltins(registry *Registry) {
 	registry.MustRegister(NewRawResolver())
 	registry.MustRegister(NewIncludeResolver())
 	registry.MustRegister(NewEnvResolver())
+	registry.MustRegister(&MessageResolver{})
 }
 
 // BuiltinError represents an error from a built-in resolver.

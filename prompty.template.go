@@ -99,6 +99,37 @@ func (t *Template) HasInferenceConfig() bool {
 	return t.inferenceConfig != nil
 }
 
+// ExecuteAndExtractMessages executes the template and extracts structured messages from the output.
+// This is useful for chat/conversation templates that use {~prompty.message~} tags.
+// Returns the messages array and any error from execution.
+func (t *Template) ExecuteAndExtractMessages(ctx context.Context, data map[string]any) ([]Message, error) {
+	output, err := t.Execute(ctx, data)
+	if err != nil {
+		return nil, err
+	}
+	return ExtractMessagesFromOutput(output), nil
+}
+
+// ExtractMessagesFromOutput parses executed template output and extracts structured messages.
+// Messages are marked by special markers inserted by the prompty.message tag resolver.
+// This is a standalone function for when you already have the executed output.
+func ExtractMessagesFromOutput(output string) []Message {
+	internalMessages := internal.ExtractMessages(output)
+	if internalMessages == nil {
+		return nil
+	}
+
+	messages := make([]Message, len(internalMessages))
+	for i, m := range internalMessages {
+		messages[i] = Message{
+			Role:    m.Role,
+			Content: m.Content,
+			Cache:   m.Cache,
+		}
+	}
+	return messages
+}
+
 // internalAttributesAdapter wraps internal.Attributes to implement Attributes interface
 type internalAttributesAdapter struct {
 	attrs internal.Attributes

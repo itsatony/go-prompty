@@ -420,6 +420,13 @@ func (e *Executor) executeTag(ctx context.Context, tag *TagNode, execCtx Context
 			return "", err
 		}
 		// Combine resolver result with children (resolver result comes first)
+		// For message tags, sanitize content and add the end marker after children
+		if tag.Name == TagNameMessage {
+			// Sanitize content to prevent marker injection attacks
+			// Strip null bytes which are used as marker delimiters
+			childResult = strings.ReplaceAll(childResult, CharNullByte, "")
+			return result + childResult + MessageEndMarker, nil
+		}
 		return result + childResult, nil
 	}
 

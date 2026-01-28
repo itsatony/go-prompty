@@ -62,9 +62,9 @@ func MustNew(opts ...Option) *Engine {
 // Parse parses a template source string and returns a Template.
 // The returned Template can be executed multiple times with different data.
 //
-// If the source contains a config block ({~prompty.config~}...{~/prompty.config~}),
-// it is extracted and parsed as InferenceConfig. The config block must appear
-// at the start of the source (after optional whitespace).
+// If the source contains YAML frontmatter (delimited by --- on separate lines),
+// it is extracted and parsed as InferenceConfig. The frontmatter must appear
+// at the start of the source (after optional whitespace/BOM).
 func (e *Engine) Parse(source string) (*Template, error) {
 	// Create lexer config
 	lexerConfig := internal.LexerConfig{
@@ -86,16 +86,16 @@ func (e *Engine) Parse(source string) (*Template, error) {
 		return nil, NewConfigBlockError(ErrMsgConfigBlockExtract, pos, err)
 	}
 
-	// Parse inference config if config block was found
+	// Parse inference config if YAML frontmatter was found
 	var inferenceConfig *InferenceConfig
-	if configResult.HasConfig && configResult.ConfigJSON != "" {
-		// Resolve environment variables in config JSON before parsing
-		resolvedJSON, err := e.resolveConfigEnvVars(configResult.ConfigJSON)
+	if configResult.HasFrontmatter && configResult.FrontmatterYAML != "" {
+		// Resolve environment variables in YAML before parsing
+		resolvedYAML, err := e.resolveConfigEnvVars(configResult.FrontmatterYAML)
 		if err != nil {
 			return nil, err
 		}
 
-		inferenceConfig, err = ParseInferenceConfig(resolvedJSON)
+		inferenceConfig, err = ParseYAMLInferenceConfig(resolvedYAML)
 		if err != nil {
 			return nil, err
 		}
@@ -123,20 +123,23 @@ func (e *Engine) Parse(source string) (*Template, error) {
 	return newTemplateWithConfig(source, templateBody, ast, e.executor, e.config, e, inferenceConfig), nil
 }
 
-// resolveConfigEnvVars resolves {~prompty.env~} tags in the config JSON.
-// This allows environment variables to be used in config blocks.
-func (e *Engine) resolveConfigEnvVars(configJSON string) (string, error) {
+// resolveConfigEnvVars resolves {~prompty.env~} tags in the YAML frontmatter.
+// This allows environment variables to be used in frontmatter configuration.
+// NOTE: When using prompty tags in YAML strings, use single quotes to avoid
+// escaping issues. YAML double quotes require backslash escaping (e.g., \")
+// which conflicts with prompty tag attribute parsing.
+func (e *Engine) resolveConfigEnvVars(yamlContent string) (string, error) {
 	// If there are no template tags, return as-is
-	if !strings.Contains(configJSON, e.config.openDelim) {
-		return configJSON, nil
+	if !strings.Contains(yamlContent, e.config.openDelim) {
+		return yamlContent, nil
 	}
 
-	// Execute the config JSON as a template to resolve env vars
+	// Execute the YAML content as a template to resolve env vars
 	// We use an empty context since env vars don't need external data
 	ctx := context.Background()
-	result, err := e.Execute(ctx, configJSON, nil)
+	result, err := e.Execute(ctx, yamlContent, nil)
 	if err != nil {
-		return "", NewConfigBlockError(ErrMsgConfigBlockParse, Position{}, err)
+		return "", NewFrontmatterError(ErrMsgFrontmatterParse, Position{}, err)
 	}
 
 	return result, nil

@@ -25,10 +25,31 @@ const (
 	TagNameCase        = "prompty.case"        // Phase 5
 	TagNameCaseDefault = "prompty.casedefault" // Phase 5 - default case in switch
 	TagNameEnv         = "prompty.env"         // Environment variable resolver
-	TagNameConfig      = "prompty.config"      // Inference configuration block
+	TagNameConfig      = "prompty.config"      // Legacy inference configuration block (JSON)
 	TagNameExtends     = "prompty.extends"     // Template inheritance - extends parent
 	TagNameBlock       = "prompty.block"       // Template inheritance - overridable block
 	TagNameParent      = "prompty.parent"      // Template inheritance - call parent block content
+	TagNameMessage     = "prompty.message"     // Conversation message for chat API
+)
+
+// YAML frontmatter constants
+const (
+	// YAMLFrontmatterDelimiter is the standard YAML frontmatter delimiter
+	YAMLFrontmatterDelimiter = "---"
+)
+
+// Message role constants for prompty.message tag
+const (
+	RoleSystem    = "system"
+	RoleUser      = "user"
+	RoleAssistant = "assistant"
+	RoleTool      = "tool"
+)
+
+// Message attribute constants
+const (
+	AttrRole  = "role"
+	AttrCache = "cache"
 )
 
 // Reserved namespace prefix for built-in tags
@@ -107,12 +128,13 @@ func (s ErrorStrategy) String() string {
 
 // Default configuration values
 const (
-	DefaultExecutionTimeout  = 30 * time.Second
-	DefaultResolverTimeout   = 5 * time.Second
-	DefaultFunctionTimeout   = 1 * time.Second
-	DefaultMaxLoopIterations = 10000
-	DefaultMaxDepth          = 10
-	DefaultMaxOutputSize     = 10 * 1024 * 1024 // 10MB
+	DefaultExecutionTimeout   = 30 * time.Second
+	DefaultResolverTimeout    = 5 * time.Second
+	DefaultFunctionTimeout    = 1 * time.Second
+	DefaultMaxLoopIterations  = 10000
+	DefaultMaxDepth           = 10
+	DefaultMaxOutputSize      = 10 * 1024 * 1024 // 10MB
+	DefaultMaxFrontmatterSize = 64 * 1024        // 64KB - DoS protection for YAML frontmatter
 )
 
 // Metadata keys for cuserr.WithMetadata

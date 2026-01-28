@@ -98,6 +98,21 @@ type Resolver interface {
 
 **FuncProvider** — Optional interface for resolvers to register custom functions.
 
+**Message** — Structured message for LLM APIs (extracted from template output):
+```go
+type Message struct {
+    Role    string // "system", "user", "assistant", or "tool"
+    Content string // Message content (trimmed)
+    Cache   bool   // Cache hint for this message
+}
+
+// Template methods for message extraction:
+messages, err := tmpl.ExecuteAndExtractMessages(ctx, data)
+// Or extract from raw output:
+output, _ := tmpl.Execute(ctx, data)
+messages := prompty.ExtractMessagesFromOutput(output)
+```
+
 ## Non-Negotiable Standards
 
 | Rule | Requirement |
@@ -171,6 +186,18 @@ RAW (unparsed):
 COMMENT (removed):
 {~prompty.comment~}removed from output{~/prompty.comment~}
 
+MESSAGE (conversation message for LLM APIs):
+{~prompty.message role="system"~}
+You are a helpful assistant.
+{~/prompty.message~}
+
+{~prompty.message role="user"~}
+{~prompty.var name="query" /~}
+{~/prompty.message~}
+
+Roles: "system", "user", "assistant", "tool"
+Optional cache attribute: cache="true" (for cache hints)
+
 CUSTOM PLUGIN TAG:
 {~UserProfile id="123" fields="name,avatar" /~}
 
@@ -180,6 +207,37 @@ ESCAPE:
 EXPRESSIONS:
 len(items) > 0 && contains(roles, "admin")
 upper(trim(user.name))
+```
+
+### YAML Frontmatter (Inference Configuration)
+
+Templates can include YAML frontmatter for inference configuration:
+
+```yaml
+---
+name: my-template
+model:
+  api: chat
+  name: gpt-4
+  parameters:
+    temperature: 0.7
+inputs:
+  query:
+    type: string
+    required: true
+---
+{~prompty.message role="user"~}
+{~prompty.var name="query" /~}
+{~/prompty.message~}
+```
+
+**Important**: When using prompty tags in YAML values, use single quotes:
+```yaml
+# Correct - single quotes preserve literal content
+name: '{~prompty.env name="MODEL" /~}'
+
+# Wrong - double quotes require escaping which breaks parsing
+name: "{~prompty.env name=\"MODEL\" /~}"
 ```
 
 ### Nested Templates

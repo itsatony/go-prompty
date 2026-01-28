@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - Unreleased
+
+### Added
+
+#### YAML Frontmatter Configuration (replaces JSON config blocks)
+- Standard YAML frontmatter with `---` delimiters for inference configuration
+- Industry-standard format (compatible with Jekyll, Hugo, Microsoft Prompty)
+- Native comment support in configuration
+- Cleaner multiline values with YAML block scalars
+- Environment variable substitution using `{~prompty.env~}` tags in YAML values
+
+#### Conversation Message Support
+- New `prompty.message` tag for LLM conversation messages
+- Supported roles: `system`, `user`, `assistant`, `tool`
+- Optional `cache` attribute for message-level caching hints
+- Full template support inside message blocks (conditionals, loops, variables)
+- `ExecuteAndExtractMessages()` method for structured message extraction
+- Dynamic conversation history via loops around message tags
+
+#### Extended Model Configuration
+- `response_format` - Structured output enforcement with JSON Schema
+- `tools` - Function/tool calling definitions
+- `tool_choice` - Tool selection strategy ("auto", "none", "required")
+- `streaming` - Streaming configuration with enabled flag
+- `context_window` - Token budget hints
+
+#### New Top-Level Configuration
+- `retry` - Retry behavior with max_attempts and backoff strategy
+- `cache` - Caching configuration with system_prompt and TTL settings
+
+### Changed
+- **BREAKING**: JSON `{~prompty.config~}` blocks deprecated in favor of YAML `---` frontmatter
+- Message role validation is case-insensitive (accepts "USER", "System", etc.)
+- Message roles are normalized to lowercase in storage for consistency
+
+### Security
+- Added null byte sanitization to prevent marker injection attacks in message content
+- Added YAML frontmatter size limit (64KB) to prevent DoS attacks
+- Message extraction gracefully handles malformed markers
+
 ## [1.3.0] - 2025-01-05
 
 ### Added

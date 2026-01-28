@@ -9,18 +9,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestE2E_ConfigBlockBasicParsing tests basic config block parsing
-func TestE2E_ConfigBlockBasicParsing(t *testing.T) {
+// TestE2E_FrontmatterBasicParsing tests basic YAML frontmatter parsing
+func TestE2E_FrontmatterBasicParsing(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{
-  "name": "test-template",
-  "description": "A test template",
-  "version": "1.0.0"
-}
-{~/prompty.config~}
+	source := `---
+name: test-template
+description: A test template
+version: 1.0.0
+---
 Hello World!`
 
 	tmpl, err := engine.Parse(source)
@@ -35,34 +33,32 @@ Hello World!`
 	assert.Equal(t, "A test template", config.Description)
 	assert.Equal(t, "1.0.0", config.Version)
 
-	// Template body should be just the content after config block
+	// Template body should be just the content after frontmatter
 	assert.Equal(t, "Hello World!", tmpl.TemplateBody())
 
-	// Source should contain the full template including config block
-	assert.Contains(t, tmpl.Source(), "{~prompty.config~}")
+	// Source should contain the full template including frontmatter
+	assert.Contains(t, tmpl.Source(), "---")
 }
 
-// TestE2E_ConfigBlockWithModel tests config block with model configuration
-func TestE2E_ConfigBlockWithModel(t *testing.T) {
+// TestE2E_FrontmatterWithModel tests frontmatter with model configuration
+func TestE2E_FrontmatterWithModel(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{
-  "name": "chat-template",
-  "model": {
-    "api": "chat",
-    "provider": "openai",
-    "name": "gpt-4",
-    "parameters": {
-      "temperature": 0.7,
-      "max_tokens": 2048,
-      "top_p": 0.9,
-      "stop": ["\n\n", "END"]
-    }
-  }
-}
-{~/prompty.config~}
+	source := `---
+name: chat-template
+model:
+  api: chat
+  provider: openai
+  name: gpt-4
+  parameters:
+    temperature: 0.7
+    max_tokens: 2048
+    top_p: 0.9
+    stop:
+      - "\n\n"
+      - END
+---
 User: {~prompty.var name="query" /~}`
 
 	tmpl, err := engine.Parse(source)
@@ -91,19 +87,19 @@ User: {~prompty.var name="query" /~}`
 	assert.Equal(t, []string{"\n\n", "END"}, config.GetStopSequences())
 }
 
-// TestE2E_ConfigBlockWithVariables tests config block with template variables
-func TestE2E_ConfigBlockWithVariables(t *testing.T) {
+// TestE2E_FrontmatterWithVariables tests frontmatter with template variables
+func TestE2E_FrontmatterWithVariables(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{
-  "name": "dynamic-template",
-  "model": {
-    "name": "{~prompty.var name="model_name" default="gpt-4" /~}"
-  }
-}
-{~/prompty.config~}
+	// IMPORTANT: Use YAML single quotes for strings containing prompty tags
+	// YAML double quotes require backslash escaping (e.g., \") which conflicts
+	// with prompty tag parsing. Single quotes preserve literal characters.
+	source := `---
+name: dynamic-template
+model:
+  name: '{~prompty.var name="model_name" default="gpt-4" /~}'
+---
 Hello {~prompty.var name="user" /~}!`
 
 	tmpl, err := engine.Parse(source)
@@ -123,8 +119,8 @@ Hello {~prompty.var name="user" /~}!`
 	assert.Equal(t, "Hello Alice!", result)
 }
 
-// TestE2E_ConfigBlockWithEnvVars tests config block with environment variables
-func TestE2E_ConfigBlockWithEnvVars(t *testing.T) {
+// TestE2E_FrontmatterWithEnvVars tests frontmatter with environment variables
+func TestE2E_FrontmatterWithEnvVars(t *testing.T) {
 	// Set up test environment variable
 	testAPIKey := "sk-test-key-12345"
 	os.Setenv("TEST_API_KEY", testAPIKey)
@@ -133,12 +129,11 @@ func TestE2E_ConfigBlockWithEnvVars(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{
-  "name": "env-template",
-  "description": "API Key: {~prompty.env name="TEST_API_KEY" /~}"
-}
-{~/prompty.config~}
+	// Use YAML single quotes for strings containing prompty tags
+	source := `---
+name: env-template
+description: 'API Key: {~prompty.env name="TEST_API_KEY" /~}'
+---
 Template content`
 
 	tmpl, err := engine.Parse(source)
@@ -151,19 +146,16 @@ Template content`
 	assert.Equal(t, "API Key: "+testAPIKey, config.Description)
 }
 
-// TestE2E_ConfigBlockTemplateExecution tests that templates with config blocks execute correctly
-func TestE2E_ConfigBlockTemplateExecution(t *testing.T) {
+// TestE2E_FrontmatterTemplateExecution tests that templates with frontmatter execute correctly
+func TestE2E_FrontmatterTemplateExecution(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{
-  "name": "greet-template",
-  "sample": {
-    "name": "World"
-  }
-}
-{~/prompty.config~}
+	source := `---
+name: greet-template
+sample:
+  name: World
+---
 Hello {~prompty.var name="name" /~}!
 
 {~prompty.if eval="context.formal"~}
@@ -198,20 +190,23 @@ How are you?
 	assert.Contains(t, result, "How are you?")
 }
 
-// TestE2E_ConfigBlockInputValidation tests input validation
-func TestE2E_ConfigBlockInputValidation(t *testing.T) {
+// TestE2E_FrontmatterInputValidation tests input validation
+func TestE2E_FrontmatterInputValidation(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{
-  "inputs": {
-    "name": {"type": "string", "required": true},
-    "age": {"type": "number", "required": true},
-    "active": {"type": "boolean", "required": false}
-  }
-}
-{~/prompty.config~}
+	source := `---
+inputs:
+  name:
+    type: string
+    required: true
+  age:
+    type: number
+    required: true
+  active:
+    type: boolean
+    required: false
+---
 Name: {~prompty.var name="name" /~}, Age: {~prompty.var name="age" /~}`
 
 	tmpl, err := engine.Parse(source)
@@ -242,21 +237,20 @@ Name: {~prompty.var name="name" /~}, Age: {~prompty.var name="age" /~}`
 	assert.Error(t, err)
 }
 
-// TestE2E_ConfigBlockSampleData tests sample data extraction
-func TestE2E_ConfigBlockSampleData(t *testing.T) {
+// TestE2E_FrontmatterSampleData tests sample data extraction
+func TestE2E_FrontmatterSampleData(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{
-  "sample": {
-    "user": "Alice",
-    "items": ["apple", "banana"],
-    "count": 42,
-    "active": true
-  }
-}
-{~/prompty.config~}
+	source := `---
+sample:
+  user: Alice
+  items:
+    - apple
+    - banana
+  count: 42
+  active: true
+---
 Template`
 
 	tmpl, err := engine.Parse(source)
@@ -268,12 +262,12 @@ Template`
 
 	sample := config.GetSampleData()
 	assert.Equal(t, "Alice", sample["user"])
-	assert.Equal(t, float64(42), sample["count"]) // JSON numbers are float64
+	assert.Equal(t, 42, sample["count"]) // YAML preserves int
 	assert.Equal(t, true, sample["active"])
 }
 
-// TestE2E_ConfigBlockStorageRoundtrip tests storing and retrieving templates with config
-func TestE2E_ConfigBlockStorageRoundtrip(t *testing.T) {
+// TestE2E_FrontmatterStorageRoundtrip tests storing and retrieving templates with config
+func TestE2E_FrontmatterStorageRoundtrip(t *testing.T) {
 	storage, err := OpenStorage(StorageDriverNameMemory, "")
 	require.NoError(t, err)
 	defer storage.Close()
@@ -287,16 +281,13 @@ func TestE2E_ConfigBlockStorageRoundtrip(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{
-  "name": "stored-template",
-  "version": "1.0.0",
-  "model": {
-    "api": "chat",
-    "name": "gpt-4"
-  }
-}
-{~/prompty.config~}
+	source := `---
+name: stored-template
+version: 1.0.0
+model:
+  api: chat
+  name: gpt-4
+---
 Hello {~prompty.var name="user" /~}!`
 
 	// Save template
@@ -326,8 +317,8 @@ Hello {~prompty.var name="user" /~}!`
 	assert.Equal(t, "Hello Alice!", result)
 }
 
-// TestE2E_NoConfigBlockBackwardCompatible tests that templates without config blocks work
-func TestE2E_NoConfigBlockBackwardCompatible(t *testing.T) {
+// TestE2E_NoFrontmatterBackwardCompatible tests that templates without frontmatter work
+func TestE2E_NoFrontmatterBackwardCompatible(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
@@ -347,47 +338,49 @@ func TestE2E_NoConfigBlockBackwardCompatible(t *testing.T) {
 	assert.Equal(t, "Hello World!", result)
 }
 
-// TestE2E_ConfigBlockMalformedJSON tests error handling for malformed JSON
-func TestE2E_ConfigBlockMalformedJSON(t *testing.T) {
+// TestE2E_FrontmatterMalformedYAML tests error handling for malformed YAML
+func TestE2E_FrontmatterMalformedYAML(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{invalid json}
-{~/prompty.config~}
+	source := `---
+invalid: yaml: content: [
+---
 Template`
 
 	_, err = engine.Parse(source)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), ErrMsgConfigBlockParse)
+	assert.Contains(t, err.Error(), ErrMsgFrontmatterParse)
 }
 
-// TestE2E_ConfigBlockUnclosed tests error handling for unclosed config blocks
-func TestE2E_ConfigBlockUnclosed(t *testing.T) {
+// TestE2E_FrontmatterUnclosed tests error handling for unclosed frontmatter
+func TestE2E_FrontmatterUnclosed(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{"name": "test"}
-Template body without closing tag`
+	source := `---
+name: test
+Template body without closing delimiter`
 
 	_, err = engine.Parse(source)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), ErrMsgConfigBlockExtract)
 }
 
-// TestE2E_ConfigBlockWithAuthors tests config with authors array
-func TestE2E_ConfigBlockWithAuthors(t *testing.T) {
+// TestE2E_FrontmatterWithAuthors tests frontmatter with authors array
+func TestE2E_FrontmatterWithAuthors(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{
-  "name": "team-template",
-  "authors": ["alice@example.com", "bob@example.com"],
-  "tags": ["production", "customer-service"]
-}
-{~/prompty.config~}
+	source := `---
+name: team-template
+authors:
+  - alice@example.com
+  - bob@example.com
+tags:
+  - production
+  - customer-service
+---
 Template`
 
 	tmpl, err := engine.Parse(source)
@@ -400,25 +393,21 @@ Template`
 	assert.Equal(t, []string{"production", "customer-service"}, config.Tags)
 }
 
-// TestE2E_ConfigBlockModelParametersToMap tests model parameters ToMap conversion
-func TestE2E_ConfigBlockModelParametersToMap(t *testing.T) {
+// TestE2E_FrontmatterModelParametersToMap tests model parameters ToMap conversion
+func TestE2E_FrontmatterModelParametersToMap(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{
-  "model": {
-    "parameters": {
-      "temperature": 0.5,
-      "max_tokens": 1024,
-      "top_p": 0.95,
-      "frequency_penalty": 0.1,
-      "presence_penalty": 0.2,
-      "seed": 12345
-    }
-  }
-}
-{~/prompty.config~}
+	source := `---
+model:
+  parameters:
+    temperature: 0.5
+    max_tokens: 1024
+    top_p: 0.95
+    frequency_penalty: 0.1
+    presence_penalty: 0.2
+    seed: 12345
+---
 Template`
 
 	tmpl, err := engine.Parse(source)
@@ -438,19 +427,20 @@ Template`
 	assert.Equal(t, int64(12345), params[ParamKeySeed])
 }
 
-// TestE2E_ConfigBlockWithOutputs tests config with outputs schema
-func TestE2E_ConfigBlockWithOutputs(t *testing.T) {
+// TestE2E_FrontmatterWithOutputs tests frontmatter with outputs schema
+func TestE2E_FrontmatterWithOutputs(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{
-  "outputs": {
-    "response": {"type": "string", "description": "The model response"},
-    "confidence": {"type": "number", "description": "Confidence score"}
-  }
-}
-{~/prompty.config~}
+	source := `---
+outputs:
+  response:
+    type: string
+    description: The model response
+  confidence:
+    type: number
+    description: Confidence score
+---
 Template`
 
 	tmpl, err := engine.Parse(source)
@@ -465,16 +455,14 @@ Template`
 	assert.Equal(t, SchemaTypeNumber, config.Outputs["confidence"].Type)
 }
 
-// TestE2E_ConfigBlockWithLeadingWhitespace tests config block after whitespace
-func TestE2E_ConfigBlockWithLeadingWhitespace(t *testing.T) {
+// TestE2E_FrontmatterWithLeadingWhitespace tests frontmatter after whitespace
+func TestE2E_FrontmatterWithLeadingWhitespace(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `
-
-  {~prompty.config~}
-{"name": "whitespace-test"}
-{~/prompty.config~}
+	source := `  ---
+name: whitespace-test
+---
 Template`
 
 	tmpl, err := engine.Parse(source)
@@ -484,16 +472,16 @@ Template`
 	assert.Equal(t, "whitespace-test", tmpl.InferenceConfig().Name)
 }
 
-// TestE2E_ConfigBlockInMiddleNotExtracted tests that config blocks in middle are not extracted
-func TestE2E_ConfigBlockInMiddleNotExtracted(t *testing.T) {
+// TestE2E_FrontmatterInMiddleNotExtracted tests that frontmatter in middle are not extracted
+func TestE2E_FrontmatterInMiddleNotExtracted(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	// Config block after content should be treated as regular text
+	// Frontmatter after content should be treated as regular text
 	source := `Hello World
-{~prompty.config~}
-{"name": "middle-config"}
-{~/prompty.config~}
+---
+name: middle-config
+---
 More content`
 
 	tmpl, err := engine.Parse(source)
@@ -504,20 +492,19 @@ More content`
 	assert.Equal(t, source, tmpl.TemplateBody())
 }
 
-// TestE2E_ConfigBlockEnvVarWithDefault tests env var with default value
-func TestE2E_ConfigBlockEnvVarWithDefault(t *testing.T) {
+// TestE2E_FrontmatterEnvVarWithDefault tests env var with default value
+func TestE2E_FrontmatterEnvVarWithDefault(t *testing.T) {
 	// Make sure env var is not set
 	os.Unsetenv("MISSING_VAR_FOR_TEST")
 
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{
-  "name": "env-default-test",
-  "description": "{~prompty.env name="MISSING_VAR_FOR_TEST" default="default-value" /~}"
-}
-{~/prompty.config~}
+	// Use YAML single quotes for strings containing prompty tags
+	source := `---
+name: env-default-test
+description: '{~prompty.env name="MISSING_VAR_FOR_TEST" default="default-value" /~}'
+---
 Template`
 
 	tmpl, err := engine.Parse(source)
@@ -533,37 +520,40 @@ func TestE2E_FullPromptyTemplate(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{
-  "name": "customer-support-agent",
-  "description": "Handles customer inquiries with empathetic responses",
-  "version": "1.0.0",
-  "authors": ["support-team@example.com"],
-  "tags": ["production", "customer-service"],
-  "model": {
-    "api": "chat",
-    "provider": "openai",
-    "name": "gpt-4",
-    "parameters": {
-      "temperature": 0.7,
-      "max_tokens": 2048
-    }
-  },
-  "inputs": {
-    "customer_name": {"type": "string", "required": true},
-    "query": {"type": "string", "required": true},
-    "priority": {"type": "string", "required": false}
-  },
-  "outputs": {
-    "response": {"type": "string"}
-  },
-  "sample": {
-    "customer_name": "Alice",
-    "query": "How do I reset my password?",
-    "priority": "normal"
-  }
-}
-{~/prompty.config~}
+	source := `---
+name: customer-support-agent
+description: Handles customer inquiries with empathetic responses
+version: 1.0.0
+authors:
+  - support-team@example.com
+tags:
+  - production
+  - customer-service
+model:
+  api: chat
+  provider: openai
+  name: gpt-4
+  parameters:
+    temperature: 0.7
+    max_tokens: 2048
+inputs:
+  customer_name:
+    type: string
+    required: true
+  query:
+    type: string
+    required: true
+  priority:
+    type: string
+    required: false
+outputs:
+  response:
+    type: string
+sample:
+  customer_name: Alice
+  query: How do I reset my password?
+  priority: normal
+---
 Hello {~prompty.var name="customer_name" /~},
 
 Thank you for reaching out. I understand you need help with: {~prompty.var name="query" /~}
@@ -611,12 +601,10 @@ func TestE2E_InferenceConfigJSON(t *testing.T) {
 	engine, err := New()
 	require.NoError(t, err)
 
-	source := `{~prompty.config~}
-{
-  "name": "json-test",
-  "version": "1.0.0"
-}
-{~/prompty.config~}
+	source := `---
+name: json-test
+version: 1.0.0
+---
 Template`
 
 	tmpl, err := engine.Parse(source)
@@ -633,4 +621,253 @@ Template`
 	require.NoError(t, err)
 	assert.Contains(t, prettyJSON, "\n")
 	assert.Contains(t, prettyJSON, `"name": "json-test"`)
+}
+
+// TestE2E_InferenceConfigYAML tests YAML serialization
+func TestE2E_InferenceConfigYAML(t *testing.T) {
+	engine, err := New()
+	require.NoError(t, err)
+
+	source := `---
+name: yaml-test
+version: 2.0.0
+model:
+  name: gpt-4
+---
+Template`
+
+	tmpl, err := engine.Parse(source)
+	require.NoError(t, err)
+
+	config := tmpl.InferenceConfig()
+	require.NotNil(t, config)
+
+	yamlStr, err := config.YAML()
+	require.NoError(t, err)
+	assert.Contains(t, yamlStr, "name: yaml-test")
+	assert.Contains(t, yamlStr, "version: 2.0.0")
+}
+
+// TestE2E_LegacyJSONConfigBlockError tests that legacy JSON config blocks produce helpful error
+func TestE2E_LegacyJSONConfigBlockError(t *testing.T) {
+	engine, err := New()
+	require.NoError(t, err)
+
+	source := `{~prompty.config~}
+{"name": "test"}
+{~/prompty.config~}
+Template`
+
+	_, err = engine.Parse(source)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "legacy JSON config block detected")
+	assert.Contains(t, err.Error(), "YAML frontmatter")
+}
+
+// TestE2E_FrontmatterWithNewFeatures tests the new features (response_format, tools, etc.)
+func TestE2E_FrontmatterWithNewFeatures(t *testing.T) {
+	engine, err := New()
+	require.NoError(t, err)
+
+	source := `---
+name: advanced-template
+model:
+  api: chat
+  name: gpt-4
+  response_format:
+    type: json_schema
+    json_schema:
+      name: entities
+      strict: true
+      schema:
+        type: object
+        properties:
+          people:
+            type: array
+          places:
+            type: array
+        required:
+          - people
+          - places
+  tools:
+    - type: function
+      function:
+        name: get_weather
+        description: Get current weather
+        parameters:
+          type: object
+          properties:
+            location:
+              type: string
+          required:
+            - location
+        strict: true
+  tool_choice: auto
+  streaming:
+    enabled: true
+  context_window: 8192
+retry:
+  max_attempts: 3
+  backoff: exponential
+cache:
+  system_prompt: true
+  ttl: 3600
+---
+Template`
+
+	tmpl, err := engine.Parse(source)
+	require.NoError(t, err)
+
+	config := tmpl.InferenceConfig()
+	require.NotNil(t, config)
+
+	// Test response format
+	assert.True(t, config.HasResponseFormat())
+	rf := config.GetResponseFormat()
+	assert.Equal(t, "json_schema", rf.Type)
+	assert.NotNil(t, rf.JSONSchema)
+	assert.Equal(t, "entities", rf.JSONSchema.Name)
+	assert.True(t, rf.JSONSchema.Strict)
+
+	// Test tools
+	assert.True(t, config.HasTools())
+	tools := config.GetTools()
+	require.Len(t, tools, 1)
+	assert.Equal(t, "function", tools[0].Type)
+	assert.Equal(t, "get_weather", tools[0].Function.Name)
+	assert.True(t, tools[0].Function.Strict)
+
+	// Test tool choice
+	assert.Equal(t, "auto", config.GetToolChoice())
+
+	// Test streaming
+	assert.True(t, config.HasStreaming())
+	streaming := config.GetStreaming()
+	assert.True(t, streaming.Enabled)
+
+	// Test context window
+	cw, ok := config.GetContextWindow()
+	assert.True(t, ok)
+	assert.Equal(t, 8192, cw)
+
+	// Test retry config
+	assert.True(t, config.HasRetry())
+	retry := config.GetRetry()
+	assert.Equal(t, 3, retry.MaxAttempts)
+	assert.Equal(t, "exponential", retry.Backoff)
+
+	// Test cache config
+	assert.True(t, config.HasCache())
+	cache := config.GetCache()
+	assert.True(t, cache.SystemPrompt)
+	assert.Equal(t, 3600, cache.TTL)
+}
+
+// TestE2E_MessageTagBasic tests basic message tag functionality
+func TestE2E_MessageTagBasic(t *testing.T) {
+	engine, err := New()
+	require.NoError(t, err)
+
+	source := `---
+name: chat-test
+model:
+  api: chat
+---
+{~prompty.message role="system"~}
+You are a helpful assistant.
+{~/prompty.message~}
+
+{~prompty.message role="user"~}
+Hello!
+{~/prompty.message~}`
+
+	tmpl, err := engine.Parse(source)
+	require.NoError(t, err)
+
+	result, err := tmpl.Execute(context.Background(), nil)
+	require.NoError(t, err)
+
+	// Extract messages
+	messages := ExtractMessagesFromOutput(result)
+	require.Len(t, messages, 2)
+
+	assert.Equal(t, "system", messages[0].Role)
+	assert.Contains(t, messages[0].Content, "helpful assistant")
+
+	assert.Equal(t, "user", messages[1].Role)
+	assert.Contains(t, messages[1].Content, "Hello!")
+}
+
+// TestE2E_MessageTagWithVariables tests message tags with variable interpolation
+func TestE2E_MessageTagWithVariables(t *testing.T) {
+	engine, err := New()
+	require.NoError(t, err)
+
+	source := `---
+name: dynamic-chat
+---
+{~prompty.message role="system"~}
+You are a {~prompty.var name="assistant_type" /~} for {~prompty.var name="company" /~}.
+{~/prompty.message~}
+
+{~prompty.message role="user"~}
+{~prompty.var name="query" /~}
+{~/prompty.message~}`
+
+	tmpl, err := engine.Parse(source)
+	require.NoError(t, err)
+
+	messages, err := tmpl.ExecuteAndExtractMessages(context.Background(), map[string]any{
+		"assistant_type": "customer support agent",
+		"company":        "Acme Corp",
+		"query":          "How do I reset my password?",
+	})
+	require.NoError(t, err)
+	require.Len(t, messages, 2)
+
+	assert.Equal(t, "system", messages[0].Role)
+	assert.Contains(t, messages[0].Content, "customer support agent")
+	assert.Contains(t, messages[0].Content, "Acme Corp")
+
+	assert.Equal(t, "user", messages[1].Role)
+	assert.Contains(t, messages[1].Content, "reset my password")
+}
+
+// TestE2E_MessageTagWithConditionals tests message tags with conditionals inside
+func TestE2E_MessageTagWithConditionals(t *testing.T) {
+	engine, err := New()
+	require.NoError(t, err)
+
+	source := `---
+name: conditional-chat
+---
+{~prompty.message role="system"~}
+You are a helpful assistant.
+{~prompty.if eval="use_guidelines"~}
+Always follow the safety guidelines.
+{~/prompty.if~}
+{~/prompty.message~}
+
+{~prompty.message role="user"~}
+Hello
+{~/prompty.message~}`
+
+	tmpl, err := engine.Parse(source)
+	require.NoError(t, err)
+
+	// With guidelines
+	messages, err := tmpl.ExecuteAndExtractMessages(context.Background(), map[string]any{
+		"use_guidelines": true,
+	})
+	require.NoError(t, err)
+	require.Len(t, messages, 2)
+	assert.Contains(t, messages[0].Content, "safety guidelines")
+
+	// Without guidelines
+	messages, err = tmpl.ExecuteAndExtractMessages(context.Background(), map[string]any{
+		"use_guidelines": false,
+	})
+	require.NoError(t, err)
+	require.Len(t, messages, 2)
+	assert.NotContains(t, messages[0].Content, "safety guidelines")
 }
