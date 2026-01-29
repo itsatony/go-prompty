@@ -1073,6 +1073,158 @@ func TestStorageEngine_SupportsStatus(t *testing.T) {
 	})
 }
 
+func TestStorageEngine_PromoteToStaging(t *testing.T) {
+	storage := NewMemoryStorage()
+	se, err := NewStorageEngine(StorageEngineConfig{Storage: storage})
+	require.NoError(t, err)
+	defer se.Close()
+
+	ctx := context.Background()
+	_ = se.Save(ctx, &StoredTemplate{Name: "test", Source: "v1"})
+	_ = se.Save(ctx, &StoredTemplate{Name: "test", Source: "v2"})
+
+	t.Run("sets staging label on version", func(t *testing.T) {
+		err := se.PromoteToStaging(ctx, "test", 2)
+		require.NoError(t, err)
+
+		tmpl, err := se.GetByLabel(ctx, "test", LabelStaging)
+		require.NoError(t, err)
+		assert.Equal(t, 2, tmpl.Version)
+	})
+
+	t.Run("returns error for non-existent version", func(t *testing.T) {
+		err := se.PromoteToStaging(ctx, "test", 99)
+		assert.Error(t, err)
+	})
+}
+
+func TestStorageEngine_ExecuteStaging(t *testing.T) {
+	storage := NewMemoryStorage()
+	se, err := NewStorageEngine(StorageEngineConfig{Storage: storage})
+	require.NoError(t, err)
+	defer se.Close()
+
+	ctx := context.Background()
+	_ = se.Save(ctx, &StoredTemplate{Name: "test", Source: "Hello {~prompty.var name=\"name\" /~}"})
+	_ = se.SetLabel(ctx, "test", LabelStaging, 1)
+
+	t.Run("executes staging labeled version", func(t *testing.T) {
+		result, err := se.ExecuteStaging(ctx, "test", map[string]any{"name": "World"})
+		require.NoError(t, err)
+		assert.Equal(t, "Hello World", result)
+	})
+
+	t.Run("returns error when staging label not set", func(t *testing.T) {
+		_, err := se.ExecuteStaging(ctx, "other", nil)
+		assert.Error(t, err)
+	})
+}
+
+func TestStorageEngine_GetActiveTemplates(t *testing.T) {
+	storage := NewMemoryStorage()
+	se, err := NewStorageEngine(StorageEngineConfig{Storage: storage})
+	require.NoError(t, err)
+	defer se.Close()
+
+	ctx := context.Background()
+
+	// Create templates with different statuses
+	_ = se.Save(ctx, &StoredTemplate{Name: "active1", Source: "v1"})
+	_ = se.Save(ctx, &StoredTemplate{Name: "active2", Source: "v1"})
+	_ = se.Save(ctx, &StoredTemplate{Name: "draft1", Source: "v1", Status: DeploymentStatusDraft})
+
+	t.Run("returns only active templates", func(t *testing.T) {
+		templates, err := se.GetActiveTemplates(ctx, nil)
+		require.NoError(t, err)
+		assert.Len(t, templates, 2)
+
+		names := make([]string, len(templates))
+		for i, t := range templates {
+			names[i] = t.Name
+		}
+		assert.Contains(t, names, "active1")
+		assert.Contains(t, names, "active2")
+		assert.NotContains(t, names, "draft1")
+	})
+}
+
+func TestStorageEngine_ArchiveVersion(t *testing.T) {
+	storage := NewMemoryStorage()
+	se, err := NewStorageEngine(StorageEngineConfig{Storage: storage})
+	require.NoError(t, err)
+	defer se.Close()
+
+	ctx := context.Background()
+	_ = se.Save(ctx, &StoredTemplate{Name: "test", Source: "v1"})
+
+	t.Run("sets status to archived", func(t *testing.T) {
+		err := se.ArchiveVersion(ctx, "test", 1)
+		require.NoError(t, err)
+
+		tmpl, err := se.Get(ctx, "test")
+		require.NoError(t, err)
+		assert.Equal(t, DeploymentStatusArchived, tmpl.Status)
+	})
+
+	t.Run("returns error for non-existent version", func(t *testing.T) {
+		err := se.ArchiveVersion(ctx, "test", 99)
+		assert.Error(t, err)
+	})
+}
+
+func TestStorageEngine_DeprecateVersion(t *testing.T) {
+	storage := NewMemoryStorage()
+	se, err := NewStorageEngine(StorageEngineConfig{Storage: storage})
+	require.NoError(t, err)
+	defer se.Close()
+
+	ctx := context.Background()
+	_ = se.Save(ctx, &StoredTemplate{Name: "test", Source: "v1"})
+
+	t.Run("sets status to deprecated", func(t *testing.T) {
+		err := se.DeprecateVersion(ctx, "test", 1)
+		require.NoError(t, err)
+
+		tmpl, err := se.Get(ctx, "test")
+		require.NoError(t, err)
+		assert.Equal(t, DeploymentStatusDeprecated, tmpl.Status)
+	})
+
+	t.Run("returns error for non-existent version", func(t *testing.T) {
+		err := se.DeprecateVersion(ctx, "test", 99)
+		assert.Error(t, err)
+	})
+}
+
+func TestStorageEngine_ActivateVersion(t *testing.T) {
+	storage := NewMemoryStorage()
+	se, err := NewStorageEngine(StorageEngineConfig{Storage: storage})
+	require.NoError(t, err)
+	defer se.Close()
+
+	ctx := context.Background()
+	_ = se.Save(ctx, &StoredTemplate{Name: "test", Source: "v1", Status: DeploymentStatusDraft})
+
+	t.Run("sets status to active", func(t *testing.T) {
+		// First verify it's in draft status
+		tmpl, err := se.Get(ctx, "test")
+		require.NoError(t, err)
+		assert.Equal(t, DeploymentStatusDraft, tmpl.Status)
+
+		err = se.ActivateVersion(ctx, "test", 1)
+		require.NoError(t, err)
+
+		tmpl, err = se.Get(ctx, "test")
+		require.NoError(t, err)
+		assert.Equal(t, DeploymentStatusActive, tmpl.Status)
+	})
+
+	t.Run("returns error for non-existent version", func(t *testing.T) {
+		err := se.ActivateVersion(ctx, "test", 99)
+		assert.Error(t, err)
+	})
+}
+
 // minimalStorage implements only TemplateStorage, not LabelStorage or StatusStorage
 type minimalStorage struct{}
 

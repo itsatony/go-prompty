@@ -219,7 +219,7 @@ func TestRollbackToVersion(t *testing.T) {
 
 	assert.Equal(t, "Original content", rolled.Source)
 	assert.Contains(t, rolled.Tags, "v1")
-	assert.Equal(t, "1", rolled.Metadata["rollback_from_version"])
+	assert.Equal(t, "1", rolled.Metadata[MetaKeyRollbackFromVersion])
 	assert.Equal(t, "Alice", rolled.Metadata["author"])
 
 	// Verify current version is now v3 (rollback creates new version)
@@ -309,8 +309,8 @@ func TestCloneVersion(t *testing.T) {
 	assert.Equal(t, "cloned", cloned.Name)
 	assert.Equal(t, "Template content", cloned.Source)
 	assert.Contains(t, cloned.Tags, "production")
-	assert.Equal(t, "source", cloned.Metadata["cloned_from"])
-	assert.Equal(t, "1", cloned.Metadata["cloned_from_version"])
+	assert.Equal(t, "source", cloned.Metadata[MetaKeyClonedFrom])
+	assert.Equal(t, "1", cloned.Metadata[MetaKeyClonedFromVersion])
 	assert.Equal(t, "Alice", cloned.Metadata["author"])
 
 	// Verify it exists

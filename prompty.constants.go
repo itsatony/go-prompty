@@ -344,6 +344,12 @@ const (
 	MetaKeyLabelAssignedAt = "label_assigned_at"
 	// MetaKeyLabelAssignedBy records who assigned a label.
 	MetaKeyLabelAssignedBy = "label_assigned_by"
+	// MetaKeyRollbackFromVersion records the version that was rolled back to.
+	MetaKeyRollbackFromVersion = "rollback_from_version"
+	// MetaKeyClonedFrom records the template name that was cloned from.
+	MetaKeyClonedFrom = "cloned_from"
+	// MetaKeyClonedFromVersion records the version that was cloned from.
+	MetaKeyClonedFromVersion = "cloned_from_version"
 )
 
 // PostgreSQL storage error messages

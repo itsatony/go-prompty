@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/itsatony/go-prompty)](https://goreportcard.com/report/github.com/itsatony/go-prompty)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Test Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen.svg)](https://github.com/itsatony/go-prompty)
-[![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)](https://github.com/itsatony/go-prompty/releases/tag/v1.5.0)
+[![Version](https://img.shields.io/badge/version-1.5.1-blue.svg)](https://github.com/itsatony/go-prompty/releases/tag/v1.5.1)
 
 ```yaml
 ---

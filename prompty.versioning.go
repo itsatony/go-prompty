@@ -172,7 +172,7 @@ func (se *StorageEngine) RollbackToVersion(ctx context.Context, name string, tar
 	for k, v := range targetTmpl.Metadata {
 		newTmpl.Metadata[k] = v
 	}
-	newTmpl.Metadata["rollback_from_version"] = fmt.Sprintf("%d", targetVersion)
+	newTmpl.Metadata[MetaKeyRollbackFromVersion] = fmt.Sprintf("%d", targetVersion)
 
 	// Save creates a new version
 	err = se.storage.Save(ctx, newTmpl)
@@ -212,8 +212,8 @@ func (se *StorageEngine) CloneVersion(ctx context.Context, sourceName string, so
 	for k, v := range sourceTmpl.Metadata {
 		clone.Metadata[k] = v
 	}
-	clone.Metadata["cloned_from"] = sourceName
-	clone.Metadata["cloned_from_version"] = fmt.Sprintf("%d", sourceVersion)
+	clone.Metadata[MetaKeyClonedFrom] = sourceName
+	clone.Metadata[MetaKeyClonedFromVersion] = fmt.Sprintf("%d", sourceVersion)
 
 	err = se.storage.Save(ctx, clone)
 	if err != nil {
