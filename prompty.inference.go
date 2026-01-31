@@ -44,8 +44,12 @@ type ModelConfig struct {
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 	// Model parameters
 	Parameters *ModelParameters `yaml:"parameters,omitempty" json:"parameters,omitempty"`
-	// Response format for structured outputs
+	// Response format for structured outputs (OpenAI, Gemini style)
 	ResponseFormat *ResponseFormat `yaml:"response_format,omitempty" json:"response_format,omitempty"`
+	// OutputFormat is Anthropic's alternative to ResponseFormat
+	OutputFormat *OutputFormat `yaml:"output_format,omitempty" json:"output_format,omitempty"`
+	// GuidedDecoding configures vLLM's structured output constraints
+	GuidedDecoding *GuidedDecoding `yaml:"guided_decoding,omitempty" json:"guided_decoding,omitempty"`
 	// Tool/function definitions for tool calling
 	Tools []*ToolDefinition `yaml:"tools,omitempty" json:"tools,omitempty"`
 	// Tool choice strategy: "auto", "none", "required", or specific function
@@ -77,10 +81,12 @@ type ModelParameters struct {
 
 // ResponseFormat configures structured output enforcement.
 type ResponseFormat struct {
-	// Type: "text", "json_object", or "json_schema"
+	// Type: "text", "json_object", "json_schema", or "enum"
 	Type string `yaml:"type" json:"type"`
 	// JSONSchema for structured output validation (when type is "json_schema")
 	JSONSchema *JSONSchemaSpec `yaml:"json_schema,omitempty" json:"json_schema,omitempty"`
+	// Enum constraint for choice-based outputs (when type is "enum")
+	Enum *EnumConstraint `yaml:"enum,omitempty" json:"enum,omitempty"`
 }
 
 // JSONSchemaSpec defines a JSON schema for structured outputs.
@@ -93,6 +99,49 @@ type JSONSchemaSpec struct {
 	Schema map[string]any `yaml:"schema" json:"schema"`
 	// Strict enables strict schema validation
 	Strict bool `yaml:"strict,omitempty" json:"strict,omitempty"`
+	// AdditionalProperties controls whether extra properties are allowed (all providers require false for strict mode)
+	AdditionalProperties *bool `yaml:"additionalProperties,omitempty" json:"additionalProperties,omitempty"`
+	// PropertyOrdering specifies the order of properties in output (Gemini 2.5+ only)
+	PropertyOrdering []string `yaml:"propertyOrdering,omitempty" json:"propertyOrdering,omitempty"`
+}
+
+// EnumConstraint defines enum/choice constraints for outputs.
+type EnumConstraint struct {
+	// Values contains the allowed enum values
+	Values []string `yaml:"values" json:"values"`
+	// Description explains the enum choices
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+}
+
+// OutputFormat is Anthropic's alternative to ResponseFormat for structured outputs.
+// Use this when targeting Anthropic Claude API specifically.
+type OutputFormat struct {
+	// Format specifies the output format specification
+	Format *OutputFormatSpec `yaml:"format" json:"format"`
+}
+
+// OutputFormatSpec defines the output format specification for Anthropic.
+type OutputFormatSpec struct {
+	// Type: "json_schema"
+	Type string `yaml:"type" json:"type"`
+	// Schema is the inline JSON schema (no wrapper unlike OpenAI)
+	Schema map[string]any `yaml:"schema" json:"schema"`
+}
+
+// GuidedDecoding configures vLLM's structured output constraints.
+type GuidedDecoding struct {
+	// Backend specifies the guided decoding engine: "xgrammar", "outlines", "lm_format_enforcer", "auto"
+	Backend string `yaml:"backend,omitempty" json:"backend,omitempty"`
+	// JSON is a JSON schema for structured output
+	JSON map[string]any `yaml:"json,omitempty" json:"json,omitempty"`
+	// Regex is a regex pattern constraint
+	Regex string `yaml:"regex,omitempty" json:"regex,omitempty"`
+	// Choice is a list of allowed output choices
+	Choice []string `yaml:"choice,omitempty" json:"choice,omitempty"`
+	// Grammar is a context-free grammar constraint
+	Grammar string `yaml:"grammar,omitempty" json:"grammar,omitempty"`
+	// WhitespacePattern controls whitespace handling
+	WhitespacePattern string `yaml:"whitespace_pattern,omitempty" json:"whitespace_pattern,omitempty"`
 }
 
 // ToolDefinition defines a tool/function that can be called by the model.
@@ -392,6 +441,102 @@ func (c *InferenceConfig) HasCache() bool {
 	return c != nil && c.Cache != nil
 }
 
+// GetOutputFormat returns the Anthropic output format or nil.
+func (c *InferenceConfig) GetOutputFormat() *OutputFormat {
+	if c == nil || c.Model == nil {
+		return nil
+	}
+	return c.Model.OutputFormat
+}
+
+// GetGuidedDecoding returns the vLLM guided decoding config or nil.
+func (c *InferenceConfig) GetGuidedDecoding() *GuidedDecoding {
+	if c == nil || c.Model == nil {
+		return nil
+	}
+	return c.Model.GuidedDecoding
+}
+
+// HasOutputFormat returns true if Anthropic output format is configured.
+func (c *InferenceConfig) HasOutputFormat() bool {
+	return c != nil && c.Model != nil && c.Model.OutputFormat != nil
+}
+
+// HasGuidedDecoding returns true if vLLM guided decoding is configured.
+func (c *InferenceConfig) HasGuidedDecoding() bool {
+	return c != nil && c.Model != nil && c.Model.GuidedDecoding != nil
+}
+
+// GetEffectiveProvider detects the intended provider from configuration.
+// Returns the explicit provider if set, otherwise infers from config shape.
+func (c *InferenceConfig) GetEffectiveProvider() string {
+	if c == nil || c.Model == nil {
+		return ""
+	}
+
+	// Explicit provider takes precedence
+	if c.Model.Provider != "" {
+		return c.Model.Provider
+	}
+
+	// Infer from configuration shape
+	if c.Model.OutputFormat != nil {
+		return ProviderAnthropic
+	}
+	if c.Model.GuidedDecoding != nil {
+		return ProviderVLLM
+	}
+
+	// Try to infer from model name
+	modelName := c.Model.Name
+	if modelName != "" {
+		if isOpenAIModel(modelName) {
+			return ProviderOpenAI
+		}
+		if isAnthropicModel(modelName) {
+			return ProviderAnthropic
+		}
+		if isGeminiModel(modelName) {
+			return ProviderGemini
+		}
+	}
+
+	return ""
+}
+
+// isOpenAIModel checks if the model name suggests OpenAI.
+func isOpenAIModel(name string) bool {
+	prefixes := []string{"gpt-", "o1-", "o3-", "text-", "davinci", "curie", "babbage", "ada"}
+	for _, prefix := range prefixes {
+		if len(name) >= len(prefix) && name[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
+}
+
+// isAnthropicModel checks if the model name suggests Anthropic.
+func isAnthropicModel(name string) bool {
+	prefixes := []string{"claude-", "claude"}
+	for _, prefix := range prefixes {
+		if len(name) >= len(prefix) && name[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
+}
+
+// isGeminiModel checks if the model name suggests Google Gemini.
+func isGeminiModel(name string) bool {
+	prefixes := []string{"gemini-", "gemini"}
+	for _, prefix := range prefixes {
+		if len(name) >= len(prefix) && name[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
+}
+
 // ValidateInputs validates the provided data against the input definitions.
 // Returns an error if any required input is missing or has wrong type.
 func (c *InferenceConfig) ValidateInputs(data map[string]any) error {
@@ -529,4 +674,265 @@ func (c *InferenceConfig) YAML() (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+// ToOpenAI converts the response format to OpenAI API format.
+// Returns nil if the response format is not configured.
+func (rf *ResponseFormat) ToOpenAI() map[string]any {
+	if rf == nil {
+		return nil
+	}
+
+	result := map[string]any{
+		SchemaKeyType: rf.Type,
+	}
+
+	if rf.JSONSchema != nil {
+		jsonSchema := map[string]any{
+			AttrName: rf.JSONSchema.Name,
+		}
+
+		if rf.JSONSchema.Description != "" {
+			jsonSchema[SchemaKeyDescription] = rf.JSONSchema.Description
+		}
+
+		if rf.JSONSchema.Strict {
+			jsonSchema[SchemaKeyStrict] = true
+		}
+
+		if rf.JSONSchema.Schema != nil {
+			// Ensure additionalProperties: false for strict mode
+			schema := copySchema(rf.JSONSchema.Schema)
+			if rf.JSONSchema.Strict {
+				ensureAdditionalPropertiesFalse(schema)
+			}
+			jsonSchema[SchemaKeySchema] = schema
+		}
+
+		result[SchemaKeyJSONSchema] = jsonSchema
+	}
+
+	if rf.Enum != nil && len(rf.Enum.Values) > 0 {
+		result[SchemaKeyEnum] = rf.Enum.Values
+	}
+
+	return result
+}
+
+// ToAnthropic converts to Anthropic output_format structure.
+// Returns nil if the response format is not configured.
+func (rf *ResponseFormat) ToAnthropic() map[string]any {
+	if rf == nil || rf.JSONSchema == nil {
+		return nil
+	}
+
+	schema := copySchema(rf.JSONSchema.Schema)
+	ensureAdditionalPropertiesFalse(schema)
+
+	return map[string]any{
+		SchemaKeyFormat: map[string]any{
+			SchemaKeyType:   ResponseFormatJSONSchema,
+			SchemaKeySchema: schema,
+		},
+	}
+}
+
+// ToGemini converts to Google Gemini/Vertex AI format.
+// Returns nil if the response format is not configured.
+func (rf *ResponseFormat) ToGemini() map[string]any {
+	if rf == nil {
+		return nil
+	}
+
+	result := map[string]any{
+		SchemaKeyType: rf.Type,
+	}
+
+	if rf.JSONSchema != nil {
+		schema := copySchema(rf.JSONSchema.Schema)
+		ensureAdditionalPropertiesFalse(schema)
+
+		// Add propertyOrdering for Gemini 2.5+
+		if len(rf.JSONSchema.PropertyOrdering) > 0 {
+			schema[SchemaKeyPropertyOrdering] = rf.JSONSchema.PropertyOrdering
+		}
+
+		jsonSchema := map[string]any{
+			AttrName:        rf.JSONSchema.Name,
+			SchemaKeySchema: schema,
+		}
+
+		if rf.JSONSchema.Description != "" {
+			jsonSchema[SchemaKeyDescription] = rf.JSONSchema.Description
+		}
+
+		result[SchemaKeyJSONSchema] = jsonSchema
+	}
+
+	return result
+}
+
+// ToVLLM converts to vLLM guided decoding format.
+// Returns nil if guided decoding is not configured.
+func (gd *GuidedDecoding) ToVLLM() map[string]any {
+	if gd == nil {
+		return nil
+	}
+
+	result := make(map[string]any)
+
+	if gd.Backend != "" {
+		result[GuidedKeyDecodingBackend] = gd.Backend
+	}
+
+	if gd.JSON != nil {
+		schema := copySchema(gd.JSON)
+		ensureAdditionalPropertiesFalse(schema)
+		result[GuidedKeyJSON] = schema
+	}
+
+	if gd.Regex != "" {
+		result[GuidedKeyRegex] = gd.Regex
+	}
+
+	if len(gd.Choice) > 0 {
+		result[GuidedKeyChoice] = gd.Choice
+	}
+
+	if gd.Grammar != "" {
+		result[GuidedKeyGrammar] = gd.Grammar
+	}
+
+	if gd.WhitespacePattern != "" {
+		result[GuidedKeyWhitespacePattern] = gd.WhitespacePattern
+	}
+
+	return result
+}
+
+// ToOutputFormat converts OutputFormat to Anthropic API format.
+func (of *OutputFormat) ToAnthropic() map[string]any {
+	if of == nil || of.Format == nil {
+		return nil
+	}
+
+	schema := copySchema(of.Format.Schema)
+	ensureAdditionalPropertiesFalse(schema)
+
+	return map[string]any{
+		SchemaKeyFormat: map[string]any{
+			SchemaKeyType:   of.Format.Type,
+			SchemaKeySchema: schema,
+		},
+	}
+}
+
+// ProviderFormat returns the response format for a specific provider.
+// Returns an error if the provider is unsupported.
+func (c *InferenceConfig) ProviderFormat(provider string) (map[string]any, error) {
+	if c == nil || c.Model == nil {
+		return nil, nil
+	}
+
+	switch provider {
+	case ProviderOpenAI, ProviderAzure:
+		if c.Model.ResponseFormat != nil {
+			return c.Model.ResponseFormat.ToOpenAI(), nil
+		}
+		return nil, nil
+
+	case ProviderAnthropic:
+		// Prefer explicit OutputFormat over ResponseFormat conversion
+		if c.Model.OutputFormat != nil {
+			return c.Model.OutputFormat.ToAnthropic(), nil
+		}
+		if c.Model.ResponseFormat != nil {
+			return c.Model.ResponseFormat.ToAnthropic(), nil
+		}
+		return nil, nil
+
+	case ProviderGoogle, ProviderGemini, ProviderVertex:
+		if c.Model.ResponseFormat != nil {
+			return c.Model.ResponseFormat.ToGemini(), nil
+		}
+		return nil, nil
+
+	case ProviderVLLM:
+		if c.Model.GuidedDecoding != nil {
+			return c.Model.GuidedDecoding.ToVLLM(), nil
+		}
+		return nil, nil
+
+	default:
+		return nil, NewSchemaProviderError(ErrMsgSchemaUnsupportedProvider, provider)
+	}
+}
+
+// copySchema creates a deep copy of a schema map.
+func copySchema(src map[string]any) map[string]any {
+	if src == nil {
+		return nil
+	}
+
+	dst := make(map[string]any, len(src))
+	for k, v := range src {
+		switch val := v.(type) {
+		case map[string]any:
+			dst[k] = copySchema(val)
+		case []any:
+			dst[k] = copySlice(val)
+		default:
+			dst[k] = v
+		}
+	}
+	return dst
+}
+
+// copySlice creates a deep copy of a slice.
+func copySlice(src []any) []any {
+	if src == nil {
+		return nil
+	}
+
+	dst := make([]any, len(src))
+	for i, v := range src {
+		switch val := v.(type) {
+		case map[string]any:
+			dst[i] = copySchema(val)
+		case []any:
+			dst[i] = copySlice(val)
+		default:
+			dst[i] = v
+		}
+	}
+	return dst
+}
+
+// ensureAdditionalPropertiesFalse recursively ensures all objects have additionalProperties: false.
+func ensureAdditionalPropertiesFalse(schema map[string]any) {
+	if schema == nil {
+		return
+	}
+
+	// Check if this is an object type
+	if typeVal, ok := schema[SchemaKeyType]; ok && typeVal == SchemaTypeObject {
+		// Set additionalProperties: false if not already set
+		if _, exists := schema[SchemaKeyAdditionalProperties]; !exists {
+			schema[SchemaKeyAdditionalProperties] = false
+		}
+	}
+
+	// Recursively process properties
+	if props, ok := schema[SchemaKeyProperties].(map[string]any); ok {
+		for _, propVal := range props {
+			if propSchema, ok := propVal.(map[string]any); ok {
+				ensureAdditionalPropertiesFalse(propSchema)
+			}
+		}
+	}
+
+	// Recursively process array items
+	if items, ok := schema[SchemaKeyItems].(map[string]any); ok {
+		ensureAdditionalPropertiesFalse(items)
+	}
 }

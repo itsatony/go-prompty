@@ -376,3 +376,392 @@ func TestValidateInputType_AllTypes(t *testing.T) {
 		})
 	}
 }
+
+func TestJSONSchemaSpec_AdditionalProperties(t *testing.T) {
+	falseVal := false
+	trueVal := true
+
+	tests := []struct {
+		name     string
+		spec     *JSONSchemaSpec
+		expected *bool
+	}{
+		{
+			name: "additionalProperties not set",
+			spec: &JSONSchemaSpec{
+				Name:   "test",
+				Schema: map[string]any{},
+			},
+			expected: nil,
+		},
+		{
+			name: "additionalProperties set to false",
+			spec: &JSONSchemaSpec{
+				Name:                 "test",
+				Schema:               map[string]any{},
+				AdditionalProperties: &falseVal,
+			},
+			expected: &falseVal,
+		},
+		{
+			name: "additionalProperties set to true",
+			spec: &JSONSchemaSpec{
+				Name:                 "test",
+				Schema:               map[string]any{},
+				AdditionalProperties: &trueVal,
+			},
+			expected: &trueVal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.spec.AdditionalProperties)
+		})
+	}
+}
+
+func TestJSONSchemaSpec_PropertyOrdering(t *testing.T) {
+	spec := &JSONSchemaSpec{
+		Name:             "test",
+		Schema:           map[string]any{},
+		PropertyOrdering: []string{"first", "second", "third"},
+	}
+
+	assert.Equal(t, []string{"first", "second", "third"}, spec.PropertyOrdering)
+}
+
+func TestEnumConstraint(t *testing.T) {
+	enum := &EnumConstraint{
+		Values:      []string{"positive", "negative", "neutral"},
+		Description: "Sentiment classification",
+	}
+
+	assert.Len(t, enum.Values, 3)
+	assert.Contains(t, enum.Values, "positive")
+	assert.Contains(t, enum.Values, "negative")
+	assert.Contains(t, enum.Values, "neutral")
+	assert.Equal(t, "Sentiment classification", enum.Description)
+}
+
+func TestResponseFormat_WithEnum(t *testing.T) {
+	rf := &ResponseFormat{
+		Type: ResponseFormatEnum,
+		Enum: &EnumConstraint{
+			Values: []string{"yes", "no"},
+		},
+	}
+
+	assert.Equal(t, ResponseFormatEnum, rf.Type)
+	require.NotNil(t, rf.Enum)
+	assert.Equal(t, []string{"yes", "no"}, rf.Enum.Values)
+}
+
+func TestOutputFormat(t *testing.T) {
+	of := &OutputFormat{
+		Format: &OutputFormatSpec{
+			Type: ResponseFormatJSONSchema,
+			Schema: map[string]any{
+				SchemaKeyType: SchemaTypeObject,
+				SchemaKeyProperties: map[string]any{
+					"result": map[string]any{SchemaKeyType: SchemaTypeString},
+				},
+			},
+		},
+	}
+
+	assert.Equal(t, ResponseFormatJSONSchema, of.Format.Type)
+	require.NotNil(t, of.Format.Schema)
+}
+
+func TestGuidedDecoding(t *testing.T) {
+	tests := []struct {
+		name string
+		gd   *GuidedDecoding
+	}{
+		{
+			name: "json constraint",
+			gd: &GuidedDecoding{
+				Backend: GuidedBackendXGrammar,
+				JSON: map[string]any{
+					SchemaKeyType: SchemaTypeObject,
+				},
+			},
+		},
+		{
+			name: "regex constraint",
+			gd: &GuidedDecoding{
+				Regex: "^[a-z]+$",
+			},
+		},
+		{
+			name: "choice constraint",
+			gd: &GuidedDecoding{
+				Choice: []string{"option1", "option2"},
+			},
+		},
+		{
+			name: "grammar constraint",
+			gd: &GuidedDecoding{
+				Grammar: "S -> 'a' | 'b'",
+			},
+		},
+		{
+			name: "with whitespace pattern",
+			gd: &GuidedDecoding{
+				JSON:              map[string]any{},
+				WhitespacePattern: `\s+`,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.NotNil(t, tt.gd)
+		})
+	}
+}
+
+func TestModelConfig_WithOutputFormat(t *testing.T) {
+	mc := &ModelConfig{
+		Provider: ProviderAnthropic,
+		Name:     "claude-3-opus",
+		OutputFormat: &OutputFormat{
+			Format: &OutputFormatSpec{
+				Type: ResponseFormatJSONSchema,
+				Schema: map[string]any{
+					SchemaKeyType: SchemaTypeObject,
+				},
+			},
+		},
+	}
+
+	require.NotNil(t, mc.OutputFormat)
+	assert.Equal(t, ResponseFormatJSONSchema, mc.OutputFormat.Format.Type)
+}
+
+func TestModelConfig_WithGuidedDecoding(t *testing.T) {
+	mc := &ModelConfig{
+		Provider: ProviderVLLM,
+		Name:     "meta-llama/Llama-2-7b-hf",
+		GuidedDecoding: &GuidedDecoding{
+			Backend: GuidedBackendOutlines,
+			JSON: map[string]any{
+				SchemaKeyType: SchemaTypeObject,
+			},
+		},
+	}
+
+	require.NotNil(t, mc.GuidedDecoding)
+	assert.Equal(t, GuidedBackendOutlines, mc.GuidedDecoding.Backend)
+}
+
+func TestInferenceConfig_GetOutputFormat(t *testing.T) {
+	of := &OutputFormat{
+		Format: &OutputFormatSpec{
+			Type: ResponseFormatJSONSchema,
+		},
+	}
+
+	config := &InferenceConfig{
+		Model: &ModelConfig{
+			OutputFormat: of,
+		},
+	}
+
+	result := config.GetOutputFormat()
+	assert.Equal(t, of, result)
+}
+
+func TestInferenceConfig_GetOutputFormat_Nil(t *testing.T) {
+	var config *InferenceConfig
+	assert.Nil(t, config.GetOutputFormat())
+
+	config = &InferenceConfig{}
+	assert.Nil(t, config.GetOutputFormat())
+
+	config = &InferenceConfig{Model: &ModelConfig{}}
+	assert.Nil(t, config.GetOutputFormat())
+}
+
+func TestInferenceConfig_GetGuidedDecoding(t *testing.T) {
+	gd := &GuidedDecoding{
+		Regex: "^test$",
+	}
+
+	config := &InferenceConfig{
+		Model: &ModelConfig{
+			GuidedDecoding: gd,
+		},
+	}
+
+	result := config.GetGuidedDecoding()
+	assert.Equal(t, gd, result)
+}
+
+func TestInferenceConfig_GetGuidedDecoding_Nil(t *testing.T) {
+	var config *InferenceConfig
+	assert.Nil(t, config.GetGuidedDecoding())
+}
+
+func TestInferenceConfig_HasOutputFormat(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *InferenceConfig
+		expected bool
+	}{
+		{"nil config", nil, false},
+		{"empty config", &InferenceConfig{}, false},
+		{"no model", &InferenceConfig{Model: nil}, false},
+		{"no output format", &InferenceConfig{Model: &ModelConfig{}}, false},
+		{"with output format", &InferenceConfig{Model: &ModelConfig{OutputFormat: &OutputFormat{}}}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.config.HasOutputFormat())
+		})
+	}
+}
+
+func TestInferenceConfig_HasGuidedDecoding(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *InferenceConfig
+		expected bool
+	}{
+		{"nil config", nil, false},
+		{"empty config", &InferenceConfig{}, false},
+		{"no model", &InferenceConfig{Model: nil}, false},
+		{"no guided decoding", &InferenceConfig{Model: &ModelConfig{}}, false},
+		{"with guided decoding", &InferenceConfig{Model: &ModelConfig{GuidedDecoding: &GuidedDecoding{}}}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.config.HasGuidedDecoding())
+		})
+	}
+}
+
+func TestInferenceConfig_GetEffectiveProvider(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *InferenceConfig
+		expected string
+	}{
+		{"nil config", nil, ""},
+		{"empty config", &InferenceConfig{}, ""},
+		{"explicit provider", &InferenceConfig{Model: &ModelConfig{Provider: ProviderOpenAI}}, ProviderOpenAI},
+		{"infer from output format", &InferenceConfig{Model: &ModelConfig{OutputFormat: &OutputFormat{}}}, ProviderAnthropic},
+		{"infer from guided decoding", &InferenceConfig{Model: &ModelConfig{GuidedDecoding: &GuidedDecoding{}}}, ProviderVLLM},
+		{"infer from model name gpt", &InferenceConfig{Model: &ModelConfig{Name: "gpt-4"}}, ProviderOpenAI},
+		{"infer from model name claude", &InferenceConfig{Model: &ModelConfig{Name: "claude-3-opus"}}, ProviderAnthropic},
+		{"infer from model name gemini", &InferenceConfig{Model: &ModelConfig{Name: "gemini-pro"}}, ProviderGemini},
+		{"explicit provider overrides inference", &InferenceConfig{Model: &ModelConfig{Provider: ProviderAzure, Name: "gpt-4"}}, ProviderAzure},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.config.GetEffectiveProvider())
+		})
+	}
+}
+
+func TestParseYAMLInferenceConfig_WithOutputFormat(t *testing.T) {
+	yaml := `
+name: test-template
+model:
+  provider: anthropic
+  name: claude-3-opus
+  output_format:
+    format:
+      type: json_schema
+      schema:
+        type: object
+        properties:
+          result:
+            type: string
+`
+	config, err := ParseYAMLInferenceConfig(yaml)
+	require.NoError(t, err)
+	require.NotNil(t, config)
+	require.NotNil(t, config.Model)
+	require.NotNil(t, config.Model.OutputFormat)
+	assert.Equal(t, ResponseFormatJSONSchema, config.Model.OutputFormat.Format.Type)
+}
+
+func TestParseYAMLInferenceConfig_WithGuidedDecoding(t *testing.T) {
+	yaml := `
+name: test-template
+model:
+  provider: vllm
+  name: meta-llama/Llama-2-7b-hf
+  guided_decoding:
+    backend: xgrammar
+    json:
+      type: object
+      properties:
+        output:
+          type: string
+`
+	config, err := ParseYAMLInferenceConfig(yaml)
+	require.NoError(t, err)
+	require.NotNil(t, config)
+	require.NotNil(t, config.Model)
+	require.NotNil(t, config.Model.GuidedDecoding)
+	assert.Equal(t, GuidedBackendXGrammar, config.Model.GuidedDecoding.Backend)
+}
+
+func TestParseYAMLInferenceConfig_WithEnumConstraint(t *testing.T) {
+	yaml := `
+name: sentiment-analysis
+model:
+  name: gpt-4o
+  response_format:
+    type: enum
+    enum:
+      values:
+        - positive
+        - negative
+        - neutral
+      description: Sentiment classification
+`
+	config, err := ParseYAMLInferenceConfig(yaml)
+	require.NoError(t, err)
+	require.NotNil(t, config)
+	require.NotNil(t, config.Model)
+	require.NotNil(t, config.Model.ResponseFormat)
+	assert.Equal(t, ResponseFormatEnum, config.Model.ResponseFormat.Type)
+	require.NotNil(t, config.Model.ResponseFormat.Enum)
+	assert.Len(t, config.Model.ResponseFormat.Enum.Values, 3)
+}
+
+func TestParseYAMLInferenceConfig_WithPropertyOrdering(t *testing.T) {
+	yaml := `
+name: gemini-template
+model:
+  provider: gemini
+  name: gemini-2-5-pro
+  response_format:
+    type: json_schema
+    json_schema:
+      name: ordered_data
+      schema:
+        type: object
+        properties:
+          first:
+            type: string
+          second:
+            type: number
+      propertyOrdering:
+        - first
+        - second
+`
+	config, err := ParseYAMLInferenceConfig(yaml)
+	require.NoError(t, err)
+	require.NotNil(t, config)
+	require.NotNil(t, config.Model.ResponseFormat)
+	require.NotNil(t, config.Model.ResponseFormat.JSONSchema)
+	assert.Equal(t, []string{"first", "second"}, config.Model.ResponseFormat.JSONSchema.PropertyOrdering)
+}

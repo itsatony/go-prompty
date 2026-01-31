@@ -295,6 +295,59 @@ const (
 	ErrFmtTypeMismatch = "expected %s, got %s"
 )
 
+// LLM Provider names for structured output handling
+const (
+	ProviderOpenAI    = "openai"
+	ProviderAnthropic = "anthropic"
+	ProviderGoogle    = "google"
+	ProviderGemini    = "gemini"
+	ProviderVertex    = "vertex"
+	ProviderVLLM      = "vllm"
+	ProviderAzure     = "azure"
+)
+
+// Response format types for structured outputs
+const (
+	ResponseFormatText       = "text"
+	ResponseFormatJSONObject = "json_object"
+	ResponseFormatJSONSchema = "json_schema"
+	ResponseFormatEnum       = "enum"
+)
+
+// vLLM guided decoding backends
+const (
+	GuidedBackendXGrammar         = "xgrammar"
+	GuidedBackendOutlines         = "outlines"
+	GuidedBackendLMFormatEnforcer = "lm_format_enforcer"
+	GuidedBackendAuto             = "auto"
+)
+
+// JSON Schema property keys
+const (
+	SchemaKeyType                 = "type"
+	SchemaKeyProperties           = "properties"
+	SchemaKeyRequired             = "required"
+	SchemaKeyAdditionalProperties = "additionalProperties"
+	SchemaKeyEnum                 = "enum"
+	SchemaKeyItems                = "items"
+	SchemaKeyPropertyOrdering     = "propertyOrdering"
+	SchemaKeyDescription          = "description"
+	SchemaKeySchema               = "schema"
+	SchemaKeyStrict               = "strict"
+	SchemaKeyFormat               = "format"
+	SchemaKeyJSONSchema           = "json_schema"
+)
+
+// vLLM guided decoding parameter keys
+const (
+	GuidedKeyDecodingBackend   = "guided_decoding_backend"
+	GuidedKeyJSON              = "guided_json"
+	GuidedKeyRegex             = "guided_regex"
+	GuidedKeyChoice            = "guided_choice"
+	GuidedKeyGrammar           = "guided_grammar"
+	GuidedKeyWhitespacePattern = "guided_whitespace_pattern"
+)
+
 // Storage error messages
 const (
 	ErrMsgCryptoRandFailure     = "cryptographic random number generator failure"

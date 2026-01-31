@@ -279,6 +279,112 @@ All resolver and plugin function execution uses isolated goroutines with:
 - Context cancellation propagation
 - Resource limits: max loop iterations (10000), max output size (10MB), max depth (10)
 
+## Structured Output Support
+
+go-prompty supports structured outputs for all major LLM providers with provider-specific serialization.
+
+### Provider-Specific Formats
+
+| Provider | Configuration Field | Notes |
+|----------|---------------------|-------|
+| OpenAI/Azure | `response_format` | `json_schema` with `strict: true` |
+| Anthropic | `output_format` | Alternative format for Claude API |
+| Gemini | `response_format` | Supports `propertyOrdering` for Gemini 2.5+ |
+| vLLM | `guided_decoding` | `json`, `regex`, `choice`, `grammar` constraints |
+
+### Schema Requirements
+
+All providers require `additionalProperties: false` for strict mode:
+- Schemas are automatically augmented with `additionalProperties: false` when serializing
+- Use `EnsureAdditionalPropertiesFalse()` for manual validation
+- Use `ValidateForProvider()` to check provider compatibility
+
+### Example Configurations
+
+**OpenAI Style:**
+```yaml
+---
+model:
+  provider: openai
+  name: gpt-4o
+  response_format:
+    type: json_schema
+    json_schema:
+      name: extracted_data
+      strict: true
+      schema:
+        type: object
+        properties:
+          name: {type: string}
+          email: {type: string}
+        required: [name, email]
+---
+```
+
+**Anthropic Style:**
+```yaml
+---
+model:
+  provider: anthropic
+  name: claude-sonnet-4-5
+  output_format:
+    format:
+      type: json_schema
+      schema:
+        type: object
+        properties:
+          result: {type: string}
+        required: [result]
+---
+```
+
+**vLLM Guided Decoding:**
+```yaml
+---
+model:
+  provider: vllm
+  name: meta-llama/Llama-2-7b-hf
+  guided_decoding:
+    backend: xgrammar
+    json:
+      type: object
+      properties:
+        answer: {type: string}
+---
+```
+
+**Enum Constraint:**
+```yaml
+---
+model:
+  response_format:
+    type: enum
+    enum:
+      values: [positive, negative, neutral]
+      description: Sentiment classification
+---
+```
+
+### Provider Detection
+
+The `GetEffectiveProvider()` method auto-detects the provider from:
+1. Explicit `provider` field
+2. Presence of `output_format` → Anthropic
+3. Presence of `guided_decoding` → vLLM
+4. Model name prefix (gpt-, claude-, gemini-)
+
+### Provider Serialization
+
+```go
+config := tmpl.InferenceConfig()
+
+// Get format for specific provider
+openAIFormat, _ := config.ProviderFormat(ProviderOpenAI)
+anthropicFormat, _ := config.ProviderFormat(ProviderAnthropic)
+geminiFormat, _ := config.ProviderFormat(ProviderGemini)
+vllmFormat, _ := config.ProviderFormat(ProviderVLLM)
+```
+
 ## Deployment-Aware Versioning
 
 Templates support deployment status and named labels for production workflows.

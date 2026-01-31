@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-01-31
+
+### Added
+
+#### Enhanced Structured Output Support
+- **Provider-Specific Formats**: Full alignment with OpenAI, Anthropic, Google Gemini, and vLLM APIs
+- **JSONSchemaSpec Extensions**:
+  - `AdditionalProperties`: Control extra properties in schema (all providers require `false` for strict mode)
+  - `PropertyOrdering`: Specify property output order (Gemini 2.5+ feature)
+- **EnumConstraint**: First-class enum/choice constraint support with values and description
+- **Anthropic OutputFormat**: Native support for Anthropic's `output_format` (alternative to `response_format`)
+- **vLLM GuidedDecoding**: Full guided decoding support
+  - `json`: JSON schema constraints
+  - `regex`: Regex pattern constraints
+  - `choice`: Choice list constraints
+  - `grammar`: Context-free grammar constraints
+  - `backend`: Backend selection (xgrammar, outlines, lm_format_enforcer, auto)
+
+#### Provider Serialization
+- `ToOpenAI()`: Convert ResponseFormat to OpenAI API format
+- `ToAnthropic()`: Convert to Anthropic output_format structure
+- `ToGemini()`: Convert to Google Gemini/Vertex AI format with propertyOrdering support
+- `ToVLLM()`: Convert GuidedDecoding to vLLM format
+- `ProviderFormat()`: Universal method to get format for any supported provider
+
+#### Schema Validation Utilities
+- `ValidateJSONSchema()`: Validate JSON schema structure
+- `ValidateForProvider()`: Validate schema compatibility with specific provider
+- `ValidateEnumConstraint()`: Validate enum constraint configuration
+- `ValidateGuidedDecoding()`: Validate vLLM guided decoding configuration
+- `EnsureAdditionalPropertiesFalse()`: Recursively add additionalProperties: false to schemas
+- `ExtractRequiredFields()`: Extract property names for required array generation
+
+#### Provider Detection
+- `GetEffectiveProvider()`: Auto-detect provider from configuration
+  - Explicit `provider` field takes precedence
+  - Presence of `output_format` → Anthropic
+  - Presence of `guided_decoding` → vLLM
+  - Model name prefix inference (gpt-, claude-, gemini-)
+
+#### New Constants
+- Provider names: `ProviderOpenAI`, `ProviderAnthropic`, `ProviderGoogle`, `ProviderGemini`, `ProviderVertex`, `ProviderVLLM`, `ProviderAzure`
+- Response format types: `ResponseFormatText`, `ResponseFormatJSONObject`, `ResponseFormatJSONSchema`, `ResponseFormatEnum`
+- Guided decoding backends: `GuidedBackendXGrammar`, `GuidedBackendOutlines`, `GuidedBackendLMFormatEnforcer`, `GuidedBackendAuto`
+- Schema property keys: `SchemaKeyType`, `SchemaKeyProperties`, `SchemaKeyRequired`, `SchemaKeyAdditionalProperties`, `SchemaKeyEnum`, `SchemaKeyItems`, `SchemaKeyPropertyOrdering`
+
+### Technical Details
+- All provider serializers automatically add `additionalProperties: false` for strict mode compliance
+- Deep copy of schemas during serialization (original schema not modified)
+- Comprehensive test coverage for all provider formats
+- Zero magic strings - all constants in prompty.constants.go
+
 ## [1.5.1] - 2026-01-29
 
 ### Fixed

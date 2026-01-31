@@ -871,3 +871,527 @@ Hello
 	require.Len(t, messages, 2)
 	assert.NotContains(t, messages[0].Content, "safety guidelines")
 }
+
+// TestE2E_OpenAIStructuredOutput tests full workflow for OpenAI-style structured outputs.
+func TestE2E_OpenAIStructuredOutput(t *testing.T) {
+	source := `---
+name: data-extraction
+model:
+  provider: openai
+  name: gpt-4o
+  response_format:
+    type: json_schema
+    json_schema:
+      name: extracted_data
+      description: Extracted user data
+      strict: true
+      schema:
+        type: object
+        properties:
+          name:
+            type: string
+          email:
+            type: string
+          age:
+            type: number
+        required:
+          - name
+          - email
+---
+{~prompty.message role="user"~}
+Extract data from: {~prompty.var name="text" /~}
+{~/prompty.message~}
+`
+
+	engine := MustNew()
+	tmpl, err := engine.Parse(source)
+	require.NoError(t, err)
+
+	// Execute template
+	ctx := context.Background()
+	_, err = tmpl.Execute(ctx, map[string]any{"text": "John Doe, john@example.com, 30 years old"})
+	require.NoError(t, err)
+
+	// Check inference config
+	config := tmpl.InferenceConfig()
+	require.NotNil(t, config)
+	assert.Equal(t, "data-extraction", config.Name)
+	assert.Equal(t, ProviderOpenAI, config.GetProvider())
+	assert.True(t, config.HasResponseFormat())
+
+	// Test provider format conversion
+	openAIFormat, err := config.ProviderFormat(ProviderOpenAI)
+	require.NoError(t, err)
+	require.NotNil(t, openAIFormat)
+	assert.Equal(t, ResponseFormatJSONSchema, openAIFormat[SchemaKeyType])
+
+	jsonSchema := openAIFormat[SchemaKeyJSONSchema].(map[string]any)
+	assert.Equal(t, "extracted_data", jsonSchema[AttrName])
+	assert.True(t, jsonSchema[SchemaKeyStrict].(bool))
+
+	// Schema should have additionalProperties: false added
+	schema := jsonSchema[SchemaKeySchema].(map[string]any)
+	assert.Equal(t, false, schema[SchemaKeyAdditionalProperties])
+}
+
+// TestE2E_AnthropicOutputFormatStyle tests full workflow for Anthropic-style structured outputs.
+func TestE2E_AnthropicOutputFormatStyle(t *testing.T) {
+	source := `---
+name: data-extraction
+model:
+  provider: anthropic
+  name: claude-sonnet-4-5
+  output_format:
+    format:
+      type: json_schema
+      schema:
+        type: object
+        properties:
+          name:
+            type: string
+          email:
+            type: string
+        required:
+          - name
+          - email
+---
+{~prompty.message role="user"~}
+Extract: {~prompty.var name="text" /~}
+{~/prompty.message~}
+`
+
+	engine := MustNew()
+	tmpl, err := engine.Parse(source)
+	require.NoError(t, err)
+
+	config := tmpl.InferenceConfig()
+	require.NotNil(t, config)
+	assert.True(t, config.HasOutputFormat())
+	assert.Equal(t, ProviderAnthropic, config.GetEffectiveProvider())
+
+	// Test provider format conversion
+	anthropicFormat, err := config.ProviderFormat(ProviderAnthropic)
+	require.NoError(t, err)
+	require.NotNil(t, anthropicFormat)
+
+	format := anthropicFormat[SchemaKeyFormat].(map[string]any)
+	assert.Equal(t, ResponseFormatJSONSchema, format[SchemaKeyType])
+
+	schema := format[SchemaKeySchema].(map[string]any)
+	assert.Equal(t, false, schema[SchemaKeyAdditionalProperties])
+}
+
+// TestE2E_GeminiPropertyOrderingSupport tests full workflow for Gemini-style with propertyOrdering.
+func TestE2E_GeminiPropertyOrderingSupport(t *testing.T) {
+	source := `---
+name: ordered-extraction
+model:
+  provider: gemini
+  name: gemini-2-5-pro
+  response_format:
+    type: json_schema
+    json_schema:
+      name: ordered_data
+      schema:
+        type: object
+        properties:
+          first_name:
+            type: string
+          last_name:
+            type: string
+          age:
+            type: number
+      propertyOrdering:
+        - first_name
+        - last_name
+        - age
+---
+{~prompty.message role="user"~}
+Extract ordered data
+{~/prompty.message~}
+`
+
+	engine := MustNew()
+	tmpl, err := engine.Parse(source)
+	require.NoError(t, err)
+
+	config := tmpl.InferenceConfig()
+	require.NotNil(t, config)
+	assert.Equal(t, ProviderGemini, config.GetProvider())
+
+	// Test provider format conversion
+	geminiFormat, err := config.ProviderFormat(ProviderGemini)
+	require.NoError(t, err)
+	require.NotNil(t, geminiFormat)
+
+	jsonSchema := geminiFormat[SchemaKeyJSONSchema].(map[string]any)
+	schema := jsonSchema[SchemaKeySchema].(map[string]any)
+
+	// Verify propertyOrdering is preserved
+	ordering := schema[SchemaKeyPropertyOrdering].([]string)
+	assert.Equal(t, []string{"first_name", "last_name", "age"}, ordering)
+}
+
+// TestE2E_VLLMGuidedDecodingJSON tests full workflow for vLLM guided decoding with JSON.
+func TestE2E_VLLMGuidedDecodingJSON(t *testing.T) {
+	source := `---
+name: structured-generation
+model:
+  provider: vllm
+  name: meta-llama/Llama-2-7b-hf
+  guided_decoding:
+    backend: xgrammar
+    json:
+      type: object
+      properties:
+        answer:
+          type: string
+        confidence:
+          type: number
+      required:
+        - answer
+        - confidence
+---
+{~prompty.message role="user"~}
+Question: {~prompty.var name="question" /~}
+{~/prompty.message~}
+`
+
+	engine := MustNew()
+	tmpl, err := engine.Parse(source)
+	require.NoError(t, err)
+
+	config := tmpl.InferenceConfig()
+	require.NotNil(t, config)
+	assert.True(t, config.HasGuidedDecoding())
+	assert.Equal(t, ProviderVLLM, config.GetEffectiveProvider())
+
+	// Test provider format conversion
+	vllmFormat, err := config.ProviderFormat(ProviderVLLM)
+	require.NoError(t, err)
+	require.NotNil(t, vllmFormat)
+
+	assert.Equal(t, GuidedBackendXGrammar, vllmFormat[GuidedKeyDecodingBackend])
+
+	jsonSchema := vllmFormat[GuidedKeyJSON].(map[string]any)
+	assert.Equal(t, false, jsonSchema[SchemaKeyAdditionalProperties])
+}
+
+// TestE2E_VLLMRegexGuidedDecoding tests vLLM regex-based guided decoding.
+func TestE2E_VLLMRegexGuidedDecoding(t *testing.T) {
+	source := `---
+name: phone-extraction
+model:
+  provider: vllm
+  name: meta-llama/Llama-2-7b-hf
+  guided_decoding:
+    regex: "\\d{3}-\\d{3}-\\d{4}"
+---
+{~prompty.message role="user"~}
+Extract phone number
+{~/prompty.message~}
+`
+
+	engine := MustNew()
+	tmpl, err := engine.Parse(source)
+	require.NoError(t, err)
+
+	config := tmpl.InferenceConfig()
+	require.NotNil(t, config)
+
+	vllmFormat, err := config.ProviderFormat(ProviderVLLM)
+	require.NoError(t, err)
+	assert.Equal(t, "\\d{3}-\\d{3}-\\d{4}", vllmFormat[GuidedKeyRegex])
+}
+
+// TestE2E_VLLMChoiceGuidedDecoding tests vLLM choice-based guided decoding.
+func TestE2E_VLLMChoiceGuidedDecoding(t *testing.T) {
+	source := `---
+name: sentiment
+model:
+  provider: vllm
+  name: meta-llama/Llama-2-7b-hf
+  guided_decoding:
+    choice:
+      - positive
+      - negative
+      - neutral
+---
+{~prompty.message role="user"~}
+Classify sentiment
+{~/prompty.message~}
+`
+
+	engine := MustNew()
+	tmpl, err := engine.Parse(source)
+	require.NoError(t, err)
+
+	config := tmpl.InferenceConfig()
+	vllmFormat, err := config.ProviderFormat(ProviderVLLM)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"positive", "negative", "neutral"}, vllmFormat[GuidedKeyChoice])
+}
+
+// TestE2E_EnumConstraintSupport tests enum/choice constraints.
+func TestE2E_EnumConstraintSupport(t *testing.T) {
+	source := `---
+name: sentiment-analysis
+model:
+  name: gpt-4o
+  response_format:
+    type: enum
+    enum:
+      values:
+        - positive
+        - negative
+        - neutral
+      description: Sentiment classification
+---
+{~prompty.message role="user"~}
+Classify: {~prompty.var name="text" /~}
+{~/prompty.message~}
+`
+
+	engine := MustNew()
+	tmpl, err := engine.Parse(source)
+	require.NoError(t, err)
+
+	config := tmpl.InferenceConfig()
+	require.NotNil(t, config)
+
+	rf := config.GetResponseFormat()
+	require.NotNil(t, rf)
+	assert.Equal(t, ResponseFormatEnum, rf.Type)
+	require.NotNil(t, rf.Enum)
+	assert.Len(t, rf.Enum.Values, 3)
+	assert.Equal(t, "Sentiment classification", rf.Enum.Description)
+
+	// Validate enum constraint
+	enumResult := ValidateEnumConstraint(rf.Enum)
+	assert.True(t, enumResult.Valid)
+}
+
+// TestE2E_SchemaValidationWorkflow tests schema validation workflow.
+func TestE2E_SchemaValidationWorkflow(t *testing.T) {
+	// Valid schema for strict mode
+	validSchema := map[string]any{
+		SchemaKeyType: SchemaTypeObject,
+		SchemaKeyProperties: map[string]any{
+			"name":  map[string]any{SchemaKeyType: SchemaTypeString},
+			"email": map[string]any{SchemaKeyType: SchemaTypeString},
+		},
+		SchemaKeyRequired:             []any{"name", "email"},
+		SchemaKeyAdditionalProperties: false,
+	}
+
+	// Validate for OpenAI
+	result := ValidateForProvider(validSchema, ProviderOpenAI)
+	assert.True(t, result.Valid, "Expected valid for OpenAI: %v", result.Errors)
+
+	// Invalid schema (missing additionalProperties)
+	invalidSchema := map[string]any{
+		SchemaKeyType: SchemaTypeObject,
+		SchemaKeyProperties: map[string]any{
+			"name": map[string]any{SchemaKeyType: SchemaTypeString},
+		},
+	}
+
+	result = ValidateForProvider(invalidSchema, ProviderOpenAI)
+	assert.False(t, result.Valid)
+	assert.NotEmpty(t, result.Errors)
+}
+
+// TestE2E_ProviderAutoDetection tests automatic provider detection.
+func TestE2E_ProviderAutoDetection(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		expected string
+	}{
+		{
+			name: "detect from explicit provider",
+			source: `---
+model:
+  provider: azure
+  name: gpt-4
+---
+content`,
+			expected: ProviderAzure,
+		},
+		{
+			name: "detect from output_format",
+			source: `---
+model:
+  output_format:
+    format:
+      type: json_schema
+      schema:
+        type: object
+---
+content`,
+			expected: ProviderAnthropic,
+		},
+		{
+			name: "detect from guided_decoding",
+			source: `---
+model:
+  guided_decoding:
+    regex: ".*"
+---
+content`,
+			expected: ProviderVLLM,
+		},
+		{
+			name: "detect from model name gpt",
+			source: `---
+model:
+  name: gpt-4-turbo
+---
+content`,
+			expected: ProviderOpenAI,
+		},
+		{
+			name: "detect from model name claude",
+			source: `---
+model:
+  name: claude-3-opus-20240229
+---
+content`,
+			expected: ProviderAnthropic,
+		},
+		{
+			name: "detect from model name gemini",
+			source: `---
+model:
+  name: gemini-1.5-pro
+---
+content`,
+			expected: ProviderGemini,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := MustNew()
+			tmpl, err := engine.Parse(tt.source)
+			require.NoError(t, err)
+
+			config := tmpl.InferenceConfig()
+			require.NotNil(t, config)
+			assert.Equal(t, tt.expected, config.GetEffectiveProvider())
+		})
+	}
+}
+
+// TestE2E_NestedSchemaHandling tests deeply nested schema handling.
+func TestE2E_NestedSchemaHandling(t *testing.T) {
+	source := `---
+name: nested-data
+model:
+  provider: openai
+  name: gpt-4o
+  response_format:
+    type: json_schema
+    json_schema:
+      name: nested_schema
+      strict: true
+      schema:
+        type: object
+        properties:
+          user:
+            type: object
+            properties:
+              name:
+                type: string
+              addresses:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    street:
+                      type: string
+                    city:
+                      type: string
+---
+content
+`
+
+	engine := MustNew()
+	tmpl, err := engine.Parse(source)
+	require.NoError(t, err)
+
+	config := tmpl.InferenceConfig()
+	require.NotNil(t, config)
+
+	// Convert to OpenAI format
+	openAIFormat, err := config.ProviderFormat(ProviderOpenAI)
+	require.NoError(t, err)
+
+	// Verify nested objects have additionalProperties: false
+	jsonSchema := openAIFormat[SchemaKeyJSONSchema].(map[string]any)
+	schema := jsonSchema[SchemaKeySchema].(map[string]any)
+	assert.Equal(t, false, schema[SchemaKeyAdditionalProperties])
+
+	userProp := schema[SchemaKeyProperties].(map[string]any)["user"].(map[string]any)
+	assert.Equal(t, false, userProp[SchemaKeyAdditionalProperties])
+
+	addressesProp := userProp[SchemaKeyProperties].(map[string]any)["addresses"].(map[string]any)
+	itemsSchema := addressesProp[SchemaKeyItems].(map[string]any)
+	assert.Equal(t, false, itemsSchema[SchemaKeyAdditionalProperties])
+}
+
+// TestE2E_NilSafeProviderMethods tests nil-safety of provider format methods.
+func TestE2E_NilSafeProviderMethods(t *testing.T) {
+	var rf *ResponseFormat
+	assert.Nil(t, rf.ToOpenAI())
+	assert.Nil(t, rf.ToAnthropic())
+	assert.Nil(t, rf.ToGemini())
+
+	var gd *GuidedDecoding
+	assert.Nil(t, gd.ToVLLM())
+
+	var of *OutputFormat
+	assert.Nil(t, of.ToAnthropic())
+
+	var config *InferenceConfig
+	result, err := config.ProviderFormat(ProviderOpenAI)
+	assert.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+// TestE2E_AnthropicResponseFormatFallback tests that ResponseFormat can be used for Anthropic.
+func TestE2E_AnthropicResponseFormatFallback(t *testing.T) {
+	source := `---
+name: anthropic-fallback
+model:
+  provider: anthropic
+  name: claude-3-opus
+  response_format:
+    type: json_schema
+    json_schema:
+      name: test_schema
+      schema:
+        type: object
+        properties:
+          result:
+            type: string
+---
+content
+`
+
+	engine := MustNew()
+	tmpl, err := engine.Parse(source)
+	require.NoError(t, err)
+
+	config := tmpl.InferenceConfig()
+	require.NotNil(t, config)
+
+	// Even though response_format is used, ProviderFormat for Anthropic should convert it
+	anthropicFormat, err := config.ProviderFormat(ProviderAnthropic)
+	require.NoError(t, err)
+	require.NotNil(t, anthropicFormat)
+
+	// Should be in Anthropic's output_format style
+	format := anthropicFormat[SchemaKeyFormat].(map[string]any)
+	assert.Equal(t, ResponseFormatJSONSchema, format[SchemaKeyType])
+}

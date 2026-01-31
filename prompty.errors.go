@@ -127,6 +127,20 @@ const (
 	ErrMsgLabelNameEmpty     = "label name cannot be empty"
 	ErrMsgLabelVersionError  = "label version mismatch"
 	ErrMsgInvalidLabelFormat = "must start with lowercase letter and contain only lowercase letters, digits, underscores, or hyphens"
+
+	// Schema validation messages
+	ErrMsgSchemaValidationFailed     = "schema validation failed"
+	ErrMsgSchemaInvalidType          = "schema has invalid type"
+	ErrMsgSchemaMissingType          = "schema missing required 'type' field"
+	ErrMsgSchemaMissingProperties    = "object schema missing 'properties' field"
+	ErrMsgSchemaInvalidProperties    = "schema 'properties' field must be an object"
+	ErrMsgSchemaInvalidRequired      = "schema 'required' field must be an array"
+	ErrMsgSchemaInvalidEnum          = "enum values must be a non-empty array"
+	ErrMsgSchemaUnsupportedProvider  = "unsupported provider for schema validation"
+	ErrMsgSchemaAdditionalProperties = "strict mode requires additionalProperties: false"
+	ErrMsgSchemaPropertyOrdering     = "propertyOrdering requires Gemini 2.5+ provider"
+	ErrMsgEnumEmptyValues            = "enum constraint requires at least one value"
+	ErrMsgGuidedDecodingConflict     = "only one guided decoding constraint allowed"
 )
 
 // Error code constants for categorization
@@ -141,6 +155,7 @@ const (
 	ErrCodeEnv        = "PROMPTY_ENV"
 	ErrCodeLabel      = "PROMPTY_LABEL"
 	ErrCodeStatus     = "PROMPTY_STATUS"
+	ErrCodeSchema     = "PROMPTY_SCHEMA"
 )
 
 // Position represents a location in the source template
@@ -413,4 +428,16 @@ func NewArchivedVersionError(templateName string, version int) error {
 func NewInvalidDeploymentStatusError(status string) error {
 	return cuserr.NewValidationError(ErrCodeStatus, ErrMsgInvalidDeploymentStatus).
 		WithMetadata("status", status)
+}
+
+// NewSchemaValidationError creates an error for schema validation failures.
+func NewSchemaValidationError(msg, path string) error {
+	return cuserr.NewValidationError(ErrCodeSchema, msg).
+		WithMetadata(MetaKeyPath, path)
+}
+
+// NewSchemaProviderError creates an error for provider-specific schema issues.
+func NewSchemaProviderError(msg, provider string) error {
+	return cuserr.NewValidationError(ErrCodeSchema, msg).
+		WithMetadata("provider", provider)
 }
