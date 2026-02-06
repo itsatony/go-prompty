@@ -22,6 +22,15 @@ type Resolver interface {
 	Validate(attrs Attributes) error
 }
 
+// PromptResolver provides prompt lookup for reference resolution.
+// Implement this interface to enable {~prompty.ref~} tag functionality.
+type PromptResolver interface {
+	// ResolvePrompt looks up a prompt by slug and version.
+	// If version is empty or "latest", the most recent version should be returned.
+	// Returns the prompt and its template body, or an error if not found.
+	ResolvePrompt(ctx context.Context, slug string, version string) (*Prompt, string, error)
+}
+
 // Attributes provides read-only access to tag attributes.
 // All attribute values are strings; resolvers must convert as needed.
 type Attributes interface {
@@ -81,4 +90,23 @@ func (r *ResolverFunc) Validate(attrs Attributes) error {
 		return r.validate(attrs)
 	}
 	return nil
+}
+
+// PromptResolverAdapter wraps a PromptResolver to implement PromptBodyResolver.
+// This adapter extracts only the template body from the full PromptResolver response.
+type PromptResolverAdapter struct {
+	resolver PromptResolver
+}
+
+// NewPromptResolverAdapter creates an adapter that wraps a PromptResolver
+// to implement the PromptBodyResolver interface used internally.
+func NewPromptResolverAdapter(resolver PromptResolver) *PromptResolverAdapter {
+	return &PromptResolverAdapter{resolver: resolver}
+}
+
+// ResolvePromptBody looks up a prompt by slug and version and returns its template body.
+// This implements the PromptBodyResolver interface.
+func (a *PromptResolverAdapter) ResolvePromptBody(ctx context.Context, slug string, version string) (string, error) {
+	_, body, err := a.resolver.ResolvePrompt(ctx, slug, version)
+	return body, err
 }

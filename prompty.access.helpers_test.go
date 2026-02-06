@@ -318,7 +318,7 @@ func TestBatchCheck_ContinuesAfterError(t *testing.T) {
 		}
 		reqs := []*AccessRequest{
 			NewAccessRequest(OpRead, "first", nil),
-			NewAccessRequest(OpList, "second", nil),  // Will error
+			NewAccessRequest(OpList, "second", nil), // Will error
 			NewAccessRequest(OpRead, "third", nil),
 			NewAccessRequest(OpList, "fourth", nil),
 		}

@@ -455,7 +455,7 @@ func TestToTime(t *testing.T) {
 // Test parseTimeString helper function
 func TestParseTimeString(t *testing.T) {
 	validFormats := []string{
-		"2024-12-25T10:30:00Z",          // RFC3339
+		"2024-12-25T10:30:00Z",           // RFC3339
 		"2024-12-25T10:30:00.123456789Z", // RFC3339Nano
 		"2024-12-25",                     // ISO date
 		"2024-12-25 15:04:05",            // Datetime with space

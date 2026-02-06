@@ -306,7 +306,7 @@ func TestValidateGuidedDecoding_Choice(t *testing.T) {
 func TestDetectSchemaProvider(t *testing.T) {
 	tests := []struct {
 		name     string
-		config   *InferenceConfig
+		config   *ExecutionConfig
 		expected string
 	}{
 		{
@@ -316,28 +316,22 @@ func TestDetectSchemaProvider(t *testing.T) {
 		},
 		{
 			name: "explicit provider",
-			config: &InferenceConfig{
-				Model: &ModelConfig{
-					Provider: ProviderOpenAI,
-				},
+			config: &ExecutionConfig{
+				Provider: ProviderOpenAI,
 			},
 			expected: ProviderOpenAI,
 		},
 		{
-			name: "infer from OutputFormat",
-			config: &InferenceConfig{
-				Model: &ModelConfig{
-					OutputFormat: &OutputFormat{},
-				},
+			name: "infer from Thinking",
+			config: &ExecutionConfig{
+				Thinking: &ThinkingConfig{Enabled: true},
 			},
 			expected: ProviderAnthropic,
 		},
 		{
 			name: "infer from GuidedDecoding",
-			config: &InferenceConfig{
-				Model: &ModelConfig{
-					GuidedDecoding: &GuidedDecoding{},
-				},
+			config: &ExecutionConfig{
+				GuidedDecoding: &GuidedDecoding{},
 			},
 			expected: ProviderVLLM,
 		},
@@ -379,7 +373,7 @@ func TestValidateForProvider_Gemini_PropertyOrdering(t *testing.T) {
 
 func TestValidateJSONSchema_PrimitiveTypes(t *testing.T) {
 	tests := []struct {
-		name     string
+		name       string
 		schemaType string
 	}{
 		{"string", SchemaTypeString},
@@ -552,17 +546,15 @@ func TestOutputFormat_ToAnthropic(t *testing.T) {
 	assert.Equal(t, false, schema[SchemaKeyAdditionalProperties])
 }
 
-func TestInferenceConfig_ProviderFormat_OpenAI(t *testing.T) {
-	config := &InferenceConfig{
-		Model: &ModelConfig{
-			ResponseFormat: &ResponseFormat{
-				Type: ResponseFormatJSONSchema,
-				JSONSchema: &JSONSchemaSpec{
-					Name: "test",
-					Schema: map[string]any{
-						SchemaKeyType:       SchemaTypeObject,
-						SchemaKeyProperties: map[string]any{},
-					},
+func TestExecutionConfig_ProviderFormat_OpenAI(t *testing.T) {
+	config := &ExecutionConfig{
+		ResponseFormat: &ResponseFormat{
+			Type: ResponseFormatJSONSchema,
+			JSONSchema: &JSONSchemaSpec{
+				Name: "test",
+				Schema: map[string]any{
+					SchemaKeyType:       SchemaTypeObject,
+					SchemaKeyProperties: map[string]any{},
 				},
 			},
 		},
@@ -574,16 +566,15 @@ func TestInferenceConfig_ProviderFormat_OpenAI(t *testing.T) {
 	assert.Equal(t, ResponseFormatJSONSchema, result[SchemaKeyType])
 }
 
-func TestInferenceConfig_ProviderFormat_Anthropic(t *testing.T) {
-	config := &InferenceConfig{
-		Model: &ModelConfig{
-			OutputFormat: &OutputFormat{
-				Format: &OutputFormatSpec{
-					Type: ResponseFormatJSONSchema,
-					Schema: map[string]any{
-						SchemaKeyType:       SchemaTypeObject,
-						SchemaKeyProperties: map[string]any{},
-					},
+func TestExecutionConfig_ProviderFormat_Anthropic(t *testing.T) {
+	config := &ExecutionConfig{
+		ResponseFormat: &ResponseFormat{
+			Type: ResponseFormatJSONSchema,
+			JSONSchema: &JSONSchemaSpec{
+				Name: "test",
+				Schema: map[string]any{
+					SchemaKeyType:       SchemaTypeObject,
+					SchemaKeyProperties: map[string]any{},
 				},
 			},
 		},
@@ -595,12 +586,10 @@ func TestInferenceConfig_ProviderFormat_Anthropic(t *testing.T) {
 	assert.Contains(t, result, SchemaKeyFormat)
 }
 
-func TestInferenceConfig_ProviderFormat_VLLM(t *testing.T) {
-	config := &InferenceConfig{
-		Model: &ModelConfig{
-			GuidedDecoding: &GuidedDecoding{
-				Regex: "^test$",
-			},
+func TestExecutionConfig_ProviderFormat_VLLM(t *testing.T) {
+	config := &ExecutionConfig{
+		GuidedDecoding: &GuidedDecoding{
+			Regex: "^test$",
 		},
 	}
 
@@ -610,10 +599,8 @@ func TestInferenceConfig_ProviderFormat_VLLM(t *testing.T) {
 	assert.Equal(t, "^test$", result[GuidedKeyRegex])
 }
 
-func TestInferenceConfig_ProviderFormat_Unknown(t *testing.T) {
-	config := &InferenceConfig{
-		Model: &ModelConfig{},
-	}
+func TestExecutionConfig_ProviderFormat_Unknown(t *testing.T) {
+	config := &ExecutionConfig{}
 
 	_, err := config.ProviderFormat("unknown-provider")
 	assert.Error(t, err)

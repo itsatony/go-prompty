@@ -872,10 +872,10 @@ func TestE2E_Conditional_LogicalAnd(t *testing.T) {
 	template := `{~prompty.if eval="isLoggedIn && isVerified"~}Access granted{~prompty.else~}Access denied{~/prompty.if~}`
 
 	tests := []struct {
-		name       string
-		loggedIn   bool
-		verified   bool
-		expected   string
+		name     string
+		loggedIn bool
+		verified bool
+		expected string
 	}{
 		{"both true", true, true, "Access granted"},
 		{"logged in only", true, false, "Access denied"},

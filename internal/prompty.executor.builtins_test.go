@@ -247,7 +247,10 @@ func TestRegisterBuiltins(t *testing.T) {
 	assert.True(t, registry.Has(TagNameInclude))
 	assert.True(t, registry.Has(TagNameEnv))
 	assert.True(t, registry.Has(TagNameMessage))
-	assert.Equal(t, 5, registry.Count())
+	assert.True(t, registry.Has(TagNameRef))
+	assert.True(t, registry.Has(TagNameSkillsCatalog))
+	assert.True(t, registry.Has(TagNameToolsCatalog))
+	assert.Equal(t, 8, registry.Count())
 
 	// Verify we can get them
 	varResolver, ok := registry.Get(TagNameVar)

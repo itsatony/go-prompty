@@ -899,10 +899,10 @@ func (p *Parser) newExpectedTokenError(expected TokenType, actual Token) error {
 
 func (p *Parser) newMismatchedTagError(expected, actual string) error {
 	return &ParserError{
-		Message:       ErrMsgMismatchedTag,
-		Position:      p.current().Position,
-		ExpectedTag:   expected,
-		ActualTag:     actual,
+		Message:     ErrMsgMismatchedTag,
+		Position:    p.current().Position,
+		ExpectedTag: expected,
+		ActualTag:   actual,
 	}
 }
 

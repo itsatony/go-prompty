@@ -13,11 +13,11 @@ import (
 // It caches the output of Execute() calls based on template name/source
 // and input data, avoiding redundant template execution.
 type ResultCache struct {
-	mu         sync.RWMutex
-	entries    map[string]*resultCacheEntry
-	config     ResultCacheConfig
-	stats      ResultCacheStats
-	evictList  []string // LRU tracking
+	mu        sync.RWMutex
+	entries   map[string]*resultCacheEntry
+	config    ResultCacheConfig
+	stats     ResultCacheStats
+	evictList []string // LRU tracking
 }
 
 // resultCacheEntry holds a cached result with metadata.

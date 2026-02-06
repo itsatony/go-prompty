@@ -4,10 +4,10 @@ import "time"
 
 // Delimiter constants - the {~ ~} syntax chosen for minimal collision with prompt content
 const (
-	DefaultOpenDelim   = "{~"
-	DefaultCloseDelim  = "~}"
-	DefaultSelfClose   = "/~}"
-	DefaultBlockClose  = "{~/"
+	DefaultOpenDelim  = "{~"
+	DefaultCloseDelim = "~}"
+	DefaultSelfClose  = "/~}"
+	DefaultBlockClose = "{~/"
 )
 
 // Built-in tag names - all use prompty. namespace prefix
@@ -30,6 +30,7 @@ const (
 	TagNameBlock       = "prompty.block"       // Template inheritance - overridable block
 	TagNameParent      = "prompty.parent"      // Template inheritance - call parent block content
 	TagNameMessage     = "prompty.message"     // Conversation message for chat API
+	TagNameRef         = "prompty.ref"         // v2.0: Prompt reference resolver
 )
 
 // YAML frontmatter constants
@@ -75,6 +76,8 @@ const (
 	AttrWith     = "with"     // Context path for include
 	AttrIsolate  = "isolate"  // Isolated context flag for include
 	AttrRequired = "required" // Required flag for env resolver
+	AttrSlug     = "slug"     // v2.0: Prompt slug for reference
+	AttrVersion  = "version"  // v2.0: Prompt version for reference
 )
 
 // Boolean attribute values
@@ -159,6 +162,9 @@ const (
 	MetaKeyToType       = "to_type"
 	MetaKeyEnvVar       = "env_var"
 	MetaKeyInputName    = "input_name"
+	MetaKeyPromptSlug   = "prompt_slug"     // v2.0: Prompt slug for reference errors
+	MetaKeyPromptName   = "prompt_name"     // v2.0: Prompt name for validation errors
+	MetaKeyRefChain     = "reference_chain" // v2.0: Reference chain for circular detection
 )
 
 // Escape sequence constants
@@ -354,6 +360,33 @@ const (
 	ErrMsgPathTraversalDetected = "invalid template name: path traversal characters detected"
 )
 
+// v2.0 Prompt validation constraints (Agent Skills spec)
+const (
+	// PromptNameMaxLength is the maximum length for prompt names (slug format)
+	PromptNameMaxLength = 64
+	// PromptDescriptionMaxLength is the maximum length for prompt descriptions
+	PromptDescriptionMaxLength = 1024
+	// PromptSlugPattern is the regex pattern for valid prompt names/slugs
+	// Must start with lowercase letter, followed by lowercase letters, digits, or hyphens
+	PromptSlugPattern = `^[a-z][a-z0-9-]*$`
+)
+
+// v2.0 Reference resolution constants
+const (
+	// RefMaxDepth is the maximum depth for nested prompt references
+	RefMaxDepth = 10
+	// RefVersionLatest is the default version when not specified
+	RefVersionLatest = "latest"
+)
+
+// v2.0 Skope visibility values
+const (
+	SkopeVisibilityPublic  = "public"
+	SkopeVisibilityPrivate = "private"
+	SkopeVisibilityShared  = "shared" // v2.1: replaces "team" per spec
+	SkopeVisibilityTeam    = "team"   // Deprecated: use SkopeVisibilityShared
+)
+
 // DeploymentStatus represents the lifecycle status of a template version.
 type DeploymentStatus string
 
@@ -422,4 +455,137 @@ const (
 const (
 	ErrFmtOperationAllowed    = "operation %s is allowed"
 	ErrFmtOperationNotAllowed = "operation %s is not allowed"
+)
+
+// v2.1 Document type constants
+// DocumentType identifies the kind of document (prompt, skill, agent).
+type DocumentType string
+
+const (
+	// DocumentTypePrompt is a simple prompt template (no skills/tools/constraints)
+	DocumentTypePrompt DocumentType = "prompt"
+	// DocumentTypeSkill is a reusable skill document (default type)
+	DocumentTypeSkill DocumentType = "skill"
+	// DocumentTypeAgent is a full agent definition with skills, tools, and constraints
+	DocumentTypeAgent DocumentType = "agent"
+)
+
+// SkillInjection defines how a skill is injected into an agent's context.
+type SkillInjection string
+
+const (
+	// SkillInjectionNone does not inject skill content into the agent
+	SkillInjectionNone SkillInjection = "none"
+	// SkillInjectionSystemPrompt appends skill content to the system prompt
+	SkillInjectionSystemPrompt SkillInjection = "system_prompt"
+	// SkillInjectionUserContext injects skill content into user context
+	SkillInjectionUserContext SkillInjection = "user_context"
+)
+
+// CatalogFormat defines the output format for catalog generation.
+type CatalogFormat string
+
+const (
+	// CatalogFormatDefault uses markdown format
+	CatalogFormatDefault CatalogFormat = ""
+	// CatalogFormatDetailed includes full descriptions and parameters
+	CatalogFormatDetailed CatalogFormat = "detailed"
+	// CatalogFormatCompact uses minimal single-line format
+	CatalogFormatCompact CatalogFormat = "compact"
+	// CatalogFormatFunctionCalling generates JSON schema for function calling
+	CatalogFormatFunctionCalling CatalogFormat = "function_calling"
+)
+
+// v2.1 Catalog resolver tag names
+const (
+	TagNameSkillsCatalog = "prompty.skills_catalog"
+	TagNameToolsCatalog  = "prompty.tools_catalog"
+)
+
+// v2.1 Field constraints
+const (
+	MaxLicenseLength       = 100
+	MaxCompatibilityLength = 500
+)
+
+// v2.1 Error message constants
+const (
+	ErrMsgNotAnAgent              = "document is not an agent type"
+	ErrMsgSkillNotFound           = "skill not found"
+	ErrMsgSkillRefEmpty           = "skill reference slug is empty"
+	ErrMsgSkillRefAmbiguous       = "skill reference is ambiguous"
+	ErrMsgNoExecutionConfig       = "execution configuration is required"
+	ErrMsgNoProvider              = "provider is required in execution config"
+	ErrMsgNoModel                 = "model is required in execution config"
+	ErrMsgCompilationFailed       = "agent compilation failed"
+	ErrMsgInvalidDocumentType     = "invalid document type"
+	ErrMsgPromptNoSkillsAllowed   = "prompt type does not support skills"
+	ErrMsgPromptNoToolsAllowed    = "prompt type does not support tools"
+	ErrMsgPromptNoConstraints     = "prompt type does not support constraints"
+	ErrMsgAgentMessagesInvalid    = "agent messages must include system or user role"
+	ErrMsgSkillRefInvalidVersion  = "invalid skill reference version"
+	ErrMsgCatalogGenerationFailed = "catalog generation failed"
+	ErrMsgSkillNoSkillsAllowed    = "skill type does not support nested skills"
+	ErrMsgInvalidSkillInjection   = "invalid skill injection mode"
+	ErrMsgMCPServerNameEmpty      = "MCP server name is empty"
+	ErrMsgMCPServerURLEmpty       = "MCP server URL is empty"
+	ErrMsgMessageTemplateNoRole   = "message template requires a role"
+	ErrMsgMessageTemplateNoBody   = "message template requires content"
+	ErrMsgInlineSkillNoSlug       = "inline skill requires a slug"
+	ErrMsgInlineSkillNoBody       = "inline skill requires a body"
+)
+
+// v2.1 Error code constants
+const (
+	ErrCodeAgent   = "PROMPTY_AGENT"
+	ErrCodeCompile = "PROMPTY_COMPILE"
+	ErrCodeCatalog = "PROMPTY_CATALOG"
+)
+
+// v2.1 Metadata keys for agent context
+const (
+	MetaKeyDocumentType  = "document_type"
+	MetaKeySkillSlug     = "skill_slug"
+	MetaKeyInjectionMode = "injection_mode"
+	MetaKeySkillVersion  = "skill_version"
+)
+
+// v2.1 Special template name for self-reference
+const (
+	TemplateNameSelf = "self"
+)
+
+// v2.1 Context keys used during agent compilation
+const (
+	ContextKeyInput       = "input"
+	ContextKeyMeta        = "meta"
+	ContextKeyContext      = "context"
+	ContextKeyConstraints = "constraints"
+	ContextKeySkills      = "skills"
+	ContextKeyTools       = "tools"
+	ContextKeySelfBody    = "_selfBody"
+)
+
+// v2.1 Skill injection markers
+const (
+	SkillInjectionMarkerStart = "<!-- SKILL_START:"
+	SkillInjectionMarkerEnd   = "<!-- SKILL_END:"
+	SkillInjectionMarkerClose = " -->"
+)
+
+// Versioning error messages
+const (
+	ErrMsgVersionGetFailed       = "failed to get version"
+	ErrMsgVersionSaveRollback    = "failed to save rollback"
+	ErrMsgVersionGetSource       = "failed to get source version"
+	ErrMsgVersionTemplateExists  = "template already exists"
+	ErrMsgVersionSaveClone       = "failed to save clone"
+	ErrMsgVersionMinimumRequired = "must keep at least 1 version"
+	ErrMsgVersionNoPrevious      = "no previous version for version 1"
+)
+
+// Catalog-specific error detail messages
+const (
+	ErrMsgCatalogFuncCallingSkills = "function_calling not supported for skills catalog"
+	ErrMsgCatalogUnknownFormat     = "unknown catalog format"
 )

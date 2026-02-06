@@ -812,11 +812,11 @@ func TestParser_ParserErrorString(t *testing.T) {
 // TestParser_ParseConditional tests the parseConditional function
 func TestParser_ParseConditional(t *testing.T) {
 	tests := []struct {
-		name      string
-		input     string
-		wantErr   bool
-		errMsg    string
-		checkAST  func(*testing.T, *RootNode)
+		name     string
+		input    string
+		wantErr  bool
+		errMsg   string
+		checkAST func(*testing.T, *RootNode)
 	}{
 		{
 			name:    "valid if...else structure",
@@ -917,11 +917,11 @@ func TestParser_ParseConditional(t *testing.T) {
 // TestParser_ParseFor tests the parseFor and parseForBody functions
 func TestParser_ParseFor(t *testing.T) {
 	tests := []struct {
-		name      string
-		input     string
-		wantErr   bool
-		errMsg    string
-		checkAST  func(*testing.T, *RootNode)
+		name     string
+		input    string
+		wantErr  bool
+		errMsg   string
+		checkAST func(*testing.T, *RootNode)
 	}{
 		{
 			name:    "valid for loop with item and in",
@@ -1028,11 +1028,11 @@ func TestParser_ParseFor(t *testing.T) {
 // TestParser_ParseSwitch tests the parseSwitch and parseSwitchCase functions
 func TestParser_ParseSwitch(t *testing.T) {
 	tests := []struct {
-		name      string
-		input     string
-		wantErr   bool
-		errMsg    string
-		checkAST  func(*testing.T, *RootNode)
+		name     string
+		input    string
+		wantErr  bool
+		errMsg   string
+		checkAST func(*testing.T, *RootNode)
 	}{
 		{
 			name:    "valid switch with single case",
@@ -1167,11 +1167,11 @@ func TestParser_ParseSwitch(t *testing.T) {
 // TestParser_ParseCommentBlock tests the parseCommentBlock function
 func TestParser_ParseCommentBlock(t *testing.T) {
 	tests := []struct {
-		name      string
-		input     string
-		wantErr   bool
-		errMsg    string
-		checkAST  func(*testing.T, *RootNode)
+		name     string
+		input    string
+		wantErr  bool
+		errMsg   string
+		checkAST func(*testing.T, *RootNode)
 	}{
 		{
 			name:    "comment with text content returns nil",

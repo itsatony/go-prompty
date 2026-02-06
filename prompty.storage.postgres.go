@@ -194,7 +194,7 @@ func (s *PostgresStorage) Get(ctx context.Context, name string) (*StoredTemplate
 	defer cancel()
 
 	query := fmt.Sprintf(`
-		SELECT id, name, source, version, status, metadata, inference_config,
+		SELECT id, name, source, version, status, metadata, prompt_config,
 		       created_at, updated_at, created_by, tenant_id, tags
 		FROM %s
 		WHERE name = $1
@@ -234,7 +234,7 @@ func (s *PostgresStorage) GetByID(ctx context.Context, id TemplateID) (*StoredTe
 	defer cancel()
 
 	query := fmt.Sprintf(`
-		SELECT id, name, source, version, status, metadata, inference_config,
+		SELECT id, name, source, version, status, metadata, prompt_config,
 		       created_at, updated_at, created_by, tenant_id, tags
 		FROM %s
 		WHERE id = $1`, s.tableName())
@@ -272,7 +272,7 @@ func (s *PostgresStorage) GetVersion(ctx context.Context, name string, version i
 	defer cancel()
 
 	query := fmt.Sprintf(`
-		SELECT id, name, source, version, status, metadata, inference_config,
+		SELECT id, name, source, version, status, metadata, prompt_config,
 		       created_at, updated_at, created_by, tenant_id, tags
 		FROM %s
 		WHERE name = $1 AND version = $2`, s.tableName())
@@ -363,9 +363,9 @@ func (s *PostgresStorage) Save(ctx context.Context, tmpl *StoredTemplate) error 
 		}
 	}
 
-	var inferenceConfigJSON []byte
-	if tmpl.InferenceConfig != nil {
-		inferenceConfigJSON, err = json.Marshal(tmpl.InferenceConfig)
+	var promptConfigJSON []byte
+	if tmpl.PromptConfig != nil {
+		promptConfigJSON, err = json.Marshal(tmpl.PromptConfig)
 		if err != nil {
 			return &StorageError{
 				Message: ErrMsgPostgresMarshalFailed,
@@ -387,14 +387,14 @@ func (s *PostgresStorage) Save(ctx context.Context, tmpl *StoredTemplate) error 
 	// Insert template
 	insertQuery := fmt.Sprintf(`
 		INSERT INTO %s
-		(id, name, source, version, status, metadata, inference_config,
+		(id, name, source, version, status, metadata, prompt_config,
 		 created_at, updated_at, created_by, tenant_id, tags)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		s.tableName())
 
 	_, err = tx.ExecContext(ctx, insertQuery,
 		string(newID), tmpl.Name, tmpl.Source, nextVersion, string(status),
-		metadataJSON, inferenceConfigJSON,
+		metadataJSON, promptConfigJSON,
 		now, now, nullString(tmpl.CreatedBy), nullString(tmpl.TenantID), tagsJSON)
 	if err != nil {
 		return &StorageError{
@@ -591,7 +591,7 @@ func (s *PostgresStorage) List(ctx context.Context, query *TemplateQuery) ([]*St
 	var sqlQuery string
 	if query.IncludeAllVersions {
 		sqlQuery = fmt.Sprintf(`
-			SELECT id, name, source, version, status, metadata, inference_config,
+			SELECT id, name, source, version, status, metadata, prompt_config,
 			       created_at, updated_at, created_by, tenant_id, tags
 			FROM %s
 			%s
@@ -600,7 +600,7 @@ func (s *PostgresStorage) List(ctx context.Context, query *TemplateQuery) ([]*St
 	} else {
 		// Only latest version per name using DISTINCT ON
 		sqlQuery = fmt.Sprintf(`
-			SELECT DISTINCT ON (name) id, name, source, version, status, metadata, inference_config,
+			SELECT DISTINCT ON (name) id, name, source, version, status, metadata, prompt_config,
 			       created_at, updated_at, created_by, tenant_id, tags
 			FROM %s
 			%s
@@ -865,7 +865,7 @@ func (s *PostgresStorage) getMigrations() []postgresMigration {
 					source           TEXT NOT NULL,
 					version          INTEGER NOT NULL DEFAULT 1,
 					metadata         JSONB DEFAULT '{}',
-					inference_config JSONB DEFAULT NULL,
+					prompt_config JSONB DEFAULT NULL,
 					created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 					updated_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 					created_by       VARCHAR(255),
@@ -972,66 +972,76 @@ func (s *PostgresStorage) getMigrations() []postgresMigration {
 				s.config.TablePrefix+"template_labels",
 			),
 		},
+		{
+			Version:     4,
+			Description: "Rename inference_config to prompt_config for v2.1",
+			SQL: fmt.Sprintf(`
+				ALTER TABLE %s
+				RENAME COLUMN inference_config TO prompt_config;
+			`,
+				s.tableName(),
+			),
+		},
 	}
 }
 
 // scanTemplate scans a single row into a StoredTemplate.
 func (s *PostgresStorage) scanTemplate(row *sql.Row) (*StoredTemplate, error) {
 	var (
-		id               string
-		name             string
-		source           string
-		version          int
-		status           sql.NullString
-		metadataJSON     []byte
-		inferenceJSON    sql.NullString
-		createdAt        time.Time
-		updatedAt        time.Time
-		createdBy        sql.NullString
-		tenantID         sql.NullString
-		tagsJSON         []byte
+		id            string
+		name          string
+		source        string
+		version       int
+		status        sql.NullString
+		metadataJSON  []byte
+		promptConfigJSONStr sql.NullString
+		createdAt     time.Time
+		updatedAt     time.Time
+		createdBy     sql.NullString
+		tenantID      sql.NullString
+		tagsJSON      []byte
 	)
 
-	err := row.Scan(&id, &name, &source, &version, &status, &metadataJSON, &inferenceJSON,
+	err := row.Scan(&id, &name, &source, &version, &status, &metadataJSON, &promptConfigJSONStr,
 		&createdAt, &updatedAt, &createdBy, &tenantID, &tagsJSON)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.unmarshalTemplate(id, name, source, version, status, metadataJSON, inferenceJSON,
+	return s.unmarshalTemplate(id, name, source, version, status, metadataJSON, promptConfigJSONStr,
 		createdAt, updatedAt, createdBy, tenantID, tagsJSON)
 }
 
 // scanTemplateRow scans a rows result into a StoredTemplate.
 func (s *PostgresStorage) scanTemplateRow(rows *sql.Rows) (*StoredTemplate, error) {
 	var (
-		id               string
-		name             string
-		source           string
-		version          int
-		status           sql.NullString
-		metadataJSON     []byte
-		inferenceJSON    sql.NullString
-		createdAt        time.Time
-		updatedAt        time.Time
-		createdBy        sql.NullString
-		tenantID         sql.NullString
-		tagsJSON         []byte
+		id            string
+		name          string
+		source        string
+		version       int
+		status        sql.NullString
+		metadataJSON  []byte
+		promptConfigJSONStr sql.NullString
+		createdAt     time.Time
+		updatedAt     time.Time
+		createdBy     sql.NullString
+		tenantID      sql.NullString
+		tagsJSON      []byte
 	)
 
-	err := rows.Scan(&id, &name, &source, &version, &status, &metadataJSON, &inferenceJSON,
+	err := rows.Scan(&id, &name, &source, &version, &status, &metadataJSON, &promptConfigJSONStr,
 		&createdAt, &updatedAt, &createdBy, &tenantID, &tagsJSON)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.unmarshalTemplate(id, name, source, version, status, metadataJSON, inferenceJSON,
+	return s.unmarshalTemplate(id, name, source, version, status, metadataJSON, promptConfigJSONStr,
 		createdAt, updatedAt, createdBy, tenantID, tagsJSON)
 }
 
 // unmarshalTemplate converts scanned values into a StoredTemplate.
 func (s *PostgresStorage) unmarshalTemplate(id, name, source string, version int,
-	status sql.NullString, metadataJSON []byte, inferenceJSON sql.NullString,
+	status sql.NullString, metadataJSON []byte, promptConfigJSONStr sql.NullString,
 	createdAt, updatedAt time.Time, createdBy, tenantID sql.NullString,
 	tagsJSON []byte) (*StoredTemplate, error) {
 
@@ -1056,13 +1066,13 @@ func (s *PostgresStorage) unmarshalTemplate(id, name, source string, version int
 		}
 	}
 
-	// Unmarshal inference config
-	if inferenceJSON.Valid && inferenceJSON.String != "" && inferenceJSON.String != "null" {
-		var cfg InferenceConfig
-		if err := json.Unmarshal([]byte(inferenceJSON.String), &cfg); err != nil {
-			return nil, fmt.Errorf("%s: inference_config: %w", ErrMsgPostgresUnmarshalFailed, err)
+	// Unmarshal prompt config
+	if promptConfigJSONStr.Valid && promptConfigJSONStr.String != "" && promptConfigJSONStr.String != "null" {
+		var cfg Prompt
+		if err := json.Unmarshal([]byte(promptConfigJSONStr.String), &cfg); err != nil {
+			return nil, fmt.Errorf("%s: prompt_config: %w", ErrMsgPostgresUnmarshalFailed, err)
 		}
-		tmpl.InferenceConfig = &cfg
+		tmpl.PromptConfig = &cfg
 	}
 
 	// Unmarshal tags
@@ -1219,7 +1229,7 @@ func (s *PostgresStorage) GetByLabel(ctx context.Context, templateName, label st
 
 	// Get template by version
 	query := fmt.Sprintf(`
-		SELECT id, name, source, version, status, metadata, inference_config,
+		SELECT id, name, source, version, status, metadata, prompt_config,
 		       created_at, updated_at, created_by, tenant_id, tags
 		FROM %s
 		WHERE name = $1 AND version = $2`, s.tableName())

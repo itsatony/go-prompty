@@ -13,13 +13,13 @@ type Template struct {
 	ast             *internal.RootNode
 	executor        *internal.Executor
 	config          *engineConfig
-	engine          TemplateExecutor       // Engine reference for nested template execution
-	inferenceConfig *InferenceConfig       // Parsed inference configuration from config block
+	engine          TemplateExecutor          // Engine reference for nested template execution
+	prompt          *Prompt                   // Parsed prompt configuration from frontmatter
 	inheritanceInfo *internal.InheritanceInfo // Inheritance info (nil if no extends)
 }
 
-// newTemplateWithConfig creates a new template with inference configuration (internal use).
-func newTemplateWithConfig(source, templateBody string, ast *internal.RootNode, executor *internal.Executor, config *engineConfig, engine TemplateExecutor, inferenceConfig *InferenceConfig) *Template {
+// newTemplateWithConfig creates a new template with prompt configuration (internal use).
+func newTemplateWithConfig(source, templateBody string, ast *internal.RootNode, executor *internal.Executor, config *engineConfig, engine TemplateExecutor, prompt *Prompt) *Template {
 	// Extract inheritance info from AST
 	inheritanceInfo, _ := internal.ExtractInheritanceInfo(ast)
 
@@ -30,10 +30,11 @@ func newTemplateWithConfig(source, templateBody string, ast *internal.RootNode, 
 		executor:        executor,
 		config:          config,
 		engine:          engine,
-		inferenceConfig: inferenceConfig,
+		prompt:          prompt,
 		inheritanceInfo: inheritanceInfo,
 	}
 }
+
 
 // Execute renders the template with the given data.
 // This is a convenience method that creates a Context from the data map.
@@ -88,15 +89,15 @@ func (t *Template) TemplateBody() string {
 	return t.templateBody
 }
 
-// InferenceConfig returns the parsed inference configuration from the config block.
-// Returns nil if the template has no config block.
-func (t *Template) InferenceConfig() *InferenceConfig {
-	return t.inferenceConfig
+// Prompt returns the v2.0 prompt configuration from the frontmatter.
+// Returns nil if the template has no frontmatter or if it's a v1 template.
+func (t *Template) Prompt() *Prompt {
+	return t.prompt
 }
 
-// HasInferenceConfig returns true if the template has a parsed inference configuration.
-func (t *Template) HasInferenceConfig() bool {
-	return t.inferenceConfig != nil
+// HasPrompt returns true if the template has a v2.0 prompt configuration.
+func (t *Template) HasPrompt() bool {
+	return t.prompt != nil
 }
 
 // ExecuteAndExtractMessages executes the template and extracts structured messages from the output.

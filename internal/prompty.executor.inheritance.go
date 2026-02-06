@@ -7,10 +7,10 @@ import (
 // InheritanceResolver handles template inheritance resolution.
 // It resolves parent templates and merges block content.
 type InheritanceResolver struct {
-	engine            TemplateExecutor
-	maxDepth          int
-	templateResolver  TemplateSourceResolver
-	inheritanceChain  []string // Track templates to detect circular inheritance
+	engine           TemplateExecutor
+	maxDepth         int
+	templateResolver TemplateSourceResolver
+	inheritanceChain []string // Track templates to detect circular inheritance
 }
 
 // TemplateSourceResolver provides access to raw template sources

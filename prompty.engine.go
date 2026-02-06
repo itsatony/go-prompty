@@ -63,7 +63,7 @@ func MustNew(opts ...Option) *Engine {
 // The returned Template can be executed multiple times with different data.
 //
 // If the source contains YAML frontmatter (delimited by --- on separate lines),
-// it is extracted and parsed as InferenceConfig. The frontmatter must appear
+// it is extracted and parsed as a v2.1 Prompt configuration. The frontmatter must appear
 // at the start of the source (after optional whitespace/BOM).
 func (e *Engine) Parse(source string) (*Template, error) {
 	// Create lexer config
@@ -86,8 +86,9 @@ func (e *Engine) Parse(source string) (*Template, error) {
 		return nil, NewConfigBlockError(ErrMsgConfigBlockExtract, pos, err)
 	}
 
-	// Parse inference config if YAML frontmatter was found
-	var inferenceConfig *InferenceConfig
+	// Parse frontmatter if present
+	var prompt *Prompt
+
 	if configResult.HasFrontmatter && configResult.FrontmatterYAML != "" {
 		// Resolve environment variables in YAML before parsing
 		resolvedYAML, err := e.resolveConfigEnvVars(configResult.FrontmatterYAML)
@@ -95,9 +96,17 @@ func (e *Engine) Parse(source string) (*Template, error) {
 			return nil, err
 		}
 
-		inferenceConfig, err = ParseYAMLInferenceConfig(resolvedYAML)
+		// Parse as Prompt
+		prompt, err = ParseYAMLPrompt(resolvedYAML)
 		if err != nil {
 			return nil, err
+		}
+
+		// Validate if we have a prompt with required fields
+		if prompt != nil {
+			if err := prompt.ValidateOptional(); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -120,7 +129,7 @@ func (e *Engine) Parse(source string) (*Template, error) {
 		return nil, NewParseError(ErrMsgParseFailed, Position{}, err)
 	}
 
-	return newTemplateWithConfig(source, templateBody, ast, e.executor, e.config, e, inferenceConfig), nil
+	return newTemplateWithConfig(source, templateBody, ast, e.executor, e.config, e, prompt), nil
 }
 
 // resolveConfigEnvVars resolves {~prompty.env~} tags in the YAML frontmatter.
@@ -364,4 +373,3 @@ func (a *resolverAdapter) Validate(attrs internal.Attributes) error {
 	wrappedAttrs := &internalAttributesAdapter{attrs: attrs}
 	return a.resolver.Validate(wrappedAttrs)
 }
-

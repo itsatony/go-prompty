@@ -1,6 +1,10 @@
-# Inference Configuration
+# Inference Configuration (Legacy v1)
 
-go-prompty supports embedded inference configuration in templates through YAML frontmatter. This allows templates to be self-describing with model configuration, parameters, input/output schemas, conversation messages, and sample data.
+> **DEPRECATED in v2.1**: The `InferenceConfig` type has been **removed** in go-prompty v2.1. All templates now use the `Prompt` type with `ExecutionConfig` for LLM parameters. The v1 `model:` YAML format is no longer supported. See [v2.1 Prompt Configuration](#v21-prompt-configuration) below for the current format.
+>
+> **Migration**: Replace `model:` blocks with `execution:` blocks. Replace `tmpl.InferenceConfig()` calls with `tmpl.Prompt()`. See the [Migration Guide](#migration-from-v1-to-v21) at the bottom of this document.
+
+This document is preserved as a reference for the legacy v1 configuration format. The v1 API methods (`HasInferenceConfig()`, `InferenceConfig()`, `ModelConfig`, `ModelParameters`) no longer exist in v2.1.
 
 ## YAML Frontmatter Format
 
@@ -310,7 +314,9 @@ model:
   name: '{~prompty.var name="model_name" default="gpt-4" /~}'
 ```
 
-## API Usage
+## v2.1 API Usage
+
+> The examples below show the current v2.1 API. For v1 API patterns, see the git history prior to v2.1.
 
 ### Parsing Templates with Config
 
@@ -319,8 +325,9 @@ engine, _ := prompty.New()
 
 source := `---
 name: my-template
-model:
-  name: gpt-4
+description: A greeting template
+execution:
+  model: gpt-4
 ---
 {~prompty.message role="user"~}
 Hello {~prompty.var name="user" /~}!
@@ -331,155 +338,110 @@ if err != nil {
     log.Fatal(err)
 }
 
-// Access config
-if tmpl.HasInferenceConfig() {
-    config := tmpl.InferenceConfig()
-    fmt.Println("Template:", config.Name)
-    fmt.Println("Model:", config.GetModelName())
+// Access prompt config
+if tmpl.HasPrompt() {
+    prompt := tmpl.Prompt()
+    fmt.Println("Name:", prompt.Name)
+    if prompt.Execution != nil {
+        fmt.Println("Model:", prompt.Execution.Model)
+    }
 }
 ```
 
-### Accessing Model Parameters
+### Accessing Execution Parameters
 
 ```go
-config := tmpl.InferenceConfig()
+prompt := tmpl.Prompt()
 
-// Check for model
-if config.HasModel() {
-    fmt.Println("API:", config.GetAPIType())
-    fmt.Println("Provider:", config.GetProvider())
-    fmt.Println("Model:", config.GetModelName())
-}
+if prompt.Execution != nil {
+    exec := prompt.Execution
+    fmt.Println("Provider:", exec.GetEffectiveProvider())
+    fmt.Println("Model:", exec.Model)
 
-// Get parameters with defaults
-if temp, ok := config.GetTemperature(); ok {
-    fmt.Println("Temperature:", temp)
-}
+    // Get parameters (pointer types distinguish unset from zero)
+    if temp, ok := exec.GetTemperature(); ok {
+        fmt.Println("Temperature:", temp)
+    }
 
-if maxTokens, ok := config.GetMaxTokens(); ok {
-    fmt.Println("Max Tokens:", maxTokens)
-}
+    if maxTokens, ok := exec.GetMaxTokens(); ok {
+        fmt.Println("Max Tokens:", maxTokens)
+    }
 
-// Get all parameters as map
-if config.Model != nil && config.Model.Parameters != nil {
-    params := config.Model.Parameters.ToMap()
-    // Use with your LLM client
+    // Provider-specific serialization
+    openAIParams := exec.ToOpenAI()
+    anthropicParams := exec.ToAnthropic()
+    _ = openAIParams
+    _ = anthropicParams
 }
 ```
 
-### Accessing New v1.4.0 Fields
+### Structured Outputs
 
 ```go
-config := tmpl.InferenceConfig()
+prompt := tmpl.Prompt()
 
-// Response format for structured outputs
-if config.HasResponseFormat() {
-    rf := config.GetResponseFormat()
+if prompt.Execution != nil && prompt.Execution.ResponseFormat != nil {
+    rf := prompt.Execution.ResponseFormat
     fmt.Println("Format type:", rf.Type)
     if rf.JSONSchema != nil {
         fmt.Println("Schema name:", rf.JSONSchema.Name)
     }
-}
-
-// Tools for function calling
-if config.HasTools() {
-    tools := config.GetTools()
-    for _, tool := range tools {
-        fmt.Println("Tool:", tool.Function.Name)
-    }
-}
-
-// Streaming config
-if config.HasStreaming() {
-    streaming := config.GetStreaming()
-    fmt.Println("Streaming enabled:", streaming.Enabled)
-}
-
-// Retry config
-if config.HasRetry() {
-    retry := config.GetRetry()
-    fmt.Println("Max attempts:", retry.MaxAttempts)
-}
-
-// Cache config
-if config.HasCache() {
-    cache := config.GetCache()
-    fmt.Println("Cache system prompt:", cache.SystemPrompt)
 }
 ```
 
 ### Input Validation
 
 ```go
-config := tmpl.InferenceConfig()
+prompt := tmpl.Prompt()
 
-// Validate inputs before execution
 data := map[string]any{
     "name": "Alice",
     "count": 42,
 }
 
-if err := config.ValidateInputs(data); err != nil {
+if err := prompt.ValidateInputs(data); err != nil {
     log.Fatal("Invalid inputs:", err)
 }
 
-// Execute template
 result, _ := tmpl.Execute(ctx, data)
-```
-
-### Using Sample Data
-
-```go
-config := tmpl.InferenceConfig()
-
-if config.HasSample() {
-    sample := config.GetSampleData()
-    // Execute with sample data for testing
-    result, _ := tmpl.Execute(ctx, sample)
-}
 ```
 
 ### Storage Integration
 
-When using StorageEngine, InferenceConfig is automatically extracted and persisted:
+When using StorageEngine, PromptConfig is automatically extracted and persisted:
 
 ```go
-storage, _ := prompty.OpenStorage("memory", "")
-engine, _ := prompty.New()
 se, _ := prompty.NewStorageEngine(prompty.StorageEngineConfig{
-    Storage: storage,
-    Engine:  engine,
+    Storage: prompty.NewMemoryStorage(),
 })
 
-// Save template - InferenceConfig is automatically extracted
-tmpl := &prompty.StoredTemplate{
+se.Save(ctx, &prompty.StoredTemplate{
     Name:   "my-template",
     Source: source,
-}
-se.Save(ctx, tmpl)
+})
 
-// Retrieved templates include InferenceConfig
+// Retrieved templates include PromptConfig
 retrieved, _ := se.Get(ctx, "my-template")
-if retrieved.InferenceConfig != nil {
-    fmt.Println("Model:", retrieved.InferenceConfig.GetModelName())
+if retrieved.PromptConfig != nil && retrieved.PromptConfig.Execution != nil {
+    fmt.Println("Model:", retrieved.PromptConfig.Execution.Model)
 }
 ```
 
-## YAML Serialization
+## Serialization
 
-InferenceConfig can be serialized for storage or API responses:
+Prompt config can be serialized for storage or API responses:
 
 ```go
-config := tmpl.InferenceConfig()
+prompt := tmpl.Prompt()
 
 // YAML output
-yamlStr, _ := config.YAML()
+yamlStr, _ := prompt.YAML()
 
 // JSON output (compact)
-jsonStr, _ := config.JSON()
+jsonStr, _ := prompt.JSON()
 
 // JSON output (pretty-printed)
-prettyJSON, _ := config.JSONPretty()
+prettyJSON, _ := prompt.JSONPretty()
 ```
 
 ## Complete Example
@@ -496,21 +458,19 @@ import (
 )
 
 func main() {
-    // Set environment variable for model
     os.Setenv("MODEL_NAME", "gpt-4-turbo")
 
     engine, _ := prompty.New()
 
     source := `---
 name: customer-support
-version: 1.0.0
-model:
-  api: chat
+description: Handles customer inquiries
+type: skill
+execution:
   provider: openai
-  name: '{~prompty.env name="MODEL_NAME" default="gpt-4" /~}'
-  parameters:
-    temperature: 0.7
-    max_tokens: 2048
+  model: '{~prompty.env name="MODEL_NAME" default="gpt-4" /~}'
+  temperature: 0.7
+  max_tokens: 2048
 inputs:
   customer_name:
     type: string
@@ -532,54 +492,27 @@ Query: {~prompty.var name="query" /~}
 {~/prompty.message~}`
 
     tmpl, _ := engine.Parse(source)
-    config := tmpl.InferenceConfig()
+    prompt := tmpl.Prompt()
 
-    // Print configuration
-    fmt.Println("Template:", config.Name)
-    fmt.Println("Version:", config.Version)
-    fmt.Println("Model:", config.GetModelName()) // "gpt-4-turbo" from env
-
-    if temp, ok := config.GetTemperature(); ok {
-        fmt.Println("Temperature:", temp)
+    fmt.Println("Name:", prompt.Name)
+    if prompt.Execution != nil {
+        fmt.Println("Model:", prompt.Execution.Model)
+        if temp, ok := prompt.Execution.GetTemperature(); ok {
+            fmt.Println("Temperature:", temp)
+        }
     }
 
     // Validate and execute with sample data
-    sample := config.GetSampleData()
-    if err := config.ValidateInputs(sample); err != nil {
+    if err := prompt.ValidateInputs(prompt.Sample); err != nil {
         fmt.Println("Validation error:", err)
         return
     }
 
-    // Execute and extract messages
-    messages, _ := tmpl.ExecuteAndExtractMessages(context.Background(), sample)
+    messages, _ := tmpl.ExecuteAndExtractMessages(context.Background(), prompt.Sample)
     for _, msg := range messages {
         fmt.Printf("[%s]: %s\n", msg.Role, msg.Content)
     }
 }
-```
-
-## Migration from JSON Config Blocks
-
-If you have templates using the legacy JSON `{~prompty.config~}` format, migrate to YAML frontmatter:
-
-**Before (JSON - deprecated):**
-```
-{~prompty.config~}
-{"name": "my-template", "model": {"name": "gpt-4"}}
-{~/prompty.config~}
-Hello {~prompty.var name="user" /~}
-```
-
-**After (YAML frontmatter):**
-```yaml
----
-name: my-template
-model:
-  name: gpt-4
----
-{~prompty.message role="user"~}
-Hello {~prompty.var name="user" /~}
-{~/prompty.message~}
 ```
 
 ## Error Handling
@@ -592,16 +525,215 @@ if err != nil {
     // Error messages indicate the issue and location
     // "failed to extract YAML frontmatter at line 1, column 1"
     // "failed to parse YAML frontmatter"
-    // "legacy JSON config block detected - please migrate to YAML frontmatter"
     fmt.Println(err)
 }
 ```
 
 ## Design Notes
 
-- **Store & Expose**: InferenceConfig is parsed and stored but does not make LLM API calls. Use the configuration with your own LLM client.
-- **Immutable After Parsing**: InferenceConfig is immutable after template parsing.
-- **Coexists with Metadata**: InferenceConfig and StoredTemplate.Metadata are independent and both available.
-- **No Frontmatter**: Templates without frontmatter work normally; `HasInferenceConfig()` returns false.
+- **Store & Expose**: Prompt configuration is parsed and stored but does not make LLM API calls. Use the configuration with your own LLM client.
+- **Immutable After Parsing**: Prompt configuration is immutable after template parsing.
+- **Coexists with Metadata**: PromptConfig and StoredTemplate.Metadata are independent and both available.
+- **No Frontmatter**: Templates without frontmatter work normally; `HasPrompt()` returns false.
 - **Position Requirement**: Frontmatter must be at the start of the template (after optional whitespace/BOM).
 - **YAML Single Quotes**: Use single quotes for YAML values containing prompty tags to avoid escaping issues.
+
+---
+
+## v2.1 Prompt Configuration
+
+go-prompty v2.1 uses the `Prompt` type compatible with the [Agent Skills](https://agentskills.io) specification. This provides better separation of concerns and interoperability with other Agent Skills tools. v2.1 adds document types (prompt, skill, agent), skills, tools, constraints, and agent compilation.
+
+### v2.1 Format
+
+The key difference from v1 is namespaced configuration with `execution` and `skope` sections:
+
+```yaml
+---
+name: customer-support-agent
+description: Handles customer inquiries with context awareness
+license: MIT
+compatibility: gpt-4,claude-3
+
+execution:
+  provider: openai
+  model: gpt-4
+  temperature: 0.7
+  max_tokens: 2048
+  thinking:
+    enabled: true
+    budget_tokens: 5000
+  response_format:
+    type: json_schema
+    json_schema:
+      name: response
+      schema:
+        type: object
+        properties:
+          answer: {type: string}
+        required: [answer]
+
+skope:
+  visibility: public
+  projects: [support, helpdesk]
+
+inputs:
+  query:
+    type: string
+    required: true
+    description: User's support query
+---
+{~prompty.message role="system"~}
+You are a helpful support agent.
+{~/prompty.message~}
+```
+
+### v2.1 Detection
+
+In v2.1, ALL frontmatter is parsed as `Prompt`. Templates are detected as v2.1 if they have:
+- A `type` field (prompt, skill, agent), OR
+- An `execution` config block, OR
+- A `skope` config block, OR
+- A `name` field
+
+The v1 `InferenceConfig` fallback has been completely removed.
+
+### Using v2.1 Prompts
+
+```go
+tmpl, _ := engine.Parse(source)
+
+if tmpl.HasPrompt() {
+    prompt := tmpl.Prompt()
+
+    // Agent Skills standard fields
+    fmt.Println("Name:", prompt.Name)
+    fmt.Println("Description:", prompt.Description)
+    fmt.Println("License:", prompt.License)
+
+    // Execution config
+    if prompt.Execution != nil {
+        fmt.Println("Provider:", prompt.Execution.Provider)
+        fmt.Println("Model:", prompt.Execution.Model)
+
+        // Provider-specific conversion
+        openAIParams := prompt.Execution.ToOpenAI()
+        anthropicParams := prompt.Execution.ToAnthropic()
+        geminiParams := prompt.Execution.ToGemini()
+        vllmParams := prompt.Execution.ToVLLM()
+
+        // Extended thinking (Claude)
+        if prompt.Execution.HasThinking() {
+            fmt.Println("Thinking enabled:", prompt.Execution.Thinking.Enabled)
+        }
+    }
+
+    // Skope platform config
+    if prompt.Skope != nil {
+        fmt.Println("Visibility:", prompt.Skope.Visibility)
+        fmt.Println("Projects:", prompt.Skope.Projects)
+    }
+
+    // Validate inputs
+    if err := prompt.ValidateInputs(data); err != nil {
+        log.Fatal("Invalid inputs:", err)
+    }
+}
+```
+
+### Prompt References
+
+The `{~prompty.ref~}` tag enables prompt composition:
+
+```yaml
+{~prompty.ref slug="common-instructions" /~}
+{~prompty.ref slug="customer-context" version="v2" /~}
+{~prompty.ref slug="safety-guidelines@latest" /~}
+```
+
+To use references, implement the `PromptResolver` interface and set it on the context:
+
+```go
+// Implement PromptResolver
+type MyPromptStore struct {
+    prompts map[string]PromptWithBody
+}
+
+func (s *MyPromptStore) ResolvePrompt(ctx context.Context, slug, version string) (*prompty.Prompt, string, error) {
+    p, ok := s.prompts[slug]
+    if !ok {
+        return nil, "", prompty.NewRefNotFoundError(slug, version)
+    }
+    return p.Prompt, p.Body, nil
+}
+
+// Create adapter and set on context
+adapter := prompty.NewPromptResolverAdapter(myStore)
+execCtx := prompty.NewContext(data).WithPromptResolver(adapter)
+
+result, err := tmpl.ExecuteWithContext(ctx, execCtx)
+```
+
+### SKILL.md Import/Export
+
+Export prompts in Agent Skills SKILL.md format:
+
+```go
+prompt := tmpl.Prompt()
+
+// Export to SKILL.md (strips execution/skope for portability)
+skillMD, _ := prompt.ExportToSkillMD(tmpl.TemplateBody())
+
+// Import from SKILL.md
+parsed, _ := prompty.ImportFromSkillMD(skillMDContent)
+prompt := parsed.Prompt
+body := parsed.Body
+
+// Check Agent Skills compatibility
+if prompt.IsAgentSkillsCompatible() {
+    // No go-prompty specific extensions
+}
+
+// Strip extensions for export
+stripped := prompt.StripExtensions()
+```
+
+### Migration from v1 to v2.1
+
+**v1 format (removed in v2.1):**
+```yaml
+---
+name: my-template
+model:
+  provider: openai
+  name: gpt-4
+  parameters:
+    temperature: 0.7
+---
+```
+
+**v2.1 format (current):**
+```yaml
+---
+name: my-template
+description: A helpful template
+type: skill
+execution:
+  provider: openai
+  model: gpt-4
+  temperature: 0.7
+---
+```
+
+**API changes:**
+- `tmpl.HasInferenceConfig()` / `tmpl.InferenceConfig()` - **removed**, use `tmpl.HasPrompt()` / `tmpl.Prompt()`
+- `InferenceConfig` type - **removed**, use `Prompt` + `ExecutionConfig`
+- `ModelConfig` / `ModelParameters` - **removed**, parameters are flat in `ExecutionConfig`
+- `StoredTemplate.InferenceConfig` - **removed**, use `StoredTemplate.PromptConfig`
+
+Key differences:
+1. `description` is recommended for v2.1
+2. `type` field specifies document type: `prompt`, `skill` (default), or `agent`
+3. Model config moved to `execution` namespace with flat parameters
+4. Optional `skope` config for platform integration
+5. Agent type supports `skills`, `tools`, `constraints`, and `messages`

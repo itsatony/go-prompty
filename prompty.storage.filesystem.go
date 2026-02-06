@@ -222,9 +222,9 @@ func (s *FilesystemStorage) Save(ctx context.Context, tmpl *StoredTemplate) erro
 		Version:         nextVersion,
 		Status:          status,
 		Metadata:        copyStringMap(tmpl.Metadata),
-		InferenceConfig: tmpl.InferenceConfig, // InferenceConfig is immutable after parsing
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		PromptConfig: tmpl.PromptConfig, // PromptConfig is immutable after parsing
+		CreatedAt:    now,
+		UpdatedAt:    now,
 		CreatedBy:       tmpl.CreatedBy,
 		TenantID:        tmpl.TenantID,
 		Tags:            copyStringSlice(tmpl.Tags),

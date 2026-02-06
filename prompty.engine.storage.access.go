@@ -9,9 +9,9 @@ import (
 // hooks are invoked at appropriate points.
 type SecureStorageEngine struct {
 	*StorageEngine
-	checker  AccessChecker
-	hooks    *HookRegistry
-	auditor  AccessAuditor
+	checker AccessChecker
+	hooks   *HookRegistry
+	auditor AccessAuditor
 }
 
 // SecureStorageEngineConfig configures the SecureStorageEngine.

@@ -499,7 +499,7 @@ func TestStorageEngine_FilesystemStorage_Loops(t *testing.T) {
 
 	// Create template with loop
 	err = engine.Save(ctx, &StoredTemplate{
-		Name:   "item-list",
+		Name: "item-list",
 		Source: `Items:{~prompty.for item="item" index="i" in="items"~}
 {~prompty.var name="i" /~}. {~prompty.var name="item.name" /~} - ${~prompty.var name="item.price" /~}{~/prompty.for~}`,
 	})

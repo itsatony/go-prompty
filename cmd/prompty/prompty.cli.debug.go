@@ -25,13 +25,13 @@ type debugConfig struct {
 
 // debugOutput represents JSON output for debug
 type debugOutput struct {
-	Valid            bool                `json:"valid"`
-	Variables        []debugVariable     `json:"variables"`
-	Resolvers        []debugResolver     `json:"resolvers"`
-	Includes         []debugInclude      `json:"includes"`
-	MissingVariables []debugMissingVar   `json:"missing_variables,omitempty"`
-	UnusedData       []string            `json:"unused_data,omitempty"`
-	Trace            []string            `json:"trace,omitempty"`
+	Valid            bool              `json:"valid"`
+	Variables        []debugVariable   `json:"variables"`
+	Resolvers        []debugResolver   `json:"resolvers"`
+	Includes         []debugInclude    `json:"includes"`
+	MissingVariables []debugMissingVar `json:"missing_variables,omitempty"`
+	UnusedData       []string          `json:"unused_data,omitempty"`
+	Trace            []string          `json:"trace,omitempty"`
 }
 
 type debugVariable struct {

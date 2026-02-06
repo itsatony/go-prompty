@@ -12,10 +12,10 @@ type CachedStorage struct {
 	storage TemplateStorage
 	config  CacheConfig
 
-	mu       sync.RWMutex
-	cache    map[string]*cacheEntry
-	byID     map[TemplateID]*cacheEntry
-	closed   bool
+	mu     sync.RWMutex
+	cache  map[string]*cacheEntry
+	byID   map[TemplateID]*cacheEntry
+	closed bool
 }
 
 // CacheConfig configures the caching behavior.
@@ -46,11 +46,11 @@ func DefaultCacheConfig() CacheConfig {
 
 // cacheEntry represents a cached template.
 type cacheEntry struct {
-	template  *StoredTemplate
-	notFound  bool
-	cachedAt  time.Time
+	template   *StoredTemplate
+	notFound   bool
+	cachedAt   time.Time
 	accessedAt time.Time
-	key       string
+	key        string
 }
 
 // NewCachedStorage wraps a storage with caching.

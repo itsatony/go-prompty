@@ -312,8 +312,8 @@ func joinPath(base, segment string) string {
 	return base + "." + segment
 }
 
-// DetectSchemaProvider attempts to detect the provider from schema configuration.
-func DetectSchemaProvider(config *InferenceConfig) string {
+// DetectSchemaProvider attempts to detect the provider from execution configuration.
+func DetectSchemaProvider(config *ExecutionConfig) string {
 	if config == nil {
 		return ""
 	}

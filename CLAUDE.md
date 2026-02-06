@@ -51,6 +51,24 @@ github.com/itsatony/go-prompty/
 ├── prompty.resolver.go           # Resolver interface (public)
 ├── prompty.errors.go             # Public error types
 ├── prompty.constants.go          # Public constants
+├── prompty.prompt.go             # v2.1: Prompt type with validation
+├── prompty.execution.go          # v2.1: ExecutionConfig with provider serialization
+├── prompty.skope.go              # v2.1: SkopeConfig (platform integration)
+├── prompty.types.agent.go        # v2.1: SkillRef, ToolsConfig, ConstraintsConfig
+├── prompty.types.shared.go       # v2.1: ResponseFormat, GuidedDecoding, InputDef
+├── prompty.types.tools.go        # v2.1: FunctionDef, ModelParameters
+├── prompty.compile.go            # v2.1: CompileAgent, ActivateSkill, Compile
+├── prompty.catalog.go            # v2.1: Catalog generation (skills, tools)
+├── prompty.document.resolver.go  # v2.1: DocumentResolver interface + impls
+├── prompty.parse.go              # v2.1: Standalone Parse/ParseFile
+├── prompty.serialize.go          # v2.1: Serialization with options
+├── prompty.import.go             # v2.1: Import from .md/.zip
+├── prompty.export.go             # v2.1: Export to .md/.zip
+├── prompty.skillmd.go            # v2.1: SKILL.md import/export
+├── prompty.storage.go            # Storage interfaces
+├── prompty.storage.memory.go     # In-memory storage
+├── prompty.storage.postgres.go   # PostgreSQL storage
+├── prompty.versioning.go         # Template versioning
 └── internal/
     ├── prompty.lexer.go          # Tokenizer
     ├── prompty.lexer.tokens.go   # Token definitions
@@ -59,6 +77,8 @@ github.com/itsatony/go-prompty/
     ├── prompty.executor.go       # Execution engine
     ├── prompty.executor.isolation.go  # Goroutine isolation
     ├── prompty.executor.builtins.go   # Built-in tag resolvers
+    ├── prompty.executor.builtins.catalog.go  # v2.1: Catalog resolvers
+    ├── prompty.executor.builtins.ref.go      # v2.1: Prompt ref resolver
     ├── prompty.expr.go           # Expression evaluator
     ├── prompty.expr.operators.go # Comparison operators
     ├── prompty.funcs.go          # Function registry
@@ -97,6 +117,17 @@ type Resolver interface {
 ```
 
 **FuncProvider** — Optional interface for resolvers to register custom functions.
+
+**DocumentResolver** — v2.1 interface for resolving prompts, skills, and agents by slug:
+```go
+type DocumentResolver interface {
+    ResolvePrompt(ctx context.Context, slug string) (*Prompt, error)
+    ResolveSkill(ctx context.Context, ref string) (*Prompt, error)
+    ResolveAgent(ctx context.Context, slug string) (*Prompt, error)
+}
+
+// Implementations: NoopDocumentResolver, MapDocumentResolver, StorageDocumentResolver
+```
 
 **Message** — Structured message for LLM APIs (extracted from template output):
 ```go
@@ -209,18 +240,20 @@ len(items) > 0 && contains(roles, "admin")
 upper(trim(user.name))
 ```
 
-### YAML Frontmatter (Inference Configuration)
+### YAML Frontmatter (v2.1 Prompt Configuration)
 
-Templates can include YAML frontmatter for inference configuration:
+All YAML frontmatter is parsed as `Prompt` configuration:
 
 ```yaml
 ---
-name: my-template
-model:
-  api: chat
-  name: gpt-4
-  parameters:
-    temperature: 0.7
+name: my-prompt
+description: A v2.1 prompt
+type: skill
+execution:
+  provider: openai
+  model: gpt-4
+  temperature: 0.7
+  max_tokens: 1000
 inputs:
   query:
     type: string
@@ -234,10 +267,89 @@ inputs:
 **Important**: When using prompty tags in YAML values, use single quotes:
 ```yaml
 # Correct - single quotes preserve literal content
-name: '{~prompty.env name="MODEL" /~}'
+model: '{~prompty.env name="MODEL" /~}'
 
 # Wrong - double quotes require escaping which breaks parsing
-name: "{~prompty.env name=\"MODEL\" /~}"
+model: "{~prompty.env name=\"MODEL\" /~}"
+```
+
+### Document Types
+
+| Type | Description |
+|------|-------------|
+| `prompt` | Simple prompt template, no skills/tools/constraints |
+| `skill` | Default type. Reusable capability, no sub-skills |
+| `agent` | Full agent with skills, tools, constraints, messages |
+
+### Agent Definition (v2.1)
+
+```yaml
+---
+name: research-agent
+description: AI research assistant
+type: agent
+execution:
+  provider: anthropic
+  model: claude-sonnet-4-5
+  temperature: 0.3
+skills:
+  - slug: web-search
+    injection: system_prompt
+  - slug: summarizer
+    injection: user_context
+tools:
+  functions:
+    - name: search_web
+      description: Search the web
+      parameters:
+        type: object
+        properties:
+          query: {type: string}
+        required: [query]
+context:
+  company: Acme Corp
+constraints:
+  behavioral:
+    - Always cite sources
+messages:
+  - role: system
+    content: |
+      You are a research assistant for {~prompty.var name="context.company" /~}.
+      {~prompty.skills_catalog format="detailed" /~}
+  - role: user
+    content: '{~prompty.var name="input.query" /~}'
+---
+{~prompty.include template="self" /~}
+```
+
+**Key v2.1 Types:**
+- `Prompt`: Full prompt configuration with document type, skills, tools, context, constraints, messages
+- `ExecutionConfig`: LLM execution parameters with `Merge()` for 3-layer precedence
+- `SkopeConfig`: Platform integration fields
+- `SkillRef`: Skill reference with injection mode and execution overrides
+- `ToolsConfig`: Tool definitions with function defs and MCP servers
+- `CompiledPrompt`: Result of `CompileAgent()` — messages, execution config, tools, constraints
+
+**Agent Compilation:**
+```go
+prompt, _ := prompty.Parse(agentYAML)
+compiled, _ := prompt.CompileAgent(ctx, input, &prompty.CompileOptions{
+    Resolver: myDocumentResolver,
+})
+// compiled.Messages, compiled.Execution, compiled.Tools, compiled.Constraints
+```
+
+**Catalog Resolvers:**
+```
+{~prompty.skills_catalog format="detailed" /~}
+{~prompty.tools_catalog format="function_calling" /~}
+```
+
+**Reference Tag for Prompt Composition:**
+```
+{~prompty.ref slug="my-prompt" /~}
+{~prompty.ref slug="my-prompt" version="v2" /~}
+{~prompty.ref slug="my-prompt@v2" /~}
 ```
 
 ### Nested Templates
@@ -288,7 +400,7 @@ go-prompty supports structured outputs for all major LLM providers with provider
 | Provider | Configuration Field | Notes |
 |----------|---------------------|-------|
 | OpenAI/Azure | `response_format` | `json_schema` with `strict: true` |
-| Anthropic | `output_format` | Alternative format for Claude API |
+| Anthropic | `response_format` | Same field, serialized to Anthropic format |
 | Gemini | `response_format` | Supports `propertyOrdering` for Gemini 2.5+ |
 | vLLM | `guided_decoding` | `json`, `regex`, `choice`, `grammar` constraints |
 
@@ -304,9 +416,10 @@ All providers require `additionalProperties: false` for strict mode:
 **OpenAI Style:**
 ```yaml
 ---
-model:
+name: entity-extractor
+execution:
   provider: openai
-  name: gpt-4o
+  model: gpt-4o
   response_format:
     type: json_schema
     json_schema:
@@ -324,12 +437,14 @@ model:
 **Anthropic Style:**
 ```yaml
 ---
-model:
+name: classifier
+execution:
   provider: anthropic
-  name: claude-sonnet-4-5
-  output_format:
-    format:
-      type: json_schema
+  model: claude-sonnet-4-5
+  response_format:
+    type: json_schema
+    json_schema:
+      name: result
       schema:
         type: object
         properties:
@@ -341,9 +456,10 @@ model:
 **vLLM Guided Decoding:**
 ```yaml
 ---
-model:
+name: qa-bot
+execution:
   provider: vllm
-  name: meta-llama/Llama-2-7b-hf
+  model: meta-llama/Llama-2-7b-hf
   guided_decoding:
     backend: xgrammar
     json:
@@ -356,7 +472,8 @@ model:
 **Enum Constraint:**
 ```yaml
 ---
-model:
+name: sentiment-classifier
+execution:
   response_format:
     type: enum
     enum:
@@ -367,22 +484,23 @@ model:
 
 ### Provider Detection
 
-The `GetEffectiveProvider()` method auto-detects the provider from:
+The `GetEffectiveProvider()` method on `ExecutionConfig` auto-detects the provider from:
 1. Explicit `provider` field
-2. Presence of `output_format` → Anthropic
+2. Presence of `thinking` config or claude model name → Anthropic
 3. Presence of `guided_decoding` → vLLM
 4. Model name prefix (gpt-, claude-, gemini-)
 
 ### Provider Serialization
 
 ```go
-config := tmpl.InferenceConfig()
+prompt := tmpl.Prompt()
+exec := prompt.Execution
 
 // Get format for specific provider
-openAIFormat, _ := config.ProviderFormat(ProviderOpenAI)
-anthropicFormat, _ := config.ProviderFormat(ProviderAnthropic)
-geminiFormat, _ := config.ProviderFormat(ProviderGemini)
-vllmFormat, _ := config.ProviderFormat(ProviderVLLM)
+openAIFormat, _ := exec.ProviderFormat(ProviderOpenAI)
+anthropicFormat, _ := exec.ProviderFormat(ProviderAnthropic)
+geminiFormat, _ := exec.ProviderFormat(ProviderGemini)
+vllmFormat, _ := exec.ProviderFormat(ProviderVLLM)
 ```
 
 ## Deployment-Aware Versioning

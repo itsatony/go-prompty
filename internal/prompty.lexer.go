@@ -40,9 +40,9 @@ func (c LexerConfig) escapeOpen() string {
 type Lexer struct {
 	source string
 	config LexerConfig
-	pos    int    // Current byte position
-	line   int    // Current line (1-indexed)
-	column int    // Current column (1-indexed)
+	pos    int // Current byte position
+	line   int // Current line (1-indexed)
+	column int // Current column (1-indexed)
 	logger *zap.Logger
 }
 
@@ -359,7 +359,6 @@ func (l *Lexer) peek() byte {
 	}
 	return l.source[l.pos]
 }
-
 
 // advance consumes and returns the current character
 func (l *Lexer) advance() byte {

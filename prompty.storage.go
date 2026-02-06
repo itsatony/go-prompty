@@ -32,10 +32,10 @@ type StoredTemplate struct {
 	// Metadata contains arbitrary key-value pairs for user-defined data.
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	// InferenceConfig holds parsed frontmatter configuration from the template source.
+	// PromptConfig holds parsed v2.1 prompt configuration from the template source.
 	// This coexists with Metadata and is automatically extracted when the template is parsed.
-	// Use this for model configuration, input/output schemas, and sample data.
-	InferenceConfig *InferenceConfig `json:"inference_config,omitempty"`
+	// Use this for execution config, skills, tools, context, and other prompt settings.
+	PromptConfig *Prompt `json:"prompt_config,omitempty"`
 
 	// CreatedAt is when this version was created.
 	CreatedAt time.Time `json:"created_at"`
@@ -289,9 +289,9 @@ func NewStorageTemplateNotFoundError(name string) error {
 // NewStorageVersionNotFoundError creates an error for version not found.
 func NewStorageVersionNotFoundError(name string, version int) error {
 	return &StorageError{
-		Message:  ErrMsgVersionNotFound,
-		Name:     name,
-		Version:  version,
+		Message: ErrMsgVersionNotFound,
+		Name:    name,
+		Version: version,
 	}
 }
 

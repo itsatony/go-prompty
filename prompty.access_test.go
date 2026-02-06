@@ -267,8 +267,8 @@ func TestCachedChecker(t *testing.T) {
 	t.Run("caches decisions", func(t *testing.T) {
 		callCount := 0
 		inner := &countingChecker{
-			allow:     true,
-			onCheck:   func() { callCount++ },
+			allow:   true,
+			onCheck: func() { callCount++ },
 		}
 
 		checker := NewCachedChecker(inner, CachedCheckerConfig{

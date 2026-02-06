@@ -21,16 +21,26 @@ type TemplateExecutor interface {
 	GetTemplateSource(name string) (string, bool)
 }
 
+// PromptBodyResolver provides prompt body lookup for reference resolution.
+// This is the internal interface used by the ref resolver.
+type PromptBodyResolver interface {
+	// ResolvePromptBody looks up a prompt by slug and version and returns its template body.
+	ResolvePromptBody(ctx context.Context, slug string, version string) (string, error)
+}
+
 // Context provides access to template variables and execution state.
 // It supports dot-notation path resolution (e.g., "user.profile.name")
 // and hierarchical scoping through parent-child relationships.
 type Context struct {
-	data       map[string]any
-	parent     *Context
-	mu         sync.RWMutex
-	errorStrat ErrorStrategy
-	engine     TemplateExecutor // Optional engine reference for nested templates
-	depth      int              // Current nesting depth for include operations
+	data           map[string]any
+	parent         *Context
+	mu             sync.RWMutex
+	errorStrat     ErrorStrategy
+	engine         TemplateExecutor   // Optional engine reference for nested templates
+	depth          int                // Current nesting depth for include operations
+	promptResolver PromptBodyResolver // v2.0: Prompt resolver for reference resolution
+	refDepth       int                // v2.0: Current reference resolution depth
+	refChain       []string           // v2.0: Chain of referenced prompt slugs for circular detection
 }
 
 // NewContext creates a new execution context with the given data.
@@ -158,18 +168,21 @@ func (c *Context) Has(path string) bool {
 
 // Child creates a child context with additional data.
 // The child inherits from the parent and can override values.
-// Engine reference and depth are propagated to child contexts.
+// Engine reference, depth, and v2.0 reference tracking are propagated to child contexts.
 // Returns interface{} to satisfy internal.ChildContextCreator interface.
 func (c *Context) Child(data map[string]any) interface{} {
 	if data == nil {
 		data = make(map[string]any)
 	}
 	return &Context{
-		data:       data,
-		parent:     c,
-		errorStrat: c.errorStrat,
-		engine:     c.engine,
-		depth:      c.depth,
+		data:           data,
+		parent:         c,
+		errorStrat:     c.errorStrat,
+		engine:         c.engine,
+		depth:          c.depth,
+		promptResolver: c.promptResolver,
+		refDepth:       c.refDepth,
+		refChain:       c.refChain,
 	}
 }
 
@@ -266,11 +279,14 @@ func (c *Context) WithEngine(engine TemplateExecutor) *Context {
 	dataCopy := deepCopyMap(c.data)
 
 	newCtx := &Context{
-		data:       dataCopy,
-		parent:     c.parent,
-		errorStrat: c.errorStrat,
-		engine:     engine,
-		depth:      c.depth,
+		data:           dataCopy,
+		parent:         c.parent,
+		errorStrat:     c.errorStrat,
+		engine:         engine,
+		depth:          c.depth,
+		promptResolver: c.promptResolver,
+		refDepth:       c.refDepth,
+		refChain:       c.refChain,
 	}
 	return newCtx
 }
@@ -288,13 +304,107 @@ func (c *Context) WithDepth(depth int) *Context {
 	dataCopy := deepCopyMap(c.data)
 
 	newCtx := &Context{
-		data:       dataCopy,
-		parent:     c.parent,
-		errorStrat: c.errorStrat,
-		engine:     c.engine,
-		depth:      depth,
+		data:           dataCopy,
+		parent:         c.parent,
+		errorStrat:     c.errorStrat,
+		engine:         c.engine,
+		depth:          depth,
+		promptResolver: c.promptResolver,
+		refDepth:       c.refDepth,
+		refChain:       c.refChain,
 	}
 	return newCtx
+}
+
+// WithPromptResolver returns a new context with the given prompt resolver.
+// This enables {~prompty.ref~} tag functionality for prompt composition.
+// The returned context has a deep copy of the data map for thread safety.
+func (c *Context) WithPromptResolver(resolver PromptBodyResolver) *Context {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	dataCopy := deepCopyMap(c.data)
+
+	newCtx := &Context{
+		data:           dataCopy,
+		parent:         c.parent,
+		errorStrat:     c.errorStrat,
+		engine:         c.engine,
+		depth:          c.depth,
+		promptResolver: resolver,
+		refDepth:       c.refDepth,
+		refChain:       c.refChain,
+	}
+	return newCtx
+}
+
+// WithRefDepth returns a new context with the given reference depth.
+// This is used internally when resolving nested prompt references.
+func (c *Context) WithRefDepth(depth int) *Context {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	dataCopy := deepCopyMap(c.data)
+
+	newCtx := &Context{
+		data:           dataCopy,
+		parent:         c.parent,
+		errorStrat:     c.errorStrat,
+		engine:         c.engine,
+		depth:          c.depth,
+		promptResolver: c.promptResolver,
+		refDepth:       depth,
+		refChain:       c.refChain,
+	}
+	return newCtx
+}
+
+// WithRefChain returns a new context with the given reference chain.
+// This is used internally to track the chain of referenced prompt slugs
+// for circular reference detection.
+func (c *Context) WithRefChain(chain []string) *Context {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	dataCopy := deepCopyMap(c.data)
+
+	// Deep copy the chain to prevent modification
+	var chainCopy []string
+	if chain != nil {
+		chainCopy = make([]string, len(chain))
+		copy(chainCopy, chain)
+	}
+
+	newCtx := &Context{
+		data:           dataCopy,
+		parent:         c.parent,
+		errorStrat:     c.errorStrat,
+		engine:         c.engine,
+		depth:          c.depth,
+		promptResolver: c.promptResolver,
+		refDepth:       c.refDepth,
+		refChain:       chainCopy,
+	}
+	return newCtx
+}
+
+// PromptResolver returns the prompt body resolver for reference resolution.
+// Implements internal.PromptResolverAccessor interface.
+// Returns interface{} to avoid import cycles with internal package.
+func (c *Context) PromptResolver() interface{} {
+	return c.promptResolver
+}
+
+// RefDepth returns the current reference resolution depth.
+// Implements internal.RefDepthAccessor interface.
+func (c *Context) RefDepth() int {
+	return c.refDepth
+}
+
+// RefChain returns the current chain of referenced prompt slugs.
+// Implements internal.RefChainAccessor interface.
+func (c *Context) RefChain() []string {
+	return c.refChain
 }
 
 // Path separator for dot-notation

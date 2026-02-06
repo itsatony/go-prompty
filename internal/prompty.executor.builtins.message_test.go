@@ -179,8 +179,8 @@ func TestIsValidRole(t *testing.T) {
 		{"user", true},
 		{"assistant", true},
 		{"tool", true},
-		{"System", true},  // case insensitive
-		{"USER", true},    // case insensitive
+		{"System", true}, // case insensitive
+		{"USER", true},   // case insensitive
 		{"invalid", false},
 		{"admin", false},
 		{"", false},

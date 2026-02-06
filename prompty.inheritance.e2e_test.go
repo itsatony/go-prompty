@@ -37,8 +37,8 @@ Footer: {~prompty.block name="footer"~}Default Footer{~/prompty.block~}`)
 		result, err := engine.Execute(ctx, child, nil)
 		require.NoError(t, err)
 		assert.Contains(t, result, "Custom Header")
-		assert.Contains(t, result, "Default Body")    // Not overridden
-		assert.Contains(t, result, "Default Footer")  // Not overridden
+		assert.Contains(t, result, "Default Body")   // Not overridden
+		assert.Contains(t, result, "Default Footer") // Not overridden
 		assert.NotContains(t, result, "Default Header")
 	})
 
@@ -50,7 +50,7 @@ Footer: {~prompty.block name="footer"~}Default Footer{~/prompty.block~}`)
 		result, err := engine.Execute(ctx, child, nil)
 		require.NoError(t, err)
 		assert.Contains(t, result, "Custom Header")
-		assert.Contains(t, result, "Default Body")     // Not overridden
+		assert.Contains(t, result, "Default Body") // Not overridden
 		assert.Contains(t, result, "Custom Footer")
 	})
 
@@ -92,7 +92,7 @@ func TestInheritance_E2E_MultiLevel(t *testing.T) {
 		assert.Contains(t, result, "[BASE]")
 		assert.Contains(t, result, "Middle Title")
 		assert.Contains(t, result, "Middle Content with custom data")
-		assert.Contains(t, result, "Default Footer")  // Inherited from base
+		assert.Contains(t, result, "Default Footer") // Inherited from base
 		assert.NotContains(t, result, "Default Title")
 	})
 
@@ -107,8 +107,8 @@ func TestInheritance_E2E_MultiLevel(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.Contains(t, result, "[BASE]")
-		assert.Contains(t, result, "Middle Title")       // From middle
-		assert.Contains(t, result, "middle stuff")       // From middle
+		assert.Contains(t, result, "Middle Title")        // From middle
+		assert.Contains(t, result, "middle stuff")        // From middle
 		assert.Contains(t, result, "Child Footer - 2024") // From child
 	})
 
@@ -121,8 +121,8 @@ func TestInheritance_E2E_MultiLevel(t *testing.T) {
 
 		result, err := engine.ExecuteTemplate(ctx, "level4", nil)
 		require.NoError(t, err)
-		assert.Contains(t, result, "L4-A")  // Latest override of 'a'
-		assert.Contains(t, result, "L3-B")  // Latest override of 'b'
+		assert.Contains(t, result, "L4-A") // Latest override of 'a'
+		assert.Contains(t, result, "L3-B") // Latest override of 'b'
 		assert.NotContains(t, result, "L2-A")
 		assert.NotContains(t, result, "L1-A")
 		assert.NotContains(t, result, "L1-B")

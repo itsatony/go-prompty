@@ -311,11 +311,11 @@ func AllowWithExpiry(reason string, expiresAt time.Time) *AccessDecision {
 
 // Access control error messages.
 const (
-	ErrMsgAccessDenied       = "access denied"
-	ErrMsgAccessCheckFailed  = "access check failed"
-	ErrMsgNilSubject         = "subject is nil"
-	ErrMsgNilChecker         = "access checker is nil"
-	ErrMsgNoCheckersInChain  = "no checkers in chain"
+	ErrMsgAccessDenied      = "access denied"
+	ErrMsgAccessCheckFailed = "access check failed"
+	ErrMsgNilSubject        = "subject is nil"
+	ErrMsgNilChecker        = "access checker is nil"
+	ErrMsgNoCheckersInChain = "no checkers in chain"
 )
 
 // AccessError represents an access control error.

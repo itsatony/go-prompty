@@ -5,6 +5,152 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-02-06
+
+### Added
+
+#### Agent Definition & Compilation
+- **Document Types**: `prompt`, `skill` (default), `agent` with `DocumentType` enum
+- **`SkillRef`**: Skill references with slug, version, inline body, injection mode, and execution overrides
+- **`ToolsConfig`**: Tool definitions with `FunctionDef`, MCP servers, and provider-specific serialization
+- **`ConstraintsConfig`**: Behavioral, safety, and operational constraints for agents
+- **`MessageTemplate`**: Typed message templates (role + content) in YAML frontmatter
+- **`CompileAgent()`**: Full agent compilation pipeline — resolves skills, generates catalogs, renders body and messages through `{~...~}` engine
+- **`ActivateSkill()`**: Activates a skill on a compiled agent with injection modes (none, system_prompt, user_context)
+- **`Compile()`**: Simple compilation for prompts/skills (body through engine with context)
+
+#### Catalog Generation
+- **`{~prompty.skills_catalog~}`**: Built-in resolver that generates skill catalog in configurable formats (default, detailed, compact)
+- **`{~prompty.tools_catalog~}`**: Built-in resolver that generates tool catalog with function_calling JSON support
+- **`GenerateSkillsCatalog()`**: Standalone catalog generation API
+- **`GenerateToolsCatalog()`**: Standalone catalog generation API
+- **Catalog Formats**: default (markdown), detailed, compact, function_calling (JSON schema)
+
+#### ExecutionConfig Enhancements
+- **`Merge()`**: 3-layer precedence merge (agent → skill → runtime) with shallow field-level semantics
+- **`FunctionDef` Extensions**: `Returns` field, `ToOpenAITool()`, `ToAnthropicTool()` provider-specific serialization
+
+#### Document Parsing & Resolution
+- **`Parse()`**: Standalone v2.1 document parser (YAML frontmatter + body extraction)
+- **`ParseFile()`**: Parse documents from filesystem
+- **`DocumentResolver` Interface**: `ResolvePrompt`, `ResolveSkill`, `ResolveAgent` for document lookup
+- **`MapDocumentResolver`**: In-memory resolver for testing
+- **`StorageDocumentResolver`**: Storage-backed resolver wrapping `TemplateStorage`
+- **`NoopDocumentResolver`**: Default resolver returning errors
+
+#### Serialization & Import/Export
+- **`Serialize()`**: YAML frontmatter + body serialization with configurable options
+- **`ExportAgentSkill()`**: Export agent as portable skill (strips agent-specific fields)
+- **`ExportFull()`**: Export with all fields including execution and skope
+- **`Import()`**: Import from .md or .zip files
+- **`ImportDirectory()`**: Import from zip archives with SKILL.md/AGENT.md/PROMPT.md
+- **`ExportSkillDirectory()`**: Export as zip archive with document and resources
+
+### Changed
+- **`StoredTemplate`**: `InferenceConfig` field replaced by `PromptConfig *Prompt`
+- **`Engine.Parse()`**: All frontmatter now parsed as `Prompt` (v1 InferenceConfig fallback removed)
+- **`DetectSchemaProvider()`**: Now accepts `*ExecutionConfig` instead of `*InferenceConfig`
+- **`ValidateOptional()`**: Enhanced detection of v2.1 documents (Execution/Skope/Type/Name signals)
+- **PostgreSQL Storage**: Column renamed `inference_config` → `prompt_config` (migration 4)
+- **Prompt Type**: Extended with `Type`, `Skills`, `Tools`, `Context`, `Constraints`, `Messages`, `Body`
+
+### Removed
+- **`InferenceConfig`**: Entire type and all associated methods deleted (replaced by `Prompt` + `ExecutionConfig`)
+- **`Template.InferenceConfig()`**: Removed (use `Template.Prompt()` → `Prompt.Execution`)
+- **`Template.HasInferenceConfig()`**: Removed (use `Template.HasPrompt()`)
+- **`ModelConfig`**: Removed (fields absorbed into `ExecutionConfig`)
+- **`examples/inference_config/`**: Removed obsolete example
+
+### Technical Details
+- Pre-release: no backward compatibility with v1 InferenceConfig
+- Single syntax: all templating uses `{~...~}` engine exclusively
+- Zero InferenceConfig references remaining in codebase
+- 78.4% test coverage (root), 84.1% (internal), zero race conditions
+- New files: 17 source files, comprehensive test coverage
+- Postgres migration 4 handles column rename for existing databases
+
+## [2.0.0] - 2026-02-04
+
+### Added
+
+#### Agent Skills Specification Support (v2.0)
+- **New `Prompt` Type**: Comprehensive v2.0 prompt configuration compatible with [Agent Skills](https://agentskills.io) specification
+  - `name`: Prompt identifier in slug format (max 64 chars, lowercase letters/digits/hyphens)
+  - `description`: Prompt description (max 1024 chars)
+  - `license`: License identifier (MIT, Apache-2.0, etc.)
+  - `compatibility`: Compatible models/providers list
+  - `allowed_tools`: Tools the prompt is designed to work with
+  - `metadata`: Arbitrary key-value metadata
+  - `inputs`: Input schema definitions with type validation
+  - `outputs`: Output schema definitions
+  - `sample`: Sample data for testing
+- **Namespaced `execution` Config**: LLM execution parameters separated from prompt metadata
+  - `provider`: LLM provider (openai, anthropic, google, vllm, azure)
+  - `model`: Model name
+  - `temperature`, `max_tokens`, `top_p`, `top_k`: Model parameters
+  - `stop_sequences`: Stop sequences
+  - `thinking`: Claude extended thinking configuration (enabled, budget_tokens)
+  - `response_format`: Structured output format
+  - `guided_decoding`: vLLM guided decoding configuration
+  - `provider_options`: Provider-specific options
+- **Namespaced `skope` Config**: Skope platform integration
+  - `slug`: Platform-specific slug
+  - `visibility`: Visibility level (public, private, team)
+  - `version_number`: Version tracking
+  - `projects`: Associated projects
+  - `references`: Prompt references
+  - Audit fields: `created_at`, `created_by`, `updated_at`, `updated_by`, `forked_from`
+
+#### Prompt Reference Syntax (`prompty.ref`)
+- **New `{~prompty.ref~}` Tag**: Reference and compose prompts from a registry
+  - `slug` attribute (required): Prompt slug identifier
+  - `version` attribute (optional): Specific version, defaults to "latest"
+  - Supports `slug@version` syntax: `{~prompty.ref slug="greeting@v2" /~}`
+- **Circular Reference Detection**: Prevents infinite loops with clear error messages
+- **Depth Limiting**: Maximum 10 levels of nested references
+- **PromptResolver Interface**: Implement to provide prompt lookup functionality
+- **PromptResolverAdapter**: Convenience adapter for integrating custom resolvers
+
+#### SKILL.md Import/Export
+- **`ExportToSkillMD()`**: Export prompts in Agent Skills SKILL.md format (strips execution/skope)
+- **`ImportFromSkillMD()`**: Parse SKILL.md files into Prompt + body
+- **`SkillMD` Type**: Represents parsed SKILL.md with Prompt and body sections
+- **`IsAgentSkillsCompatible()`**: Check if prompt uses only standard Agent Skills fields
+- **`StripExtensions()`**: Remove go-prompty specific extensions for portability
+
+#### Context Enhancements for References
+- **`WithPromptResolver()`**: Set prompt resolver for reference resolution
+- **`WithRefDepth()`**: Track reference resolution depth
+- **`WithRefChain()`**: Track reference chain for circular detection
+- **`PromptResolver()`**, **`RefDepth()`**, **`RefChain()`**: Accessor methods
+
+#### New Types
+- **`ExecutionConfig`**: LLM execution configuration with provider-specific methods
+  - `ToOpenAI()`, `ToAnthropic()`, `ToGemini()`, `ToVLLM()`: Provider format conversion
+  - `ProviderFormat(provider)`: Universal format conversion
+  - `GetEffectiveProvider()`: Auto-detect provider from config
+- **`SkopeConfig`**: Skope platform configuration
+- **`ThinkingConfig`**: Claude extended thinking configuration
+- **`PromptBodyResolver`**: Interface for prompt body lookup
+- **`PromptResolverAdapter`**: Wraps PromptResolver to PromptBodyResolver
+
+### Changed
+- **Template Detection**: Templates with `execution` or `skope` config are treated as v2.0 Prompts
+- **v1 Backward Compatibility**: Templates without v2-specific config still parse as v1 InferenceConfig
+- **`Template.Prompt()`**: New method to access v2.0 Prompt configuration
+- **`Template.HasPrompt()`**: Check if template has v2.0 Prompt
+
+### Deprecated
+- **`Template.InferenceConfig()`**: Use `Template.Prompt().Execution` instead
+- **`Template.HasInferenceConfig()`**: Use `Template.HasPrompt()` instead
+
+### Technical Details
+- Agent Skills specification compatibility for prompt interoperability
+- v2 detection based on presence of namespaced configs (execution/skope), not just name+description
+- Full test coverage for v2.0 types and reference resolution
+- Zero magic strings - all constants in prompty.constants.go
+- Thread-safe prompt resolution with proper context propagation
+
 ## [1.6.0] - 2026-01-31
 
 ### Added

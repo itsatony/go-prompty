@@ -16,9 +16,9 @@ import (
 // MemoryStorage implements ExtendedTemplateStorage (includes LabelStorage and StatusStorage).
 type MemoryStorage struct {
 	mu        sync.RWMutex
-	templates map[string][]*StoredTemplate          // name -> versions (sorted by version desc)
-	byID      map[TemplateID]*StoredTemplate        // id -> template
-	labels    map[string]map[string]*TemplateLabel  // templateName -> (label -> TemplateLabel)
+	templates map[string][]*StoredTemplate         // name -> versions (sorted by version desc)
+	byID      map[TemplateID]*StoredTemplate       // id -> template
+	labels    map[string]map[string]*TemplateLabel // templateName -> (label -> TemplateLabel)
 	closed    bool
 }
 
@@ -154,9 +154,9 @@ func (s *MemoryStorage) Save(ctx context.Context, tmpl *StoredTemplate) error {
 		Version:         nextVersion,
 		Status:          status,
 		Metadata:        copyStringMap(tmpl.Metadata),
-		InferenceConfig: tmpl.InferenceConfig, // InferenceConfig is immutable after parsing
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		PromptConfig: tmpl.PromptConfig, // PromptConfig is immutable after parsing
+		CreatedAt:    now,
+		UpdatedAt:    now,
 		CreatedBy:       tmpl.CreatedBy,
 		TenantID:        tmpl.TenantID,
 		Tags:            copyStringSlice(tmpl.Tags),
@@ -456,9 +456,9 @@ func copyStoredTemplate(tmpl *StoredTemplate) *StoredTemplate {
 		Version:         tmpl.Version,
 		Status:          tmpl.Status,
 		Metadata:        copyStringMap(tmpl.Metadata),
-		InferenceConfig: tmpl.InferenceConfig, // InferenceConfig is immutable after parsing
-		CreatedAt:       tmpl.CreatedAt,
-		UpdatedAt:       tmpl.UpdatedAt,
+		PromptConfig: tmpl.PromptConfig, // PromptConfig is immutable after parsing
+		CreatedAt:    tmpl.CreatedAt,
+		UpdatedAt:    tmpl.UpdatedAt,
 		CreatedBy:       tmpl.CreatedBy,
 		TenantID:        tmpl.TenantID,
 		Tags:            copyStringSlice(tmpl.Tags),

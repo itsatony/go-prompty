@@ -139,10 +139,10 @@ func (e *RegistryError) Error() string {
 
 // Registry error message constants
 const (
-	ErrMsgNilResolver          = "resolver cannot be nil"
-	ErrMsgEmptyTagName         = "resolver tag name cannot be empty"
+	ErrMsgNilResolver           = "resolver cannot be nil"
+	ErrMsgEmptyTagName          = "resolver tag name cannot be empty"
 	ErrMsgResolverAlreadyExists = "resolver already registered for tag"
-	ErrMsgResolverUnknown      = "no resolver registered for tag"
+	ErrMsgResolverUnknown       = "no resolver registered for tag"
 )
 
 // Additional log field constants for registry

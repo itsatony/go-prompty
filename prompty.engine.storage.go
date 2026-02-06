@@ -137,7 +137,7 @@ func (se *StorageEngine) ValidateVersion(ctx context.Context, templateName strin
 
 // Save stores a new template or creates a new version.
 // The template source is validated before saving.
-// If the template source contains a config block and InferenceConfig is not already set,
+// If the template source contains a config block and PromptConfig is not already set,
 // the config is automatically extracted and populated.
 func (se *StorageEngine) Save(ctx context.Context, tmpl *StoredTemplate) error {
 	// Validate source before saving
@@ -152,13 +152,13 @@ func (se *StorageEngine) Save(ctx context.Context, tmpl *StoredTemplate) error {
 		}
 	}
 
-	// Extract InferenceConfig from source if not already set
-	if tmpl.InferenceConfig == nil && tmpl.Source != "" {
+	// Extract PromptConfig from source if not already set
+	if tmpl.PromptConfig == nil && tmpl.Source != "" {
 		parsed, err := se.engine.Parse(tmpl.Source)
-		if err == nil && parsed.HasInferenceConfig() {
-			tmpl.InferenceConfig = parsed.InferenceConfig()
+		if err == nil && parsed.HasPrompt() {
+			tmpl.PromptConfig = parsed.Prompt()
 		}
-		// If parsing fails, we skip setting InferenceConfig (validation already passed)
+		// If parsing fails, we skip setting PromptConfig (validation already passed)
 	}
 
 	// Save to storage

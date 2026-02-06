@@ -475,8 +475,7 @@ func TestNewExprEvaluatorWithContext_NilContext(t *testing.T) {
 	ctx := newMockContextAccessor(nil)
 
 	// Should not panic with nil context - pass context.TODO for the test
-	//nolint:staticcheck // Testing nil context handling
-	evaluator := NewExprEvaluatorWithContext(nil, funcs, ctx) //nolint:staticcheck
+	evaluator := NewExprEvaluatorWithContext(context.TODO(), funcs, ctx)
 	require.NotNil(t, evaluator)
 
 	// Should work normally with nil context (uses background)

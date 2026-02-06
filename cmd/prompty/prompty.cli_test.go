@@ -676,7 +676,7 @@ func TestSeverityToName(t *testing.T) {
 		input    int
 		expected string
 	}{
-		{"Error", 0, SeverityNameError},   // SeverityError = 0
+		{"Error", 0, SeverityNameError},     // SeverityError = 0
 		{"Warning", 1, SeverityNameWarning}, // SeverityWarning = 1
 		{"Info", 2, SeverityNameInfo},       // SeverityInfo = 2
 		{"Unknown", 99, SeverityNameError},  // Default to error

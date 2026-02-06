@@ -502,7 +502,7 @@ func TestCollectAllKeys(t *testing.T) {
 	data := map[string]any{
 		"name": "test",
 		"user": map[string]any{
-			"id":   "123",
+			"id": "123",
 			"profile": map[string]any{
 				"email": "test@example.com",
 			},
@@ -580,7 +580,7 @@ func TestMinOfThree(t *testing.T) {
 
 func TestDryRunResult_String_AllSections(t *testing.T) {
 	result := &DryRunResult{
-		Valid: true,
+		Valid:  true,
 		Output: "test output",
 		Variables: []VariableReference{
 			{Name: "found", Line: 1, InData: true},

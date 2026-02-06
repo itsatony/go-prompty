@@ -10,17 +10,17 @@ import (
 // Error message constants - ALL error messages must be constants (NO MAGIC STRINGS)
 const (
 	// Parse errors
-	ErrMsgParseFailed       = "template parsing failed"
-	ErrMsgInvalidSyntax     = "invalid template syntax"
-	ErrMsgUnexpectedChar    = "unexpected character"
-	ErrMsgUnterminatedTag   = "unterminated tag"
-	ErrMsgUnterminatedStr   = "unterminated string literal"
-	ErrMsgInvalidEscape     = "invalid escape sequence"
-	ErrMsgUnexpectedEOF     = "unexpected end of input"
-	ErrMsgMismatchedTag     = "mismatched closing tag"
-	ErrMsgInvalidTagName    = "invalid tag name"
-	ErrMsgEmptyTagName      = "tag name cannot be empty"
-	ErrMsgNestedRawBlock    = "nested raw blocks are not allowed"
+	ErrMsgParseFailed     = "template parsing failed"
+	ErrMsgInvalidSyntax   = "invalid template syntax"
+	ErrMsgUnexpectedChar  = "unexpected character"
+	ErrMsgUnterminatedTag = "unterminated tag"
+	ErrMsgUnterminatedStr = "unterminated string literal"
+	ErrMsgInvalidEscape   = "invalid escape sequence"
+	ErrMsgUnexpectedEOF   = "unexpected end of input"
+	ErrMsgMismatchedTag   = "mismatched closing tag"
+	ErrMsgInvalidTagName  = "invalid tag name"
+	ErrMsgEmptyTagName    = "tag name cannot be empty"
+	ErrMsgNestedRawBlock  = "nested raw blocks are not allowed"
 
 	// Execution errors
 	ErrMsgUnknownTag       = "unknown tag"
@@ -56,10 +56,10 @@ const (
 	ErrMsgErrorHandledByStrat  = "error handled by strategy"
 
 	// Validation messages (Phase 3)
-	ErrMsgValidationFailed      = "template validation failed"
-	ErrMsgUnknownTagInTemplate  = "unknown tag in template"
-	ErrMsgInvalidOnErrorAttr    = "invalid onerror attribute value"
-	ErrMsgMissingIncludeTarget  = "included template not found"
+	ErrMsgValidationFailed     = "template validation failed"
+	ErrMsgUnknownTagInTemplate = "unknown tag in template"
+	ErrMsgInvalidOnErrorAttr   = "invalid onerror attribute value"
+	ErrMsgMissingIncludeTarget = "included template not found"
 
 	// For loop messages (Phase 4)
 	ErrMsgForMissingItem    = "missing required 'item' attribute"
@@ -141,6 +141,20 @@ const (
 	ErrMsgSchemaPropertyOrdering     = "propertyOrdering requires Gemini 2.5+ provider"
 	ErrMsgEnumEmptyValues            = "enum constraint requires at least one value"
 	ErrMsgGuidedDecodingConflict     = "only one guided decoding constraint allowed"
+
+	// v2.0 Prompt validation messages
+	ErrMsgPromptNameRequired        = "prompt name is required"
+	ErrMsgPromptNameTooLong         = "prompt name exceeds maximum length"
+	ErrMsgPromptNameInvalidFormat   = "prompt name must be slug format (lowercase letters, digits, hyphens)"
+	ErrMsgPromptDescriptionRequired = "prompt description is required"
+	ErrMsgPromptDescriptionTooLong  = "prompt description exceeds maximum length"
+
+	// v2.0 Reference resolution messages
+	ErrMsgRefNotFound      = "referenced prompt not found"
+	ErrMsgRefCircular      = "circular reference detected"
+	ErrMsgRefDepthExceeded = "reference resolution depth exceeded"
+	ErrMsgRefMissingSlug   = "prompty.ref requires slug attribute"
+	ErrMsgRefInvalidSlug   = "invalid prompt slug format"
 )
 
 // Error code constants for categorization
@@ -156,6 +170,8 @@ const (
 	ErrCodeLabel      = "PROMPTY_LABEL"
 	ErrCodeStatus     = "PROMPTY_STATUS"
 	ErrCodeSchema     = "PROMPTY_SCHEMA"
+	ErrCodePrompt     = "PROMPTY_PROMPT" // v2.0: Prompt validation errors
+	ErrCodeRef        = "PROMPTY_REF"    // v2.0: Reference resolution errors
 )
 
 // Position represents a location in the source template
@@ -440,4 +456,123 @@ func NewSchemaValidationError(msg, path string) error {
 func NewSchemaProviderError(msg, provider string) error {
 	return cuserr.NewValidationError(ErrCodeSchema, msg).
 		WithMetadata("provider", provider)
+}
+
+// NewPromptValidationError creates an error for prompt validation failures.
+func NewPromptValidationError(msg, promptName string) error {
+	return cuserr.NewValidationError(ErrCodePrompt, msg).
+		WithMetadata(MetaKeyPromptName, promptName)
+}
+
+// NewPromptNameRequiredError creates an error for missing prompt name.
+func NewPromptNameRequiredError() error {
+	return cuserr.NewValidationError(ErrCodePrompt, ErrMsgPromptNameRequired)
+}
+
+// NewPromptNameTooLongError creates an error for prompt name exceeding max length.
+func NewPromptNameTooLongError(name string, maxLen int) error {
+	return cuserr.NewValidationError(ErrCodePrompt, ErrMsgPromptNameTooLong).
+		WithMetadata(MetaKeyPromptName, name).
+		WithMetadata(MetaKeyMaxDepth, strconv.Itoa(maxLen))
+}
+
+// NewPromptNameInvalidFormatError creates an error for invalid prompt name format.
+func NewPromptNameInvalidFormatError(name string) error {
+	return cuserr.NewValidationError(ErrCodePrompt, ErrMsgPromptNameInvalidFormat).
+		WithMetadata(MetaKeyPromptName, name)
+}
+
+// NewPromptDescriptionRequiredError creates an error for missing prompt description.
+func NewPromptDescriptionRequiredError() error {
+	return cuserr.NewValidationError(ErrCodePrompt, ErrMsgPromptDescriptionRequired)
+}
+
+// NewPromptDescriptionTooLongError creates an error for prompt description exceeding max length.
+func NewPromptDescriptionTooLongError(maxLen int) error {
+	return cuserr.NewValidationError(ErrCodePrompt, ErrMsgPromptDescriptionTooLong).
+		WithMetadata(MetaKeyMaxDepth, strconv.Itoa(maxLen))
+}
+
+// NewRefNotFoundError creates an error for referenced prompt not found.
+func NewRefNotFoundError(slug, version string) error {
+	return cuserr.NewNotFoundError(ErrCodeRef, ErrMsgRefNotFound).
+		WithMetadata(MetaKeyPromptSlug, slug).
+		WithMetadata(AttrVersion, version)
+}
+
+// NewRefCircularError creates an error for circular reference detection.
+func NewRefCircularError(slug string, chain []string) error {
+	chainStr := ""
+	for i, s := range chain {
+		if i > 0 {
+			chainStr += " -> "
+		}
+		chainStr += s
+	}
+	return cuserr.NewValidationError(ErrCodeRef, ErrMsgRefCircular).
+		WithMetadata(MetaKeyPromptSlug, slug).
+		WithMetadata(MetaKeyRefChain, chainStr)
+}
+
+// NewRefDepthExceededError creates an error for reference resolution depth exceeded.
+func NewRefDepthExceededError(depth, maxDepth int) error {
+	return cuserr.NewValidationError(ErrCodeRef, ErrMsgRefDepthExceeded).
+		WithMetadata(MetaKeyCurrentDepth, strconv.Itoa(depth)).
+		WithMetadata(MetaKeyMaxDepth, strconv.Itoa(maxDepth))
+}
+
+// NewRefMissingSlugError creates an error for missing slug attribute in prompty.ref.
+func NewRefMissingSlugError() error {
+	return cuserr.NewValidationError(ErrCodeRef, ErrMsgRefMissingSlug).
+		WithMetadata(MetaKeyTag, TagNameRef)
+}
+
+// NewRefInvalidSlugError creates an error for invalid slug format in prompty.ref.
+func NewRefInvalidSlugError(slug string) error {
+	return cuserr.NewValidationError(ErrCodeRef, ErrMsgRefInvalidSlug).
+		WithMetadata(MetaKeyPromptSlug, slug)
+}
+
+// v2.1 Agent error constructors
+
+// NewAgentError creates an error for agent-related failures.
+func NewAgentError(msg string, cause error) error {
+	if cause != nil {
+		return cuserr.WrapStdError(cause, ErrCodeAgent, msg)
+	}
+	return cuserr.NewValidationError(ErrCodeAgent, msg)
+}
+
+// NewAgentValidationError creates an error for agent validation failures.
+func NewAgentValidationError(msg, promptName string) error {
+	return cuserr.NewValidationError(ErrCodeAgent, msg).
+		WithMetadata(MetaKeyPromptName, promptName)
+}
+
+// NewCompilationError creates an error for agent compilation failures.
+func NewCompilationError(msg string, cause error) error {
+	if cause != nil {
+		return cuserr.WrapStdError(cause, ErrCodeCompile, msg)
+	}
+	return cuserr.NewValidationError(ErrCodeCompile, msg)
+}
+
+// NewCatalogError creates an error for catalog generation failures.
+func NewCatalogError(msg string, cause error) error {
+	if cause != nil {
+		return cuserr.WrapStdError(cause, ErrCodeCatalog, msg)
+	}
+	return cuserr.NewValidationError(ErrCodeCatalog, msg)
+}
+
+// NewSkillNotFoundError creates an error for a skill reference that could not be resolved.
+func NewSkillNotFoundError(slug string) error {
+	return cuserr.NewNotFoundError(ErrCodeAgent, ErrMsgSkillNotFound).
+		WithMetadata(MetaKeySkillSlug, slug)
+}
+
+// NewInvalidDocumentTypeError creates an error for invalid document type.
+func NewInvalidDocumentTypeError(docType string) error {
+	return cuserr.NewValidationError(ErrCodeAgent, ErrMsgInvalidDocumentType).
+		WithMetadata(MetaKeyDocumentType, docType)
 }

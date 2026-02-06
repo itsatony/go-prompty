@@ -18,7 +18,7 @@ func TestAccessAuditEvent_Builder(t *testing.T) {
 	event := NewAccessAuditEvent(OpExecute, "greeting", subject, decision).
 		WithRequestID("req_xyz").
 		WithTemplate(tmpl).
-		WithDuration(100 * time.Millisecond).
+		WithDuration(100*time.Millisecond).
 		WithError(nil).
 		WithMetadata("custom", "value")
 

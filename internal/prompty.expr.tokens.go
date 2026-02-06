@@ -327,7 +327,7 @@ func (e *ExprTokenError) Error() string {
 
 // Expression tokenizer error messages
 const (
-	ErrMsgExprUnexpectedChar = "unexpected character"
+	ErrMsgExprUnexpectedChar  = "unexpected character"
 	ErrMsgExprUnterminatedStr = "unterminated string literal"
-	ErrMsgExprInvalidNumber  = "invalid number format"
+	ErrMsgExprInvalidNumber   = "invalid number format"
 )

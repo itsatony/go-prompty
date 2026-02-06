@@ -787,39 +787,32 @@ func TestPostgres_E2E_LargeData(t *testing.T) {
 }
 
 // =============================================================================
-// InferenceConfig Persistence Tests
+// PromptConfig Persistence Tests
 // =============================================================================
 
-func TestPostgres_E2E_InferenceConfigPersistence(t *testing.T) {
+func TestPostgres_E2E_PromptConfigPersistence(t *testing.T) {
 	storage, cleanup := setupPostgresContainer(t)
 	defer cleanup()
 	ctx := context.Background()
 
-	t.Run("SaveAndRetrieveInferenceConfig", func(t *testing.T) {
-		cfg := &InferenceConfig{
-			API: "anthropic",
-			Model: &ModelConfig{
-				Provider: "anthropic",
-				Name:     "claude-3-opus",
-				Parameters: map[string]any{
-					"temperature": 0.7,
-					"max_tokens":  4096,
-					"top_p":       0.9,
-				},
+	t.Run("SaveAndRetrievePromptConfig", func(t *testing.T) {
+		temp := 0.7
+		maxTokens := 4096
+		cfg := &Prompt{
+			Name:        "config-prompt",
+			Description: "A test prompt config",
+			Execution: &ExecutionConfig{
+				Provider:    "anthropic",
+				Model:       "claude-3-opus",
+				Temperature: &temp,
+				MaxTokens:   &maxTokens,
 			},
-			Input: &InputSchema{
-				Type: "object",
-				Properties: map[string]*PropertySchema{
-					"query": {
-						Type:        "string",
-						Description: "User query",
-					},
+			Inputs: map[string]*InputDef{
+				"query": {
+					Type:        "string",
+					Description: "User query",
+					Required:    true,
 				},
-				Required: []string{"query"},
-			},
-			Output: &OutputSchema{
-				Type:   "string",
-				Format: "text",
 			},
 			Sample: map[string]any{
 				"query": "What is the meaning of life?",
@@ -827,9 +820,9 @@ func TestPostgres_E2E_InferenceConfigPersistence(t *testing.T) {
 		}
 
 		tmpl := &StoredTemplate{
-			Name:            "config-test",
-			Source:          "Answer: {~prompty.var name=\"response\" /~}",
-			InferenceConfig: cfg,
+			Name:         "config-test",
+			Source:       "Answer: {~prompty.var name=\"response\" /~}",
+			PromptConfig: cfg,
 		}
 
 		err := storage.Save(ctx, tmpl)
@@ -838,35 +831,32 @@ func TestPostgres_E2E_InferenceConfigPersistence(t *testing.T) {
 		// Retrieve and verify
 		retrieved, err := storage.Get(ctx, "config-test")
 		require.NoError(t, err)
-		require.NotNil(t, retrieved.InferenceConfig)
+		require.NotNil(t, retrieved.PromptConfig)
 
-		assert.Equal(t, "anthropic", retrieved.InferenceConfig.API)
-		assert.NotNil(t, retrieved.InferenceConfig.Model)
-		assert.Equal(t, "claude-3-opus", retrieved.InferenceConfig.Model.Name)
-		assert.Equal(t, 0.7, retrieved.InferenceConfig.Model.Parameters["temperature"])
-		assert.NotNil(t, retrieved.InferenceConfig.Input)
-		assert.Contains(t, retrieved.InferenceConfig.Input.Required, "query")
-		assert.NotNil(t, retrieved.InferenceConfig.Output)
-		assert.Equal(t, "text", retrieved.InferenceConfig.Output.Format)
+		assert.Equal(t, "config-prompt", retrieved.PromptConfig.Name)
+		require.NotNil(t, retrieved.PromptConfig.Execution)
+		assert.Equal(t, "anthropic", retrieved.PromptConfig.Execution.Provider)
+		assert.Equal(t, "claude-3-opus", retrieved.PromptConfig.Execution.Model)
+		require.NotNil(t, retrieved.PromptConfig.Inputs)
+		assert.Contains(t, retrieved.PromptConfig.Inputs, "query")
 	})
 
-	t.Run("UpdateInferenceConfig", func(t *testing.T) {
-		// Save new version with updated config
-		cfg := &InferenceConfig{
-			API: "openai",
-			Model: &ModelConfig{
-				Provider: "openai",
-				Name:     "gpt-4",
-				Parameters: map[string]any{
-					"temperature": 0.5,
-				},
+	t.Run("UpdatePromptConfig", func(t *testing.T) {
+		temp := 0.5
+		cfg := &Prompt{
+			Name:        "updated-config",
+			Description: "Updated prompt config",
+			Execution: &ExecutionConfig{
+				Provider:    "openai",
+				Model:       "gpt-4",
+				Temperature: &temp,
 			},
 		}
 
 		tmpl := &StoredTemplate{
-			Name:            "config-test",
-			Source:          "Updated answer: {~prompty.var name=\"response\" /~}",
-			InferenceConfig: cfg,
+			Name:         "config-test",
+			Source:       "Updated answer: {~prompty.var name=\"response\" /~}",
+			PromptConfig: cfg,
 		}
 
 		err := storage.Save(ctx, tmpl)
@@ -876,19 +866,21 @@ func TestPostgres_E2E_InferenceConfigPersistence(t *testing.T) {
 		// Verify latest has new config
 		latest, err := storage.Get(ctx, "config-test")
 		require.NoError(t, err)
-		assert.Equal(t, "openai", latest.InferenceConfig.API)
+		require.NotNil(t, latest.PromptConfig)
+		assert.Equal(t, "openai", latest.PromptConfig.Execution.Provider)
 
 		// Verify old version still has old config
 		v1, err := storage.GetVersion(ctx, "config-test", 1)
 		require.NoError(t, err)
-		assert.Equal(t, "anthropic", v1.InferenceConfig.API)
+		require.NotNil(t, v1.PromptConfig)
+		assert.Equal(t, "anthropic", v1.PromptConfig.Execution.Provider)
 	})
 
-	t.Run("NilInferenceConfig", func(t *testing.T) {
+	t.Run("NilPromptConfig", func(t *testing.T) {
 		tmpl := &StoredTemplate{
-			Name:            "no-config",
-			Source:          "Simple template",
-			InferenceConfig: nil,
+			Name:         "no-config",
+			Source:       "Simple template",
+			PromptConfig: nil,
 		}
 
 		err := storage.Save(ctx, tmpl)
@@ -896,7 +888,7 @@ func TestPostgres_E2E_InferenceConfigPersistence(t *testing.T) {
 
 		retrieved, err := storage.Get(ctx, "no-config")
 		require.NoError(t, err)
-		assert.Nil(t, retrieved.InferenceConfig)
+		assert.Nil(t, retrieved.PromptConfig)
 	})
 }
 

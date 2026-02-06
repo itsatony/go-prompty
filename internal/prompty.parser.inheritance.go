@@ -8,10 +8,10 @@ import (
 // BlockNode represents a named overridable block in template inheritance.
 // Example: {~prompty.block name="header"~}default content{~/prompty.block~}
 type BlockNode struct {
-	pos        Position
-	Name       string     // Block name from 'name' attribute
-	Children   []Node     // Block content (child nodes)
-	RawSource  string     // Original source for parent() calls
+	pos       Position
+	Name      string // Block name from 'name' attribute
+	Children  []Node // Block content (child nodes)
+	RawSource string // Original source for parent() calls
 }
 
 // Type returns NodeTypeBlock
@@ -41,9 +41,9 @@ func NewBlockNode(name string, children []Node, pos Position) *BlockNode {
 // InheritanceInfo stores information about template inheritance.
 // This is attached to templates that use extends.
 type InheritanceInfo struct {
-	ParentTemplate string               // Name of the parent template
+	ParentTemplate string                // Name of the parent template
 	Blocks         map[string]*BlockNode // Named blocks defined in this template
-	ExtendsPos     Position             // Position of extends tag
+	ExtendsPos     Position              // Position of extends tag
 }
 
 // NewInheritanceInfo creates a new inheritance info

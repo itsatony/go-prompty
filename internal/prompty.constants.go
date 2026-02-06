@@ -74,50 +74,50 @@ const (
 
 // Character constants
 const (
-	CharEquals       = '='
-	CharDoubleQuote  = '"'
-	CharSingleQuote  = '\''
-	CharBackslash    = '\\'
-	CharSlash        = '/'
-	CharNewline      = '\n'
-	CharSpace        = ' '
-	CharTab          = '\t'
-	CharCarriageRet  = '\r'
-	CharNullByte     = "\x00" // String for use with strings.ReplaceAll (security: marker sanitization)
+	CharEquals      = '='
+	CharDoubleQuote = '"'
+	CharSingleQuote = '\''
+	CharBackslash   = '\\'
+	CharSlash       = '/'
+	CharNewline     = '\n'
+	CharSpace       = ' '
+	CharTab         = '\t'
+	CharCarriageRet = '\r'
+	CharNullByte    = "\x00" // String for use with strings.ReplaceAll (security: marker sanitization)
 )
 
 // String constants for delimiter matching
 const (
-	StrOpenDelim   = "{~"
-	StrCloseDelim  = "~}"
-	StrSelfClose   = "/~}"
-	StrBlockClose  = "{~/"
-	StrEscapeOpen  = "\\{~"
+	StrOpenDelim  = "{~"
+	StrCloseDelim = "~}"
+	StrSelfClose  = "/~}"
+	StrBlockClose = "{~/"
+	StrEscapeOpen = "\\{~"
 )
 
 // Delimiter lengths
 const (
-	LenOpenDelim   = 2 // {~
-	LenCloseDelim  = 2 // ~}
-	LenSelfClose   = 3 // /~}
-	LenBlockClose  = 3 // {~/
-	LenEscapeOpen  = 3 // \{~
+	LenOpenDelim  = 2 // {~
+	LenCloseDelim = 2 // ~}
+	LenSelfClose  = 3 // /~}
+	LenBlockClose = 3 // {~/
+	LenEscapeOpen = 3 // \{~
 )
 
 // Log message constants
 const (
-	LogMsgLexerCreated     = "lexer created"
-	LogMsgTokenizerStart   = "starting tokenization"
-	LogMsgTokenizerEnd     = "tokenization complete"
-	LogMsgParserCreated    = "parser created"
-	LogMsgParserStart      = "starting parse"
-	LogMsgParserEnd        = "parse complete"
-	LogMsgExecutorCreated  = "executor created"
-	LogMsgExecutorStart    = "starting execution"
-	LogMsgExecutorEnd      = "execution complete"
-	LogMsgResolverInvoked  = "resolver invoked"
-	LogMsgResolverComplete = "resolver complete"
-	LogMsgRegistryCreated  = "registry created"
+	LogMsgLexerCreated       = "lexer created"
+	LogMsgTokenizerStart     = "starting tokenization"
+	LogMsgTokenizerEnd       = "tokenization complete"
+	LogMsgParserCreated      = "parser created"
+	LogMsgParserStart        = "starting parse"
+	LogMsgParserEnd          = "parse complete"
+	LogMsgExecutorCreated    = "executor created"
+	LogMsgExecutorStart      = "starting execution"
+	LogMsgExecutorEnd        = "execution complete"
+	LogMsgResolverInvoked    = "resolver invoked"
+	LogMsgResolverComplete   = "resolver complete"
+	LogMsgRegistryCreated    = "registry created"
 	LogMsgResolverRegistered = "resolver registered"
 	LogMsgResolverCollision  = "resolver registration collision - first-come-wins"
 )
@@ -160,6 +160,9 @@ const (
 	TagNameExtends     = "prompty.extends"     // Template inheritance - extends parent
 	TagNameBlock       = "prompty.block"       // Template inheritance - overridable block
 	TagNameParent      = "prompty.parent"      // Template inheritance - call parent block content
+	TagNameRef           = "prompty.ref"             // v2.0: Prompt reference resolver
+	TagNameSkillsCatalog = "prompty.skills_catalog" // v2.1: Skills catalog generator
+	TagNameToolsCatalog  = "prompty.tools_catalog"  // v2.1: Tools catalog generator
 	// TagNameMessage is defined separately in the message tag constants section
 )
 
@@ -178,6 +181,8 @@ const (
 	AttrLimit    = "limit"    // Loop iteration limit (Phase 4)
 	AttrValue    = "value"    // Case value for switch/case (Phase 5)
 	AttrRequired = "required" // Required flag for env resolver
+	AttrSlug     = "slug"     // v2.0: Prompt slug for reference
+	AttrVersion  = "version"  // v2.0: Prompt version for reference
 )
 
 // Boolean attribute values
@@ -190,18 +195,18 @@ const (
 const (
 	ErrMsgMissingTemplateAttr = "missing required 'template' attribute"
 	ErrMsgEngineNotAvailable  = "engine not available in context"
-	ErrMsgDepthExceeded = "maximum template inclusion depth exceeded"
+	ErrMsgDepthExceeded       = "maximum template inclusion depth exceeded"
 )
 
 // Meta key constants for internal data passing and error metadata
 const (
-	MetaKeyParentDepth   = "_parentDepth"
-	MetaKeyValue         = "_value"
-	MetaKeyPath          = "path"
-	MetaKeyTemplateName  = "template_name"
-	MetaKeyFromType      = "from_type"
-	MetaKeyToType        = "to_type"
-	MetaKeyIterableType  = "iterable_type"
+	MetaKeyParentDepth  = "_parentDepth"
+	MetaKeyValue        = "_value"
+	MetaKeyPath         = "path"
+	MetaKeyTemplateName = "template_name"
+	MetaKeyFromType     = "from_type"
+	MetaKeyToType       = "to_type"
+	MetaKeyIterableType = "iterable_type"
 )
 
 // Log messages for template operations
@@ -237,17 +242,17 @@ const (
 
 // String format constants for AST String() methods
 const (
-	FmtOpenBrace    = "{"
-	FmtCloseBrace   = "}"
-	FmtCommaSep     = ", "
-	FmtKeyValueSep  = "="
-	FmtEmptyBraces  = "{}"
+	FmtOpenBrace   = "{"
+	FmtCloseBrace  = "}"
+	FmtCommaSep    = ", "
+	FmtKeyValueSep = "="
+	FmtEmptyBraces = "{}"
 )
 
 // String display constants for truncation
 const (
-	MaxStringDisplayLength = 50  // Maximum length before truncation
-	TruncatedStringLength  = 47  // Length to truncate to (leaves room for suffix)
+	MaxStringDisplayLength = 50    // Maximum length before truncation
+	TruncatedStringLength  = 47    // Length to truncate to (leaves room for suffix)
 	TruncationSuffix       = "..." // Suffix to indicate truncation
 )
 
@@ -456,8 +461,8 @@ const (
 
 // Error messages for message tag
 const (
-	ErrMsgMessageMissingRole   = "missing required 'role' attribute"
-	ErrMsgMessageInvalidRole   = "invalid role - must be system, user, assistant, or tool"
+	ErrMsgMessageMissingRole      = "missing required 'role' attribute"
+	ErrMsgMessageInvalidRole      = "invalid role - must be system, user, assistant, or tool"
 	ErrMsgMessageNestedNotAllowed = "nested message tags are not allowed"
 )
 
@@ -469,14 +474,14 @@ const (
 
 // Error messages for template inheritance
 const (
-	ErrMsgExtendsNotFirst         = "extends must be first tag in template"
-	ErrMsgExtendsMultiple         = "only one extends allowed per template"
-	ErrMsgExtendsMissingTemplate  = "missing required 'template' attribute for extends"
-	ErrMsgBlockMissingName        = "missing required 'name' attribute for block"
-	ErrMsgBlockDuplicateName      = "duplicate block name"
-	ErrMsgBlockNotClosed          = "block not properly closed"
-	ErrMsgParentOutsideBlock      = "parent can only be used inside a block"
-	ErrMsgCircularInheritance     = "circular template inheritance detected"
+	ErrMsgExtendsNotFirst          = "extends must be first tag in template"
+	ErrMsgExtendsMultiple          = "only one extends allowed per template"
+	ErrMsgExtendsMissingTemplate   = "missing required 'template' attribute for extends"
+	ErrMsgBlockMissingName         = "missing required 'name' attribute for block"
+	ErrMsgBlockDuplicateName       = "duplicate block name"
+	ErrMsgBlockNotClosed           = "block not properly closed"
+	ErrMsgParentOutsideBlock       = "parent can only be used inside a block"
+	ErrMsgCircularInheritance      = "circular template inheritance detected"
 	ErrMsgInheritanceDepthExceeded = "template inheritance depth exceeded"
 )
 
@@ -491,8 +496,8 @@ const (
 
 // Log field names for template inheritance
 const (
-	LogFieldParentTemplate = "parent_template"
-	LogFieldBlockName      = "block_name"
+	LogFieldParentTemplate   = "parent_template"
+	LogFieldBlockName        = "block_name"
 	LogFieldInheritanceDepth = "inheritance_depth"
 )
 
@@ -504,4 +509,53 @@ const (
 // Node type for inheritance (add to NodeType constants)
 const (
 	NodeTypeBlock NodeType = iota + 100 // Block node for inheritance
+)
+
+// v2.0 Reference resolver constants
+const (
+	RefMaxDepth      = 10       // Maximum depth for nested prompt references
+	RefVersionLatest = "latest" // Default version when not specified
+)
+
+// v2.1 Special template name for self-reference in compilation
+const (
+	TemplateNameSelf = "self"
+)
+
+// v2.1 Context keys used during agent compilation
+const (
+	ContextKeySelfBody = "_selfBody"
+	ContextKeySkills   = "skills"
+	ContextKeyTools    = "tools"
+)
+
+// Error messages for reference resolver (v2.0)
+const (
+	ErrMsgRefMissingSlug   = "missing required 'slug' attribute"
+	ErrMsgRefNotFound      = "referenced prompt not found"
+	ErrMsgRefCircular      = "circular reference detected"
+	ErrMsgRefDepthExceeded = "reference resolution depth exceeded"
+	ErrMsgRefNoResolver    = "prompt resolver not available in context"
+	ErrMsgRefInvalidSlug   = "invalid prompt slug format"
+)
+
+// Log messages for reference resolver (v2.0)
+const (
+	LogMsgRefResolve  = "resolving prompt reference"
+	LogMsgRefResolved = "prompt reference resolved"
+)
+
+// Log field names for reference resolver (v2.0)
+const (
+	LogFieldPromptSlug    = "prompt_slug"
+	LogFieldPromptVersion = "prompt_version"
+	LogFieldRefChain      = "ref_chain"
+)
+
+// Meta key constants for reference resolver (v2.0)
+const (
+	MetaKeyPromptSlug   = "prompt_slug"
+	MetaKeyRefChain     = "ref_chain"
+	MetaKeyRefDepth     = "_refDepth"     // Internal key for tracking reference depth
+	MetaKeyRefChainList = "_refChainList" // Internal key for tracking reference chain ([]string)
 )

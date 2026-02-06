@@ -173,12 +173,12 @@ type CostEstimate struct {
 
 // Pricing constants (per 1K tokens, input only, as of late 2024)
 const (
-	PriceGPT4Per1K        = 0.03
-	PriceGPT4oPer1K       = 0.005
-	PriceGPT35Per1K       = 0.0015
-	PriceClaudeOpusPer1K  = 0.015
+	PriceGPT4Per1K         = 0.03
+	PriceGPT4oPer1K        = 0.005
+	PriceGPT35Per1K        = 0.0015
+	PriceClaudeOpusPer1K   = 0.015
 	PriceClaudeSonnetPer1K = 0.003
-	PriceClaudeHaikuPer1K = 0.00025
+	PriceClaudeHaikuPer1K  = 0.00025
 )
 
 // EstimateCost calculates estimated costs for various LLM providers.
@@ -304,13 +304,13 @@ func NewTokenBudget(maxTokens, reservedForResponse int) *TokenBudget {
 
 // Common context window sizes
 const (
-	ContextGPT4Turbo   = 128000
-	ContextGPT4        = 8192
-	ContextGPT35       = 16385
-	ContextClaudeOpus  = 200000
+	ContextGPT4Turbo    = 128000
+	ContextGPT4         = 8192
+	ContextGPT35        = 16385
+	ContextClaudeOpus   = 200000
 	ContextClaudeSonnet = 200000
-	ContextClaudeHaiku = 200000
-	ContextLlama3      = 8192
+	ContextClaudeHaiku  = 200000
+	ContextLlama3       = 8192
 )
 
 // NewGPT4TurboBudget creates a budget for GPT-4 Turbo.

@@ -6,15 +6,17 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/itsatony/go-prompty)](https://goreportcard.com/report/github.com/itsatony/go-prompty)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Test Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen.svg)](https://github.com/itsatony/go-prompty)
-[![Version](https://img.shields.io/badge/version-1.6.0-blue.svg)](https://github.com/itsatony/go-prompty/releases/tag/v1.6.0)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/itsatony/go-prompty/releases/tag/v2.1.0)
 
 ```yaml
 ---
 name: enterprise-assistant
-model:
-  name: '{~prompty.env name="MODEL" default="gpt-4" /~}'
-  parameters:
-    temperature: 0.7
+description: Context-aware enterprise support agent
+type: agent
+execution:
+  provider: openai
+  model: '{~prompty.env name="MODEL" default="gpt-4" /~}'
+  temperature: 0.7
 ---
 {~prompty.message role="system"~}
 {~prompty.if eval="user.tier == 'enterprise'"~}
@@ -39,6 +41,7 @@ You are assisting {~prompty.var name="user.name" default="a user" /~}.
 | **Self-describing** | Embed model configuration with YAML frontmatter |
 | **Environment aware** | Access env vars with `prompty.env` |
 | **Conversation support** | Message tags for chat/LLM API integration |
+| **Agent definitions** | Skills, tools, constraints, and catalog generation |
 | **Production ready** | Access control, multi-tenancy, audit logging |
 
 ## Installation
@@ -144,7 +147,10 @@ Please respond in {~prompty.var name="language" default="English" /~}.`
 | **Context** | Execution data with dot-notation path access |
 | **Resolver** | Plugin handler for custom tags |
 | **Func** | Custom function for expressions |
-| **InferenceConfig** | Embedded model configuration (v1.2.0+) |
+| **Prompt** | v2.1 prompt config with document types, skills, tools, constraints |
+| **ExecutionConfig** | LLM execution parameters with provider serialization |
+| **CompiledPrompt** | v2.1 agent compilation result (messages, execution, tools) |
+| **DocumentResolver** | v2.1 interface for resolving prompts/skills/agents by slug |
 
 ### Parse Once, Execute Many
 
@@ -231,18 +237,20 @@ Access environment variables with optional defaults.
 | `default` | No | Fallback value if not set |
 | `required` | No | Error if not set (and no default) |
 
-### YAML Frontmatter - Inference Configuration
+### YAML Frontmatter - Prompt Configuration
 
-Embed model configuration at the start of templates using YAML frontmatter. See [Inference Configuration](#inference-configuration) for full details.
+Embed prompt configuration at the start of templates using YAML frontmatter. See [Prompt Configuration](#prompt-configuration) for full details.
 
 ```yaml
 ---
 name: customer-support
-model:
-  name: gpt-4
-  parameters:
-    temperature: 0.7
-    max_tokens: 2048
+description: Handles customer inquiries
+type: skill
+execution:
+  provider: openai
+  model: gpt-4
+  temperature: 0.7
+  max_tokens: 2048
 ---
 ```
 
@@ -350,6 +358,25 @@ engine.MustRegisterTemplate("user-context", `User: {~prompty.var name="name" /~}
 | `with` | No | Use value at path as context root |
 | `isolate` | No | `"true"` to not inherit parent context |
 | *(other)* | No | Passed as variables to child template |
+
+### `prompty.ref` - Prompt References (v2.0)
+
+Reference and compose prompts from a registry. Enables modular prompt composition.
+
+```
+{~prompty.ref slug="greeting-prompt" /~}
+{~prompty.ref slug="customer-support" version="v2" /~}
+{~prompty.ref slug="my-prompt@latest" /~}
+```
+
+| Attribute | Required | Description |
+|-----------|----------|-------------|
+| `slug` | Yes | Prompt slug identifier (lowercase, letters/digits/hyphens) |
+| `version` | No | Specific version, defaults to "latest" |
+
+**Slug@version syntax**: `{~prompty.ref slug="greeting@v2" /~}` is equivalent to `version="v2"`.
+
+**Requires**: A `PromptResolver` must be set on the context via `WithPromptResolver()`.
 
 ### `prompty.raw` - Unprocessed Content
 
@@ -578,9 +605,9 @@ Expressions are used in `eval` attributes for conditionals and switch/case.
 
 ---
 
-## Inference Configuration
+## Prompt Configuration
 
-Templates can embed model configuration using YAML frontmatter with `---` delimiters. This makes templates self-describing with model parameters, input/output schemas, and sample data.
+Templates can embed prompt configuration using YAML frontmatter with `---` delimiters. This makes templates self-describing with execution parameters, input/output schemas, and sample data.
 
 ### YAML Frontmatter Format
 
@@ -588,15 +615,13 @@ Templates can embed model configuration using YAML frontmatter with `---` delimi
 ---
 name: customer-support-agent
 description: Handles customer inquiries
-version: 1.0.0
-model:
-  api: chat
+type: skill
+execution:
   provider: openai
-  name: '{~prompty.env name="MODEL_NAME" default="gpt-4" /~}'
-  parameters:
-    temperature: 0.7
-    max_tokens: 2048
-    top_p: 0.9
+  model: '{~prompty.env name="MODEL_NAME" default="gpt-4" /~}'
+  temperature: 0.7
+  max_tokens: 2048
+  top_p: 0.9
 inputs:
   customer_name:
     type: string
@@ -625,23 +650,22 @@ Query: {~prompty.var name="query" /~}
 ```go
 tmpl, _ := engine.Parse(source)
 
-if tmpl.HasInferenceConfig() {
-    config := tmpl.InferenceConfig()
+if tmpl.HasPrompt() {
+    prompt := tmpl.Prompt()
 
-    fmt.Println("Template:", config.Name)
-    fmt.Println("Model:", config.GetModelName())
+    fmt.Println("Name:", prompt.Name)
+    fmt.Println("Description:", prompt.Description)
 
-    if temp, ok := config.GetTemperature(); ok {
-        fmt.Println("Temperature:", temp)
+    // Access execution config
+    if prompt.Execution != nil {
+        fmt.Println("Provider:", prompt.Execution.Provider)
+        fmt.Println("Model:", prompt.Execution.Model)
     }
 
     // Validate inputs before execution
-    if err := config.ValidateInputs(data); err != nil {
+    if err := prompt.ValidateInputs(data); err != nil {
         log.Fatal("Invalid inputs:", err)
     }
-
-    // Get parameters as map for LLM client
-    params := config.Model.Parameters.ToMap()
 }
 ```
 
@@ -659,21 +683,93 @@ for _, msg := range messages {
 }
 ```
 
-### Model Parameters
+### Execution Parameters
+
+Parameters are set directly in the `execution:` block:
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
+| `provider` | string | Provider: openai, anthropic, google, vllm, azure |
+| `model` | string | Model name (e.g., gpt-4, claude-3-sonnet) |
 | `temperature` | float | Sampling temperature (0.0-2.0) |
 | `max_tokens` | int | Maximum tokens to generate |
 | `top_p` | float | Nucleus sampling (0.0-1.0) |
-| `frequency_penalty` | float | Repetition penalty (-2.0-2.0) |
-| `presence_penalty` | float | Topic penalty (-2.0-2.0) |
-| `stop` | []string | Stop sequences |
-| `seed` | int | Reproducibility seed |
-| `response_format` | object | Structured output format (v1.4.0+) |
-| `tools` | array | Function/tool calling definitions (v1.4.0+) |
+| `top_k` | int | Top-k sampling |
+| `stop_sequences` | []string | Stop sequences |
+| `response_format` | object | Structured output format |
+| `thinking` | object | Extended thinking (Anthropic) |
+| `guided_decoding` | object | Guided decoding (vLLM) |
 
-**Deep Dive:** See [docs/INFERENCE_CONFIG.md](docs/INFERENCE_CONFIG.md) for complete documentation.
+**Legacy Reference:** See [docs/INFERENCE_CONFIG.md](docs/INFERENCE_CONFIG.md) for v1 configuration documentation (deprecated in v2.1).
+
+### v2.1 Prompt Configuration (Agent Skills)
+
+v2.1 extends the `Prompt` type compatible with [Agent Skills](https://agentskills.io) specification, adding agent definitions with skills, tools, constraints, and compilation:
+
+```yaml
+---
+name: customer-support-agent
+description: Handles customer inquiries with context awareness
+license: MIT
+compatibility: gpt-4,claude-3
+
+execution:
+  provider: openai
+  model: gpt-4
+  temperature: 0.7
+  max_tokens: 2048
+  thinking:
+    enabled: true
+    budget_tokens: 5000
+
+skope:
+  visibility: public
+  projects: [support, helpdesk]
+
+inputs:
+  query:
+    type: string
+    required: true
+---
+{~prompty.message role="system"~}
+You are a helpful support agent.
+{~/prompty.message~}
+```
+
+**v2.1 Detection**: Templates with `execution`, `skope`, `type`, or `name` config are v2.1 Prompts.
+
+```go
+tmpl, _ := engine.Parse(source)
+
+if tmpl.HasPrompt() {
+    prompt := tmpl.Prompt()
+
+    fmt.Println("Name:", prompt.Name)
+    fmt.Println("Description:", prompt.Description)
+
+    // Access execution config
+    if prompt.Execution != nil {
+        fmt.Println("Provider:", prompt.Execution.Provider)
+
+        // Provider-specific format conversion
+        openAIParams := prompt.Execution.ToOpenAI()
+        anthropicParams := prompt.Execution.ToAnthropic()
+    }
+
+    // Validate inputs
+    if err := prompt.ValidateInputs(data); err != nil {
+        log.Fatal("Invalid inputs:", err)
+    }
+}
+```
+
+**Key v2.1 Types**:
+- `Prompt`: Full prompt config with document type (prompt/skill/agent), skills, tools, constraints, messages
+- `ExecutionConfig`: LLM parameters with provider-specific conversion and `Merge()` for 3-layer precedence
+- `SkopeConfig`: Platform integration (visibility, projects, versioning)
+- `SkillRef`, `ToolsConfig`, `ConstraintsConfig`: Agent-specific configuration
+- `CompiledPrompt`: Result of `CompileAgent()` — messages, execution config, tools, constraints
+- `DocumentResolver`: Interface for resolving prompts/skills/agents by slug
 
 ---
 
@@ -779,7 +875,7 @@ go-prompty includes a pluggable storage layer for managing templates with versio
 - **Built-in drivers**: Memory (testing), Filesystem (persistent), and PostgreSQL (production)
 - **Custom backends**: Implement `TemplateStorage` for MongoDB, Redis, or other databases
 - **Caching**: Automatic caching wrapper for any storage backend
-- **InferenceConfig persistence**: Config blocks are automatically extracted and stored
+- **PromptConfig persistence**: Prompt configuration is automatically extracted and stored
 
 ```go
 // PostgreSQL storage (production-ready with migrations)
@@ -796,20 +892,20 @@ engine, _ := prompty.NewStorageEngine(prompty.StorageEngineConfig{
     Storage: storage,
 })
 
-// Save with versioning - InferenceConfig automatically extracted
+// Save with versioning - PromptConfig automatically extracted
 engine.Save(ctx, &prompty.StoredTemplate{
     Name:   "greeting",
-    Source: "---\nmodel:\n  name: gpt-4\n---\nHello {~prompty.var name=\"user\" /~}!",
+    Source: "---\nname: greeting\nexecution:\n  model: gpt-4\n---\nHello {~prompty.var name=\"user\" /~}!",
     Tags:   []string{"production"},
 })
 
 // Execute
 result, _ := engine.Execute(ctx, "greeting", map[string]any{"user": "Alice"})
 
-// Retrieved templates include InferenceConfig
+// Retrieved templates include PromptConfig
 tmpl, _ := engine.Get(ctx, "greeting")
-if tmpl.InferenceConfig != nil {
-    fmt.Println("Model:", tmpl.InferenceConfig.GetModelName())
+if tmpl.PromptConfig != nil && tmpl.PromptConfig.Execution != nil {
+    fmt.Println("Model:", tmpl.PromptConfig.Execution.Model)
 }
 ```
 
@@ -1190,8 +1286,8 @@ func (t *Template) Execute(ctx context.Context, data map[string]any) (string, er
 func (t *Template) ExecuteWithContext(ctx context.Context, execCtx *Context) (string, error)
 func (t *Template) Source() string
 func (t *Template) TemplateBody() string                    // Source without config block
-func (t *Template) HasInferenceConfig() bool
-func (t *Template) InferenceConfig() *InferenceConfig
+func (t *Template) HasPrompt() bool                         // Check for Prompt config
+func (t *Template) Prompt() *Prompt                         // Get Prompt config
 func (t *Template) DryRun(ctx context.Context, data map[string]any) *DryRunResult
 func (t *Template) Explain(ctx context.Context, data map[string]any) *ExplainResult
 ```
@@ -1199,23 +1295,114 @@ func (t *Template) Explain(ctx context.Context, data map[string]any) *ExplainRes
 </details>
 
 <details>
-<summary><strong>InferenceConfig</strong></summary>
+<summary><strong>Prompt (v2.1)</strong></summary>
 
 ```go
-func (c *InferenceConfig) HasModel() bool
-func (c *InferenceConfig) GetAPIType() string
-func (c *InferenceConfig) GetProvider() string
-func (c *InferenceConfig) GetModelName() string
-func (c *InferenceConfig) GetTemperature() (float64, bool)
-func (c *InferenceConfig) GetMaxTokens() (int, bool)
-func (c *InferenceConfig) GetTopP() (float64, bool)
-func (c *InferenceConfig) HasInputs() bool
-func (c *InferenceConfig) HasOutputs() bool
-func (c *InferenceConfig) HasSample() bool
-func (c *InferenceConfig) GetSampleData() map[string]any
-func (c *InferenceConfig) ValidateInputs(data map[string]any) error
-func (c *InferenceConfig) JSON() (string, error)
-func (c *InferenceConfig) JSONPretty() (string, error)
+// Prompt configuration (Agent Skills compatible)
+type Prompt struct {
+    Name          string                // Required: slug format
+    Description   string                // Required: max 1024 chars
+    Type          DocumentType          // v2.1: "prompt", "skill" (default), "agent"
+    License       string                // Optional: MIT, Apache-2.0, etc.
+    Compatibility string                // Optional: compatible models
+    Metadata      map[string]any        // Optional: custom metadata
+    Inputs        map[string]*InputDef  // Optional: input schema
+    Outputs       map[string]*OutputDef // Optional: output schema
+    Sample        map[string]any        // Optional: sample data
+    Execution     *ExecutionConfig      // LLM execution config
+    Skope         *SkopeConfig          // Platform config
+    Skills        []SkillRef            // v2.1: Agent skill references
+    Tools         *ToolsConfig          // v2.1: Tool definitions
+    Context       map[string]any        // v2.1: Agent context data
+    Constraints   *ConstraintsConfig    // v2.1: Agent constraints
+    Messages      []MessageTemplate     // v2.1: Message templates
+    Body          string                // Template body (after frontmatter)
+}
+
+func (p *Prompt) Validate() error
+func (p *Prompt) ValidateInputs(data map[string]any) error
+func (p *Prompt) GetSlug() string
+func (p *Prompt) Clone() *Prompt
+func (p *Prompt) IsAgent() bool
+func (p *Prompt) IsSkill() bool
+func (p *Prompt) IsPrompt() bool
+func (p *Prompt) EffectiveType() DocumentType
+func (p *Prompt) Compile(ctx context.Context, input map[string]any, opts CompileOptions) (string, error)
+func (p *Prompt) CompileAgent(ctx context.Context, input map[string]any, opts CompileOptions) (*CompiledPrompt, error)
+func (p *Prompt) ActivateSkill(ctx context.Context, skillSlug string, input map[string]any, opts CompileOptions) (*CompiledPrompt, error)
+func (p *Prompt) ValidateForExecution() error
+func (p *Prompt) IsAgentSkillsCompatible() bool
+func (p *Prompt) StripExtensions() *Prompt
+func (p *Prompt) ExportToSkillMD(body string) (string, error)
+```
+
+</details>
+
+<details>
+<summary><strong>ExecutionConfig (v2.1)</strong></summary>
+
+```go
+type ExecutionConfig struct {
+    Provider       string              // openai, anthropic, google, vllm, azure
+    Model          string              // Model name
+    Temperature    *float64            // 0.0-2.0
+    MaxTokens      *int                // Max output tokens
+    TopP           *float64            // Nucleus sampling
+    TopK           *int                // Top-k sampling
+    StopSequences  []string            // Stop sequences
+    Thinking       *ThinkingConfig     // Claude extended thinking
+    ResponseFormat *ResponseFormat     // Structured output
+    GuidedDecoding *GuidedDecoding     // vLLM guided decoding
+    ProviderOptions map[string]any     // Provider-specific options
+}
+
+func (c *ExecutionConfig) Validate() error
+func (c *ExecutionConfig) Clone() *ExecutionConfig
+func (c *ExecutionConfig) Merge(other *ExecutionConfig) *ExecutionConfig  // v2.1: 3-layer precedence merge
+func (c *ExecutionConfig) GetTemperature() (float64, bool)
+func (c *ExecutionConfig) GetMaxTokens() (int, bool)
+func (c *ExecutionConfig) HasThinking() bool
+func (c *ExecutionConfig) ToOpenAI() map[string]any
+func (c *ExecutionConfig) ToAnthropic() map[string]any
+func (c *ExecutionConfig) ToGemini() map[string]any
+func (c *ExecutionConfig) ToVLLM() map[string]any
+func (c *ExecutionConfig) ProviderFormat(provider string) (map[string]any, error)
+func (c *ExecutionConfig) GetEffectiveProvider() string
+```
+
+</details>
+
+<details>
+<summary><strong>DocumentResolver (v2.1)</strong></summary>
+
+```go
+type DocumentResolver interface {
+    ResolvePrompt(ctx context.Context, slug string) (*Prompt, error)
+    ResolveSkill(ctx context.Context, ref string) (*Prompt, error)
+    ResolveAgent(ctx context.Context, slug string) (*Prompt, error)
+}
+
+func NewMapDocumentResolver() *MapDocumentResolver
+func NewStorageDocumentResolver(storage TemplateStorage) *StorageDocumentResolver
+```
+
+</details>
+
+<details>
+<summary><strong>CompiledPrompt (v2.1)</strong></summary>
+
+```go
+type CompiledPrompt struct {
+    Messages    []CompiledMessage
+    Execution   *ExecutionConfig
+    Tools       *ToolsConfig
+    Constraints *OperationalConstraints
+}
+
+type CompiledMessage struct {
+    Role    string
+    Content string
+}
 ```
 
 </details>
@@ -1236,6 +1423,14 @@ func (c *Context) Set(key string, value any)
 func (c *Context) Data() map[string]any
 func (c *Context) Child(data map[string]any) interface{}
 func (c *Context) Parent() *Context
+
+// v2.0: Prompt reference support
+func (c *Context) WithPromptResolver(resolver PromptBodyResolver) *Context
+func (c *Context) WithRefDepth(depth int) *Context
+func (c *Context) WithRefChain(chain []string) *Context
+func (c *Context) PromptResolver() interface{}
+func (c *Context) RefDepth() int
+func (c *Context) RefChain() []string
 ```
 
 </details>
@@ -1351,7 +1546,6 @@ Use \{~ for literal delimiters.
 | [storage_persistence](examples/storage_persistence/) | Filesystem storage |
 | [access_rbac](examples/access_rbac/) | RBAC access control |
 | [access_tenant](examples/access_tenant/) | Multi-tenant isolation |
-| [inference_config](examples/inference_config/) | Model configuration blocks |
 | [error_handling](examples/error_handling/) | All 5 error strategies |
 | [debugging](examples/debugging/) | DryRun and Explain features |
 | [custom_storage_postgres](examples/custom_storage_postgres/) | PostgreSQL backend (now built-in) |
@@ -1362,7 +1556,7 @@ Use \{~ for literal delimiters.
 
 | Guide | Description |
 |-------|-------------|
-| [INFERENCE_CONFIG.md](docs/INFERENCE_CONFIG.md) | Model configuration, schemas, validation |
+| [INFERENCE_CONFIG.md](docs/INFERENCE_CONFIG.md) | Legacy v1 model configuration reference (deprecated in v2.1) |
 | [STORAGE.md](docs/STORAGE.md) | Storage architecture, versioning, PostgreSQL |
 | [CUSTOM_STORAGE.md](docs/CUSTOM_STORAGE.md) | Implementing custom backends |
 | [ACCESS_CONTROL.md](docs/ACCESS_CONTROL.md) | RBAC, multi-tenancy, audit logging |

@@ -87,9 +87,9 @@ func TestExprParser_Parse_DoubleNot(t *testing.T) {
 
 func TestExprParser_Parse_Comparison(t *testing.T) {
 	tests := []struct {
-		name string
+		name  string
 		input string
-		op   ExprTokenType
+		op    ExprTokenType
 	}{
 		{"equals", `x == 1`, ExprTokenTypeEq},
 		{"not equals", `x != 1`, ExprTokenTypeNeq},
@@ -272,7 +272,7 @@ func TestExprParser_Parse_Error_UnexpectedToken(t *testing.T) {
 	// The error could be about unexpected character or unexpected token
 	assert.True(t,
 		strings.Contains(err.Error(), ErrMsgExprUnexpectedToken) ||
-		strings.Contains(err.Error(), ErrMsgExprUnexpectedChar),
+			strings.Contains(err.Error(), ErrMsgExprUnexpectedChar),
 		"expected error to contain 'unexpected token' or 'unexpected character', got: %s", err.Error())
 }
 
