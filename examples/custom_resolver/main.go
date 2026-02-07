@@ -12,7 +12,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/itsatony/go-prompty"
+	"github.com/itsatony/go-prompty/v2"
 )
 
 // DateResolver handles {~myapp.date format="..." /~} tags

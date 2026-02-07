@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/itsatony/go-prompty"
+	"github.com/itsatony/go-prompty/v2"
 )
 
 func main() {

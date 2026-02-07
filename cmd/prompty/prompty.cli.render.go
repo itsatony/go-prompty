@@ -9,7 +9,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/itsatony/go-prompty"
+	"github.com/itsatony/go-prompty/v2"
 )
 
 // renderConfig holds parsed render command configuration

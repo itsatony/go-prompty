@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"log"
 
-	prompty "github.com/itsatony/go-prompty"
+	prompty "github.com/itsatony/go-prompty/v2"
 )
 
 // Role represents a user role in the system.

@@ -42,7 +42,7 @@ golangci-lint run
 ### Package Structure
 
 ```
-github.com/itsatony/go-prompty/
+github.com/itsatony/go-prompty/v2/
 ├── prompty.go                    # Public API entry point
 ├── prompty.engine.go             # Engine type (public)
 ├── prompty.template.go           # Template type (public)

@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/itsatony/go-prompty"
+	"github.com/itsatony/go-prompty/v2"
 	"go.uber.org/zap"
 )
 

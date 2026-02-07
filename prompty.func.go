@@ -1,7 +1,7 @@
 package prompty
 
 import (
-	"github.com/itsatony/go-prompty/internal"
+	"github.com/itsatony/go-prompty/v2/internal"
 )
 
 // Func represents a custom function that can be used in expressions.

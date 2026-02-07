@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/itsatony/go-prompty/internal"
+	"github.com/itsatony/go-prompty/v2/internal"
 )
 
 // DryRunResult contains the results of a dry-run execution.

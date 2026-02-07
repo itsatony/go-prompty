@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/itsatony/go-prompty"
+	"github.com/itsatony/go-prompty/v2"
 	_ "github.com/lib/pq" // PostgreSQL driver
 )
 

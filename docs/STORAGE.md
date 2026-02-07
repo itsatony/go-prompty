@@ -20,7 +20,7 @@ package main
 import (
     "context"
     "fmt"
-    "github.com/itsatony/go-prompty"
+    "github.com/itsatony/go-prompty/v2"
 )
 
 func main() {

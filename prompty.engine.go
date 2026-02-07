@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/itsatony/go-prompty/internal"
+	"github.com/itsatony/go-prompty/v2/internal"
 	"go.uber.org/zap"
 )
 

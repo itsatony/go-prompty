@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/itsatony/go-prompty"
+	"github.com/itsatony/go-prompty/v2"
 )
 
 // validateConfig holds parsed validate command configuration

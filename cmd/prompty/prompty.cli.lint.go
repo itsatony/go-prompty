@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/itsatony/go-prompty"
+	"github.com/itsatony/go-prompty/v2"
 )
 
 // lintConfig holds parsed lint command configuration

@@ -3,7 +3,7 @@ package prompty
 import (
 	"context"
 
-	"github.com/itsatony/go-prompty/internal"
+	"github.com/itsatony/go-prompty/v2/internal"
 )
 
 // Template represents a parsed template that can be executed multiple times.

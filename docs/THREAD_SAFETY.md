@@ -19,7 +19,7 @@ import (
     "context"
     "sync"
 
-    "github.com/itsatony/go-prompty"
+    "github.com/itsatony/go-prompty/v2"
 )
 
 func main() {
@@ -58,7 +58,7 @@ import (
     "context"
     "sync"
 
-    "github.com/itsatony/go-prompty"
+    "github.com/itsatony/go-prompty/v2"
 )
 
 func main() {
@@ -161,7 +161,7 @@ import (
     "sync"
     "time"
 
-    "github.com/itsatony/go-prompty"
+    "github.com/itsatony/go-prompty/v2"
 )
 
 // TemplateCache provides thread-safe caching of parsed templates

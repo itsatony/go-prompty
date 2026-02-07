@@ -2,7 +2,7 @@
 
 **Dynamic LLM prompt templating for Go** - Build complex, maintainable AI prompts with a powerful templating engine designed for production use.
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/itsatony/go-prompty.svg)](https://pkg.go.dev/github.com/itsatony/go-prompty)
+[![Go Reference](https://pkg.go.dev/badge/github.com/itsatony/go-prompty/v2.svg)](https://pkg.go.dev/github.com/itsatony/go-prompty/v2)
 [![Go Report Card](https://goreportcard.com/badge/github.com/itsatony/go-prompty)](https://goreportcard.com/report/github.com/itsatony/go-prompty)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Test Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen.svg)](https://github.com/itsatony/go-prompty)
@@ -48,12 +48,12 @@ You are assisting {~prompty.var name="user.name" default="a user" /~}.
 ## Installation
 
 ```bash
-go get github.com/itsatony/go-prompty
+go get github.com/itsatony/go-prompty/v2
 ```
 
 **CLI tool:**
 ```bash
-go install github.com/itsatony/go-prompty/cmd/prompty@latest
+go install github.com/itsatony/go-prompty/v2/cmd/prompty@latest
 ```
 
 ## Quick Start
@@ -64,7 +64,7 @@ package main
 import (
     "context"
     "fmt"
-    "github.com/itsatony/go-prompty"
+    "github.com/itsatony/go-prompty/v2"
 )
 
 func main() {
@@ -1883,7 +1883,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 <div align="center">
 
-**[Documentation](https://pkg.go.dev/github.com/itsatony/go-prompty)** |
+**[Documentation](https://pkg.go.dev/github.com/itsatony/go-prompty/v2)** |
 **[Examples](examples/)** |
 **[Issues](https://github.com/itsatony/go-prompty/issues)**
 

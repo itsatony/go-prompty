@@ -26,7 +26,7 @@ import (
     "context"
     "testing"
 
-    prompty "github.com/itsatony/go-prompty"
+    prompty "github.com/itsatony/go-prompty/v2"
     "github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/require"
 )
@@ -600,7 +600,7 @@ import (
     "os"
     "path/filepath"
 
-    prompty "github.com/itsatony/go-prompty"
+    prompty "github.com/itsatony/go-prompty/v2"
 )
 
 func main() {

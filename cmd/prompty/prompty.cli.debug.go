@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/itsatony/go-prompty"
+	"github.com/itsatony/go-prompty/v2"
 )
 
 // debugConfig holds parsed debug command configuration
