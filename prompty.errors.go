@@ -170,8 +170,9 @@ const (
 	ErrCodeLabel      = "PROMPTY_LABEL"
 	ErrCodeStatus     = "PROMPTY_STATUS"
 	ErrCodeSchema     = "PROMPTY_SCHEMA"
-	ErrCodePrompt     = "PROMPTY_PROMPT" // v2.0: Prompt validation errors
-	ErrCodeRef        = "PROMPTY_REF"    // v2.0: Reference resolution errors
+	ErrCodePrompt     = "PROMPTY_PROMPT"     // v2.0: Prompt validation errors
+	ErrCodeRef        = "PROMPTY_REF"        // v2.0: Reference resolution errors
+	ErrCodeVersioning = "PROMPTY_VERSIONING" // Versioning operation errors
 )
 
 // Position represents a location in the source template
@@ -571,8 +572,57 @@ func NewSkillNotFoundError(slug string) error {
 		WithMetadata(MetaKeySkillSlug, slug)
 }
 
+// NewCompileMessageError creates an error for message compilation failures with index context.
+func NewCompileMessageError(messageIndex int, role string, cause error) error {
+	return cuserr.WrapStdError(cause, ErrCodeCompile, ErrMsgCompileMessageFailed).
+		WithMetadata(MetaKeyMessageIndex, strconv.Itoa(messageIndex)).
+		WithMetadata(MetaKeyMessageRole, role).
+		WithMetadata(MetaKeyCompileStage, "messages")
+}
+
+// NewCompileSkillError creates an error for skill compilation failures with slug context.
+func NewCompileSkillError(skillSlug string, cause error) error {
+	return cuserr.WrapStdError(cause, ErrCodeCompile, ErrMsgCompileSkillFailed).
+		WithMetadata(MetaKeySkillSlug, skillSlug).
+		WithMetadata(MetaKeyCompileStage, "skill_activation")
+}
+
+// NewCompileBodyError creates an error for body compilation failures with stage context.
+func NewCompileBodyError(cause error) error {
+	return cuserr.WrapStdError(cause, ErrCodeCompile, ErrMsgCompileBodyFailed).
+		WithMetadata(MetaKeyCompileStage, "body")
+}
+
+// NewProviderMessageError creates an error for unsupported provider in message serialization.
+func NewProviderMessageError(provider string) error {
+	return cuserr.NewValidationError(ErrCodeCompile, ErrMsgUnsupportedMsgProvider).
+		WithMetadata("provider", provider)
+}
+
 // NewInvalidDocumentTypeError creates an error for invalid document type.
 func NewInvalidDocumentTypeError(docType string) error {
 	return cuserr.NewValidationError(ErrCodeAgent, ErrMsgInvalidDocumentType).
 		WithMetadata(MetaKeyDocumentType, docType)
+}
+
+// Versioning error constructors
+
+// NewVersioningError creates an error for versioning operation failures.
+func NewVersioningError(msg string, cause error) error {
+	if cause != nil {
+		return cuserr.WrapStdError(cause, ErrCodeVersioning, msg)
+	}
+	return cuserr.NewValidationError(ErrCodeVersioning, msg)
+}
+
+// NewVersionGetError creates an error for version retrieval failures.
+func NewVersionGetError(version int, cause error) error {
+	return cuserr.WrapStdError(cause, ErrCodeVersioning, ErrMsgVersionGetFailed).
+		WithMetadata(AttrVersion, strconv.Itoa(version))
+}
+
+// NewVersionTemplateExistsError creates an error when a template already exists.
+func NewVersionTemplateExistsError(name string) error {
+	return cuserr.NewValidationError(ErrCodeVersioning, ErrMsgVersionTemplateExists).
+		WithMetadata(MetaKeyTemplateName, name)
 }

@@ -9,6 +9,13 @@
 /prompty
 /cmd/prompty/prompty
 
+# Compiled example binaries
+/basic
+/agent_compilation
+/catalog_generation
+/document_resolver
+/prompt_import_export
+
 # Test binary, built with `go test -c`
 *.test
 

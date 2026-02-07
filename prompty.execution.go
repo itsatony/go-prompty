@@ -568,6 +568,19 @@ func (e *ExecutionConfig) ProviderFormat(provider string) (map[string]any, error
 // Merge creates a new ExecutionConfig that merges other into the receiver.
 // The other config's non-nil/non-zero values override the receiver's values (more-specific wins).
 // Returns a new config; neither the receiver nor other is modified.
+//
+// This implements 3-layer precedence for agent compilation:
+//
+//	agent definition (base) → skill override (resolved) → runtime override (SkillRef.Execution)
+//
+// Each layer is merged left-to-right: base.Merge(skillOverride).Merge(runtimeOverride).
+// For each field, the rightmost non-nil/non-zero value wins.
+//
+// Example:
+//
+//	agent := &ExecutionConfig{Provider: "openai", Model: "gpt-4", Temperature: floatPtr(0.7)}
+//	skill := &ExecutionConfig{Temperature: floatPtr(0.1)}
+//	effective := agent.Merge(skill) // Provider: "openai", Model: "gpt-4", Temperature: 0.1
 func (e *ExecutionConfig) Merge(other *ExecutionConfig) *ExecutionConfig {
 	if e == nil && other == nil {
 		return nil

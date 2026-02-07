@@ -504,3 +504,36 @@ func (p *Prompt) IsSkill() bool {
 func (p *Prompt) IsPrompt() bool {
 	return p != nil && p.EffectiveType() == DocumentTypePrompt
 }
+
+// ValidateAsAgent performs stricter validation for agent documents.
+// In addition to standard Validate() checks, it verifies that:
+//   - The document type is "agent"
+//   - Execution config with provider and model is present
+//   - Body or messages are defined (at least one is required)
+//
+// Use this before CompileAgent() to catch configuration issues early.
+func (p *Prompt) ValidateAsAgent() error {
+	if err := p.Validate(); err != nil {
+		return err
+	}
+
+	if !p.IsAgent() {
+		return NewAgentValidationError(ErrMsgNotAnAgent, p.Name)
+	}
+
+	if p.Execution == nil {
+		return NewCompilationError(ErrMsgNoExecutionConfig, nil)
+	}
+	if p.Execution.Provider == "" {
+		return NewCompilationError(ErrMsgNoProvider, nil)
+	}
+	if p.Execution.Model == "" {
+		return NewCompilationError(ErrMsgNoModel, nil)
+	}
+
+	if p.Body == "" && len(p.Messages) == 0 {
+		return NewAgentValidationError(ErrMsgAgentNoBodyOrMessages, p.Name)
+	}
+
+	return nil
+}

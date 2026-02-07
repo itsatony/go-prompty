@@ -374,7 +374,7 @@ func TestVarResolver_Resolve_WithSuggestions(t *testing.T) {
 
 func TestNewVariableNotFoundWithAvailableKeysError(t *testing.T) {
 	t.Run("formats available keys correctly", func(t *testing.T) {
-		err := NewVariableNotFoundWithAvailableKeysError("missing", []string{"name", "email", "age"})
+		err := NewVariableNotFoundWithAvailableKeysError("missing", []string{"name", "email", "age"}, false)
 		errStr := err.Error()
 		assert.Contains(t, errStr, "variable not found")
 		assert.Contains(t, errStr, "Available keys")
@@ -385,7 +385,7 @@ func TestNewVariableNotFoundWithAvailableKeysError(t *testing.T) {
 	})
 
 	t.Run("handles empty keys", func(t *testing.T) {
-		err := NewVariableNotFoundWithAvailableKeysError("missing", []string{})
+		err := NewVariableNotFoundWithAvailableKeysError("missing", []string{}, false)
 		errStr := err.Error()
 		assert.Contains(t, errStr, "variable not found")
 		assert.NotContains(t, errStr, "Available keys")
@@ -393,7 +393,7 @@ func TestNewVariableNotFoundWithAvailableKeysError(t *testing.T) {
 
 	t.Run("truncates long key lists", func(t *testing.T) {
 		keys := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
-		err := NewVariableNotFoundWithAvailableKeysError("missing", keys)
+		err := NewVariableNotFoundWithAvailableKeysError("missing", keys, false)
 		errStr := err.Error()
 		assert.Contains(t, errStr, "Available keys")
 		assert.Contains(t, errStr, "(3 more)")

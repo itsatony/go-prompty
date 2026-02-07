@@ -24,8 +24,25 @@ type skillCatalogEntry struct {
 	version     string
 }
 
-// GenerateSkillsCatalog generates a catalog of skills in the specified format.
+// GenerateSkillsCatalog generates a human-readable catalog of skills in the specified format.
 // It resolves each skill reference using the DocumentResolver to get descriptions.
+//
+// Supported formats:
+//   - CatalogFormatDefault (""): Markdown list with bold slugs and descriptions
+//   - CatalogFormatDetailed: Markdown with headers, version info, and injection mode
+//   - CatalogFormatCompact: Single-line semicolon-separated list
+//   - CatalogFormatFunctionCalling: Not supported for skills (returns error)
+//
+// Resolution failures for individual skills are non-fatal — the skill appears with
+// an empty description. Returns empty string for empty skill lists.
+//
+// Example:
+//
+//	catalog, err := prompty.GenerateSkillsCatalog(ctx, agent.Skills, resolver, prompty.CatalogFormatDetailed)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Println(catalog)
 func GenerateSkillsCatalog(ctx context.Context, skills []SkillRef, resolver DocumentResolver, format CatalogFormat) (string, error) {
 	if len(skills) == 0 {
 		return "", nil
@@ -126,7 +143,23 @@ func generateSkillsCatalogCompact(entries []skillCatalogEntry) string {
 	return strings.Join(parts, "; ")
 }
 
-// GenerateToolsCatalog generates a catalog of tools in the specified format.
+// GenerateToolsCatalog generates a human-readable catalog of tools in the specified format.
+//
+// Supported formats:
+//   - CatalogFormatDefault (""): Markdown list with tool names and descriptions
+//   - CatalogFormatDetailed: Markdown with headers, parameter schemas, and MCP server details
+//   - CatalogFormatCompact: Single-line semicolon-separated list
+//   - CatalogFormatFunctionCalling: JSON array of OpenAI-compatible function definitions
+//
+// Returns empty string when tools is nil or has no tools defined.
+//
+// Example:
+//
+//	catalog, err := prompty.GenerateToolsCatalog(agent.Tools, prompty.CatalogFormatFunctionCalling)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	// catalog is JSON: [{"type":"function","function":{...}}]
 func GenerateToolsCatalog(tools *ToolsConfig, format CatalogFormat) (string, error) {
 	if tools == nil || !tools.HasTools() {
 		return "", nil

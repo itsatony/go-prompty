@@ -49,7 +49,7 @@ func (r *RefResolver) Resolve(ctx context.Context, execCtx interface{}, attrs At
 	// Get prompt resolver from context
 	resolver, ok := getPromptResolver(execCtx)
 	if !ok {
-		return "", NewBuiltinError(ErrMsgRefNoResolver, TagNameRef)
+		return "", NewBuiltinError(AppendHint(ErrMsgRefNoResolver, HintRefNoResolver), TagNameRef)
 	}
 
 	// Check reference depth
@@ -71,7 +71,7 @@ func (r *RefResolver) Resolve(ctx context.Context, execCtx interface{}, attrs At
 	// Resolve the prompt
 	body, err := resolver.ResolvePromptBody(ctx, slug, version)
 	if err != nil {
-		return "", NewBuiltinError(ErrMsgRefNotFound, TagNameRef).
+		return "", NewBuiltinError(AppendHint(ErrMsgRefNotFound, HintRefNotFound), TagNameRef).
 			WithMetadata(LogFieldPromptSlug, slug).
 			WithMetadata(LogFieldPromptVersion, version)
 	}

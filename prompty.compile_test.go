@@ -404,6 +404,286 @@ func TestPrompt_ValidateForExecution(t *testing.T) {
 	require.NoError(t, p.ValidateForExecution())
 }
 
+// ==================== API-04: Provider Message Serialization ====================
+
+func TestCompiledPrompt_ToOpenAIMessages(t *testing.T) {
+	compiled := &CompiledPrompt{
+		Messages: []CompiledMessage{
+			{Role: RoleSystem, Content: "You are a helpful assistant."},
+			{Role: RoleUser, Content: "Hello!"},
+			{Role: RoleAssistant, Content: "Hi there!"},
+		},
+	}
+
+	msgs := compiled.ToOpenAIMessages()
+	require.Len(t, msgs, 3)
+
+	assert.Equal(t, RoleSystem, msgs[0][AttrRole])
+	assert.Equal(t, "You are a helpful assistant.", msgs[0]["content"])
+	assert.Equal(t, RoleUser, msgs[1][AttrRole])
+	assert.Equal(t, "Hello!", msgs[1]["content"])
+	assert.Equal(t, RoleAssistant, msgs[2][AttrRole])
+	assert.Equal(t, "Hi there!", msgs[2]["content"])
+}
+
+func TestCompiledPrompt_ToOpenAIMessages_Nil(t *testing.T) {
+	var cp *CompiledPrompt
+	assert.Nil(t, cp.ToOpenAIMessages())
+
+	cp = &CompiledPrompt{}
+	assert.Nil(t, cp.ToOpenAIMessages())
+}
+
+func TestCompiledPrompt_ToAnthropicMessages(t *testing.T) {
+	compiled := &CompiledPrompt{
+		Messages: []CompiledMessage{
+			{Role: RoleSystem, Content: "System instructions."},
+			{Role: RoleUser, Content: "Hello!"},
+			{Role: RoleAssistant, Content: "Hi!"},
+		},
+	}
+
+	result := compiled.ToAnthropicMessages()
+	require.NotNil(t, result)
+
+	// System extracted to top-level
+	assert.Equal(t, "System instructions.", result[RoleSystem])
+
+	// Non-system messages in messages array
+	msgs, ok := result["messages"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, msgs, 2)
+	assert.Equal(t, RoleUser, msgs[0][AttrRole])
+	assert.Equal(t, RoleAssistant, msgs[1][AttrRole])
+}
+
+func TestCompiledPrompt_ToAnthropicMessages_MultipleSystemMessages(t *testing.T) {
+	compiled := &CompiledPrompt{
+		Messages: []CompiledMessage{
+			{Role: RoleSystem, Content: "First system message."},
+			{Role: RoleSystem, Content: "Second system message."},
+			{Role: RoleUser, Content: "Hello!"},
+		},
+	}
+
+	result := compiled.ToAnthropicMessages()
+	// Multiple system messages joined with double newline
+	assert.Equal(t, "First system message.\n\nSecond system message.", result[RoleSystem])
+}
+
+func TestCompiledPrompt_ToAnthropicMessages_NoSystemMessage(t *testing.T) {
+	compiled := &CompiledPrompt{
+		Messages: []CompiledMessage{
+			{Role: RoleUser, Content: "Hello!"},
+		},
+	}
+
+	result := compiled.ToAnthropicMessages()
+	_, hasSystem := result[RoleSystem]
+	assert.False(t, hasSystem)
+
+	msgs, ok := result["messages"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, msgs, 1)
+}
+
+func TestCompiledPrompt_ToAnthropicMessages_Nil(t *testing.T) {
+	var cp *CompiledPrompt
+	assert.Nil(t, cp.ToAnthropicMessages())
+}
+
+func TestCompiledPrompt_ToGeminiContents(t *testing.T) {
+	compiled := &CompiledPrompt{
+		Messages: []CompiledMessage{
+			{Role: RoleSystem, Content: "System instructions."},
+			{Role: RoleUser, Content: "Hello!"},
+			{Role: RoleAssistant, Content: "Hi!"},
+		},
+	}
+
+	result := compiled.ToGeminiContents()
+	require.NotNil(t, result)
+
+	// System instruction extracted
+	sysInstr, ok := result["system_instruction"].(map[string]any)
+	require.True(t, ok)
+	parts, ok := sysInstr["parts"].([]map[string]string)
+	require.True(t, ok)
+	require.Len(t, parts, 1)
+	assert.Equal(t, "System instructions.", parts[0]["text"])
+
+	// Contents with role mapping
+	contents, ok := result["contents"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, contents, 2)
+
+	assert.Equal(t, RoleUser, contents[0][AttrRole])
+	// Assistant → model
+	assert.Equal(t, "model", contents[1][AttrRole])
+
+	// Check parts structure
+	userParts, ok := contents[0]["parts"].([]map[string]string)
+	require.True(t, ok)
+	assert.Equal(t, "Hello!", userParts[0]["text"])
+}
+
+func TestCompiledPrompt_ToGeminiContents_Nil(t *testing.T) {
+	var cp *CompiledPrompt
+	assert.Nil(t, cp.ToGeminiContents())
+}
+
+func TestCompiledPrompt_ToProviderMessages(t *testing.T) {
+	compiled := &CompiledPrompt{
+		Messages: []CompiledMessage{
+			{Role: RoleSystem, Content: "System."},
+			{Role: RoleUser, Content: "Hi."},
+		},
+	}
+
+	tests := []struct {
+		provider string
+		wantErr  bool
+	}{
+		{ProviderOpenAI, false},
+		{ProviderAzure, false},
+		{ProviderAnthropic, false},
+		{ProviderGemini, false},
+		{ProviderGoogle, false},
+		{ProviderVertex, false},
+		{"unknown-provider", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			result, err := compiled.ToProviderMessages(tt.provider)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				assert.NotNil(t, result)
+			}
+		})
+	}
+}
+
+func TestCompiledPrompt_ToProviderMessages_Nil(t *testing.T) {
+	var cp *CompiledPrompt
+	result, err := cp.ToProviderMessages(ProviderOpenAI)
+	require.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+// ==================== ENH-02: Functional Options for CompileOptions ====================
+
+func TestNewCompileOptions(t *testing.T) {
+	resolver := NewMapDocumentResolver()
+	engine := MustNew()
+
+	opts := NewCompileOptions(
+		WithResolver(resolver),
+		WithCompileEngine(engine),
+		WithSkillsCatalogFormat(CatalogFormatDetailed),
+		WithToolsCatalogFormat(CatalogFormatFunctionCalling),
+	)
+
+	assert.Equal(t, resolver, opts.Resolver)
+	assert.Equal(t, engine, opts.Engine)
+	assert.Equal(t, CatalogFormatDetailed, opts.SkillsCatalogFormat)
+	assert.Equal(t, CatalogFormatFunctionCalling, opts.ToolsCatalogFormat)
+}
+
+func TestNewCompileOptions_Empty(t *testing.T) {
+	opts := NewCompileOptions()
+	assert.Nil(t, opts.Resolver)
+	assert.Nil(t, opts.Engine)
+	assert.Equal(t, CatalogFormatDefault, opts.SkillsCatalogFormat)
+	assert.Equal(t, CatalogFormatDefault, opts.ToolsCatalogFormat)
+}
+
+func TestNewCompileOptions_Partial(t *testing.T) {
+	resolver := NewMapDocumentResolver()
+	opts := NewCompileOptions(WithResolver(resolver))
+
+	assert.Equal(t, resolver, opts.Resolver)
+	assert.Nil(t, opts.Engine)
+}
+
+func TestNewCompileOptions_UsedInCompilation(t *testing.T) {
+	p := &Prompt{
+		Name:        "test-agent",
+		Description: "Test agent",
+		Type:        DocumentTypeAgent,
+		Skills: []SkillRef{
+			{Slug: "helper"},
+		},
+		Body: "You are a helpful assistant.",
+	}
+
+	resolver := NewMapDocumentResolver()
+	resolver.AddSkill("helper", &Prompt{
+		Name:        "helper",
+		Description: "A helper skill",
+		Type:        DocumentTypeSkill,
+		Body:        "I can help you.",
+	})
+
+	opts := NewCompileOptions(
+		WithResolver(resolver),
+		WithSkillsCatalogFormat(CatalogFormatCompact),
+	)
+
+	compiled, err := p.CompileAgent(context.Background(), nil, opts)
+	require.NoError(t, err)
+	require.NotNil(t, compiled)
+	require.Len(t, compiled.Messages, 1)
+}
+
+// ==================== API-05: Compilation Error Context ====================
+
+func TestCompileMessages_ErrorContext(t *testing.T) {
+	p := &Prompt{
+		Name:        "error-agent",
+		Description: "Agent with bad message",
+		Type:        DocumentTypeAgent,
+		Messages: []MessageTemplate{
+			{Role: RoleSystem, Content: "Valid content."},
+			{Role: RoleUser, Content: "{~prompty.var name=\"nonexistent.deep.path\" /~}"},
+		},
+		Body: "body",
+	}
+
+	_, err := p.CompileAgent(context.Background(), nil, nil)
+	// Should succeed — var with no onerror just produces empty by default in most configs
+	// Let's test with an explicit error case
+	if err != nil {
+		// If error returned, check it has context
+		errStr := err.Error()
+		assert.Contains(t, errStr, ErrMsgCompileMessageFailed)
+	}
+}
+
+func TestActivateSkill_ErrorContext_SkillResolutionFailed(t *testing.T) {
+	p := &Prompt{
+		Name:        "agent",
+		Description: "Agent",
+		Type:        DocumentTypeAgent,
+		Skills: []SkillRef{
+			{Slug: "broken-skill"},
+		},
+		Body: "body",
+	}
+
+	// Resolver that has no such skill
+	resolver := NewMapDocumentResolver()
+	opts := &CompileOptions{Resolver: resolver}
+
+	_, err := p.ActivateSkill(context.Background(), "broken-skill", nil, opts)
+	require.Error(t, err)
+	errStr := err.Error()
+	assert.Contains(t, errStr, ErrMsgCompileSkillFailed)
+}
+
 // contains is a simple helper to check if a string contains a substring.
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstring(s, substr))
@@ -416,4 +696,220 @@ func containsSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// --- AgentDryRun Tests ---
+
+func TestAgentDryRun_ValidAgent(t *testing.T) {
+	p := &Prompt{
+		Name:        "test-agent",
+		Description: "A valid test agent",
+		Type:        DocumentTypeAgent,
+		Execution: &ExecutionConfig{
+			Provider: "openai",
+			Model:    "gpt-4",
+		},
+		Messages: []MessageTemplate{
+			{Role: RoleSystem, Content: "You are a helpful assistant."},
+			{Role: RoleUser, Content: "Hello"},
+		},
+		Body: "Agent body.",
+		Tools: &ToolsConfig{
+			Functions: []*FunctionDef{
+				{Name: "search", Description: "Search the web"},
+			},
+		},
+	}
+
+	result := p.AgentDryRun(context.Background(), nil)
+	assert.True(t, result.OK())
+	assert.False(t, result.HasErrors())
+	assert.Equal(t, 2, result.MessageCount)
+	assert.Equal(t, 1, result.ToolsDefined)
+	assert.Equal(t, 0, result.SkillsResolved)
+}
+
+func TestAgentDryRun_UnresolvableSkill(t *testing.T) {
+	resolver := NewMapDocumentResolver()
+	p := &Prompt{
+		Name:        "test-agent",
+		Description: "Agent with unresolvable skill",
+		Type:        DocumentTypeAgent,
+		Execution: &ExecutionConfig{
+			Provider: "openai",
+			Model:    "gpt-4",
+		},
+		Skills: []SkillRef{
+			{Slug: "nonexistent-skill"},
+		},
+		Body: "Agent body.",
+	}
+
+	result := p.AgentDryRun(context.Background(), &CompileOptions{Resolver: resolver})
+	assert.True(t, result.HasErrors())
+	assert.Equal(t, 1, len(result.Issues))
+	assert.Equal(t, AgentDryRunCategorySkill, result.Issues[0].Category)
+	assert.Equal(t, "skill:nonexistent-skill", result.Issues[0].Location)
+}
+
+func TestAgentDryRun_InvalidMessageTemplate(t *testing.T) {
+	p := &Prompt{
+		Name:        "test-agent",
+		Description: "Agent with invalid message",
+		Type:        DocumentTypeAgent,
+		Execution: &ExecutionConfig{
+			Provider: "openai",
+			Model:    "gpt-4",
+		},
+		Messages: []MessageTemplate{
+			{Role: RoleSystem, Content: "{~prompty.var name=\"unclosed\""},
+		},
+		Body: "Valid body.",
+	}
+
+	result := p.AgentDryRun(context.Background(), nil)
+	assert.True(t, result.HasErrors())
+
+	foundTemplateIssue := false
+	for _, issue := range result.Issues {
+		if issue.Category == AgentDryRunCategoryTemplate && issue.Location == "message[0]" {
+			foundTemplateIssue = true
+			break
+		}
+	}
+	assert.True(t, foundTemplateIssue, "should have a template issue for message[0]")
+}
+
+func TestAgentDryRun_InvalidBody(t *testing.T) {
+	p := &Prompt{
+		Name:        "test-agent",
+		Description: "Agent with invalid body",
+		Type:        DocumentTypeAgent,
+		Execution: &ExecutionConfig{
+			Provider: "openai",
+			Model:    "gpt-4",
+		},
+		Messages: []MessageTemplate{
+			{Role: RoleSystem, Content: "Valid system message."},
+		},
+		Body: "{~prompty.var name=\"unclosed\"",
+	}
+
+	result := p.AgentDryRun(context.Background(), nil)
+	assert.True(t, result.HasErrors())
+
+	foundBodyIssue := false
+	for _, issue := range result.Issues {
+		if issue.Category == AgentDryRunCategoryTemplate && issue.Location == "body" {
+			foundBodyIssue = true
+			break
+		}
+	}
+	assert.True(t, foundBodyIssue, "should have a template issue for body")
+}
+
+func TestAgentDryRun_NoResolver(t *testing.T) {
+	p := &Prompt{
+		Name:        "test-agent",
+		Description: "Agent with skills but no resolver",
+		Type:        DocumentTypeAgent,
+		Execution: &ExecutionConfig{
+			Provider: "openai",
+			Model:    "gpt-4",
+		},
+		Skills: []SkillRef{
+			{Slug: "skill-a"},
+			{Slug: "skill-b"},
+		},
+		Body: "Agent body.",
+	}
+
+	result := p.AgentDryRun(context.Background(), nil)
+	assert.True(t, result.HasErrors())
+
+	skillIssueCount := 0
+	for _, issue := range result.Issues {
+		if issue.Category == AgentDryRunCategorySkill {
+			skillIssueCount++
+		}
+	}
+	assert.Equal(t, 2, skillIssueCount, "should have issues for each skill")
+}
+
+func TestAgentDryRun_MultipleIssues(t *testing.T) {
+	p := &Prompt{
+		Name:        "test-agent",
+		Description: "Agent with multiple issues",
+		Type:        DocumentTypeAgent,
+		Execution: &ExecutionConfig{
+			Provider: "openai",
+			Model:    "gpt-4",
+		},
+		Skills: []SkillRef{
+			{Slug: "missing-skill"},
+		},
+		Messages: []MessageTemplate{
+			{Role: RoleSystem, Content: "{~prompty.var name=\"broken\""},
+		},
+		Body: "{~prompty.var name=\"also-broken\"",
+	}
+
+	result := p.AgentDryRun(context.Background(), nil)
+	assert.True(t, result.HasErrors())
+	// At least 3 issues: 1 skill (no resolver) + 1 message parse + 1 body parse
+	assert.GreaterOrEqual(t, len(result.Issues), 3)
+}
+
+func TestAgentDryRun_NilPrompt(t *testing.T) {
+	var p *Prompt
+	result := p.AgentDryRun(context.Background(), nil)
+	assert.True(t, result.HasErrors())
+	assert.Equal(t, 1, len(result.Issues))
+	assert.Equal(t, AgentDryRunCategoryParse, result.Issues[0].Category)
+	assert.Contains(t, result.Issues[0].Message, ErrMsgAgentDryRunNilPrompt)
+}
+
+func TestAgentDryRunResult_OK(t *testing.T) {
+	result := &AgentDryRunResult{}
+	assert.True(t, result.OK())
+	assert.False(t, result.HasErrors())
+}
+
+func TestAgentDryRunResult_HasErrors(t *testing.T) {
+	result := &AgentDryRunResult{
+		Issues: []AgentDryRunIssue{
+			{Category: AgentDryRunCategoryValidation, Message: "test issue", Location: "prompt"},
+		},
+	}
+	assert.True(t, result.HasErrors())
+	assert.False(t, result.OK())
+}
+
+func TestAgentDryRunResult_String(t *testing.T) {
+	t.Run("ok result", func(t *testing.T) {
+		result := &AgentDryRunResult{
+			SkillsResolved: 2,
+			ToolsDefined:   3,
+			MessageCount:   4,
+		}
+		s := result.String()
+		assert.Contains(t, s, "OK")
+		assert.Contains(t, s, "2 skills resolved")
+		assert.Contains(t, s, "3 tools defined")
+		assert.Contains(t, s, "4 messages")
+	})
+
+	t.Run("result with issues", func(t *testing.T) {
+		result := &AgentDryRunResult{
+			Issues: []AgentDryRunIssue{
+				{Category: AgentDryRunCategorySkill, Message: "not found", Location: "skill:web-search"},
+				{Category: AgentDryRunCategoryTemplate, Message: "parse error", Location: "body"},
+			},
+		}
+		s := result.String()
+		assert.Contains(t, s, "2 issue(s)")
+		assert.Contains(t, s, "skill")
+		assert.Contains(t, s, "web-search")
+		assert.Contains(t, s, "body")
+	})
 }

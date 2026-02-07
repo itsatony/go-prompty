@@ -1,12 +1,12 @@
 project:
   name: go-prompty
-  version: 2.1.0
+  version: 2.2.0
   description: Dynamic LLM prompt templating system for Go with plugin-based architecture
 
 git:
   commit: ""
   branch: main
-  tag: v2.1.0
+  tag: v2.2.0
 
 build:
   time: ""

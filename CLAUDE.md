@@ -57,10 +57,12 @@ github.com/itsatony/go-prompty/
 ├── prompty.types.agent.go        # v2.1: SkillRef, ToolsConfig, ConstraintsConfig
 ├── prompty.types.shared.go       # v2.1: ResponseFormat, GuidedDecoding, InputDef
 ├── prompty.types.tools.go        # v2.1: FunctionDef, ModelParameters
-├── prompty.compile.go            # v2.1: CompileAgent, ActivateSkill, Compile
+├── prompty.compile.go            # v2.1: CompileAgent, ActivateSkill, Compile, AgentDryRun
 ├── prompty.catalog.go            # v2.1: Catalog generation (skills, tools)
 ├── prompty.document.resolver.go  # v2.1: DocumentResolver interface + impls
 ├── prompty.parse.go              # v2.1: Standalone Parse/ParseFile
+├── prompty.runner.go             # v2.1: TemplateRunner interface (Engine + StorageEngine)
+├── prompty.agent.executor.go     # v2.1: AgentExecutor convenience wrapper
 ├── prompty.serialize.go          # v2.1: Serialization with options
 ├── prompty.import.go             # v2.1: Import from .md/.zip
 ├── prompty.export.go             # v2.1: Export to .md/.zip
@@ -127,6 +129,18 @@ type DocumentResolver interface {
 }
 
 // Implementations: NoopDocumentResolver, MapDocumentResolver, StorageDocumentResolver
+```
+
+**TemplateRunner** — Common interface for resolver management shared by Engine and StorageEngine:
+```go
+type TemplateRunner interface {
+    RegisterResolver(r Resolver) error
+    HasResolver(tagName string) bool
+    ListResolvers() []string
+    ResolverCount() int
+}
+
+// Both Engine and StorageEngine satisfy this interface.
 ```
 
 **Message** — Structured message for LLM APIs (extracted from template output):

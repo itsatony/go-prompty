@@ -89,13 +89,14 @@ func (r *VarResolver) Resolve(ctx context.Context, execCtx interface{}, attrs At
 			pathPrefix := ExtractPathPrefix(name)
 			suggestions = FindSimilarStrings(pathPrefix, availableKeys, 3)
 		}
+		showHint := ShouldShowHint(attrs)
 		if len(suggestions) > 0 {
-			return "", NewVariableNotFoundWithSuggestionsError(name, suggestions)
+			return "", NewVariableNotFoundWithSuggestionsError(name, suggestions, showHint)
 		}
 		if len(availableKeys) > 0 {
-			return "", NewVariableNotFoundWithAvailableKeysError(name, availableKeys)
+			return "", NewVariableNotFoundWithAvailableKeysError(name, availableKeys, showHint)
 		}
-		return "", NewVariableNotFoundBuiltinError(name)
+		return "", NewVariableNotFoundBuiltinError(name, showHint)
 	}
 
 	// Convert value to string
@@ -209,17 +210,26 @@ func (e *BuiltinError) Error() string {
 }
 
 // NewVariableNotFoundBuiltinError creates an error for variable not found.
-func NewVariableNotFoundBuiltinError(path string) *BuiltinError {
-	return NewBuiltinError(ErrMsgVariableNotFound, TagNameVar).
+// When showHint is true, an actionable hint is appended to the error message.
+func NewVariableNotFoundBuiltinError(path string, showHint bool) *BuiltinError {
+	message := ErrMsgVariableNotFound
+	if showHint {
+		message = AppendHint(message, HintVarNotFound)
+	}
+	return NewBuiltinError(message, TagNameVar).
 		WithMetadata(MetaKeyPath, path)
 }
 
 // NewVariableNotFoundWithSuggestionsError creates an error for variable not found
 // with "did you mean?" suggestions based on available keys in the context.
-func NewVariableNotFoundWithSuggestionsError(path string, suggestions []string) *BuiltinError {
+// When showHint is true, an actionable hint is appended to the error message.
+func NewVariableNotFoundWithSuggestionsError(path string, suggestions []string, showHint bool) *BuiltinError {
 	message := ErrMsgVariableNotFound
 	if len(suggestions) > 0 {
 		message += FormatSuggestions(suggestions)
+	}
+	if showHint {
+		message = AppendHint(message, HintVarNotFound)
 	}
 	return NewBuiltinError(message, TagNameVar).
 		WithMetadata(MetaKeyPath, path)
@@ -227,10 +237,14 @@ func NewVariableNotFoundWithSuggestionsError(path string, suggestions []string) 
 
 // NewVariableNotFoundWithAvailableKeysError creates an error for variable not found
 // with a list of available keys when no similar suggestions are found.
-func NewVariableNotFoundWithAvailableKeysError(path string, availableKeys []string) *BuiltinError {
+// When showHint is true, an actionable hint is appended to the error message.
+func NewVariableNotFoundWithAvailableKeysError(path string, availableKeys []string, showHint bool) *BuiltinError {
 	message := ErrMsgVariableNotFound
 	if len(availableKeys) > 0 {
 		message += FormatAvailableKeys(availableKeys, 5)
+	}
+	if showHint {
+		message = AppendHint(message, HintVarNotFound)
 	}
 	return NewBuiltinError(message, TagNameVar).
 		WithMetadata(MetaKeyPath, path)
@@ -239,6 +253,13 @@ func NewVariableNotFoundWithAvailableKeysError(path string, availableKeys []stri
 // NewTemplateNotFoundBuiltinError creates an error for template not found.
 func NewTemplateNotFoundBuiltinError(name string) *BuiltinError {
 	return NewBuiltinError(ErrMsgTemplateNotFound, TagNameInclude).
+		WithMetadata(MetaKeyTemplateName, name)
+}
+
+// NewTemplateNotFoundWithHintError creates an error for template not found with an actionable hint.
+func NewTemplateNotFoundWithHintError(name string) *BuiltinError {
+	message := AppendHint(ErrMsgTemplateNotFound, HintTemplateNotFound)
+	return NewBuiltinError(message, TagNameInclude).
 		WithMetadata(MetaKeyTemplateName, name)
 }
 

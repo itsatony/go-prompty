@@ -533,6 +533,9 @@ const (
 	ErrMsgMessageTemplateNoBody   = "message template requires content"
 	ErrMsgInlineSkillNoSlug       = "inline skill requires a slug"
 	ErrMsgInlineSkillNoBody       = "inline skill requires a body"
+	ErrMsgAgentNoBodyOrMessages   = "agent requires body or messages"
+	ErrMsgUnsupportedMsgProvider  = "unsupported provider for message serialization"
+	ErrMsgNoDocumentResolver      = "no document resolver configured"
 )
 
 // v2.1 Error code constants
@@ -548,6 +551,9 @@ const (
 	MetaKeySkillSlug     = "skill_slug"
 	MetaKeyInjectionMode = "injection_mode"
 	MetaKeySkillVersion  = "skill_version"
+	MetaKeyMessageIndex  = "message_index"
+	MetaKeyMessageRole   = "message_role"
+	MetaKeyCompileStage  = "compile_stage"
 )
 
 // v2.1 Special template name for self-reference

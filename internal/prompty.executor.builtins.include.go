@@ -55,7 +55,7 @@ func (r *IncludeResolver) Resolve(ctx context.Context, execCtx interface{}, attr
 
 	// Check if template exists
 	if !engine.HasTemplate(templateName) {
-		return "", NewTemplateNotFoundBuiltinError(templateName)
+		return "", NewTemplateNotFoundWithHintError(templateName)
 	}
 
 	// Check depth limit

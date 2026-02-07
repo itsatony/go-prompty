@@ -2,6 +2,7 @@ package prompty
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -222,7 +223,7 @@ func RegisterStorageDriver(name string, driver StorageDriver) {
 		panic(ErrMsgNilStorageDriver)
 	}
 	if _, exists := storageDrivers[name]; exists {
-		panic(ErrMsgDriverAlreadyRegistered + ": " + name)
+		panic(fmt.Sprintf("%s: %s", ErrMsgDriverAlreadyRegistered, name))
 	}
 	storageDrivers[name] = driver
 }

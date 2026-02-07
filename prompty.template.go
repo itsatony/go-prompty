@@ -100,6 +100,24 @@ func (t *Template) HasPrompt() bool {
 	return t.prompt != nil
 }
 
+// Compile compiles the template's prompt by executing its body through an engine.
+// Returns an error if the template has no prompt configuration.
+func (t *Template) Compile(ctx context.Context, input map[string]any, opts *CompileOptions) (string, error) {
+	if t.prompt == nil {
+		return "", NewCompilationError(ErrMsgCompilationFailed, nil)
+	}
+	return t.prompt.Compile(ctx, input, opts)
+}
+
+// CompileAgent compiles the template's agent prompt into a CompiledPrompt.
+// Returns an error if the template has no prompt configuration or is not an agent.
+func (t *Template) CompileAgent(ctx context.Context, input map[string]any, opts *CompileOptions) (*CompiledPrompt, error) {
+	if t.prompt == nil {
+		return nil, NewCompilationError(ErrMsgCompilationFailed, nil)
+	}
+	return t.prompt.CompileAgent(ctx, input, opts)
+}
+
 // ExecuteAndExtractMessages executes the template and extracts structured messages from the output.
 // This is useful for chat/conversation templates that use {~prompty.message~} tags.
 // Returns the messages array and any error from execution.

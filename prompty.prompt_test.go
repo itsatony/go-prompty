@@ -576,3 +576,133 @@ func TestPrompt_StripExtensions(t *testing.T) {
 	assert.Nil(t, stripped.Execution)
 	assert.Nil(t, stripped.Skope)
 }
+
+// ==================== API-03: ValidateAsAgent ====================
+
+func TestPrompt_ValidateAsAgent(t *testing.T) {
+	tests := []struct {
+		name    string
+		prompt  *Prompt
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid agent with body",
+			prompt: &Prompt{
+				Name:        "test-agent",
+				Description: "A test agent",
+				Type:        DocumentTypeAgent,
+				Execution: &ExecutionConfig{
+					Provider: "openai",
+					Model:    "gpt-4",
+				},
+				Body: "You are a helpful assistant.",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid agent with messages",
+			prompt: &Prompt{
+				Name:        "test-agent",
+				Description: "A test agent",
+				Type:        DocumentTypeAgent,
+				Execution: &ExecutionConfig{
+					Provider: "anthropic",
+					Model:    "claude-sonnet-4-5",
+				},
+				Messages: []MessageTemplate{
+					{Role: RoleSystem, Content: "System."},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "not an agent",
+			prompt: &Prompt{
+				Name:        "test-skill",
+				Description: "A skill",
+				Type:        DocumentTypeSkill,
+				Execution: &ExecutionConfig{
+					Provider: "openai",
+					Model:    "gpt-4",
+				},
+				Body: "Body.",
+			},
+			wantErr: true,
+			errMsg:  ErrMsgNotAnAgent,
+		},
+		{
+			name: "no execution config",
+			prompt: &Prompt{
+				Name:        "test-agent",
+				Description: "An agent without execution",
+				Type:        DocumentTypeAgent,
+				Body:        "Body.",
+			},
+			wantErr: true,
+			errMsg:  ErrMsgNoExecutionConfig,
+		},
+		{
+			name: "no provider",
+			prompt: &Prompt{
+				Name:        "test-agent",
+				Description: "An agent without provider",
+				Type:        DocumentTypeAgent,
+				Execution: &ExecutionConfig{
+					Model: "gpt-4",
+				},
+				Body: "Body.",
+			},
+			wantErr: true,
+			errMsg:  ErrMsgNoProvider,
+		},
+		{
+			name: "no model",
+			prompt: &Prompt{
+				Name:        "test-agent",
+				Description: "An agent without model",
+				Type:        DocumentTypeAgent,
+				Execution: &ExecutionConfig{
+					Provider: "openai",
+				},
+				Body: "Body.",
+			},
+			wantErr: true,
+			errMsg:  ErrMsgNoModel,
+		},
+		{
+			name: "no body or messages",
+			prompt: &Prompt{
+				Name:        "test-agent",
+				Description: "An agent with nothing",
+				Type:        DocumentTypeAgent,
+				Execution: &ExecutionConfig{
+					Provider: "openai",
+					Model:    "gpt-4",
+				},
+			},
+			wantErr: true,
+			errMsg:  ErrMsgAgentNoBodyOrMessages,
+		},
+		{
+			name:    "nil prompt fails validation",
+			prompt:  nil,
+			wantErr: true,
+			errMsg:  ErrMsgPromptNameRequired,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.prompt.ValidateAsAgent()
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errMsg != "" {
+					assert.Contains(t, err.Error(), tt.errMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

@@ -180,6 +180,12 @@ func (e *Engine) Register(r Resolver) error {
 	return e.registry.Register(adapter)
 }
 
+// RegisterResolver adds a custom resolver to the engine.
+// This is an alias for Register that satisfies the TemplateRunner interface.
+func (e *Engine) RegisterResolver(r Resolver) error {
+	return e.Register(r)
+}
+
 // MustRegister adds a custom resolver and panics if registration fails.
 func (e *Engine) MustRegister(r Resolver) {
 	if err := e.Register(r); err != nil {

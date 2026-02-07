@@ -137,12 +137,12 @@ func (se *StorageEngine) GetVersionHistory(ctx context.Context, name string) (*V
 func (se *StorageEngine) CompareVersions(ctx context.Context, name string, oldVersion, newVersion int) (*VersionDiff, error) {
 	oldTmpl, err := se.storage.GetVersion(ctx, name, oldVersion)
 	if err != nil {
-		return nil, fmt.Errorf("%s %d: %w", ErrMsgVersionGetFailed, oldVersion, err)
+		return nil, NewVersionGetError(oldVersion, err)
 	}
 
 	newTmpl, err := se.storage.GetVersion(ctx, name, newVersion)
 	if err != nil {
-		return nil, fmt.Errorf("%s %d: %w", ErrMsgVersionGetFailed, newVersion, err)
+		return nil, NewVersionGetError(newVersion, err)
 	}
 
 	return diffTemplates(oldTmpl, newTmpl), nil
@@ -154,7 +154,7 @@ func (se *StorageEngine) RollbackToVersion(ctx context.Context, name string, tar
 	// Get the target version
 	targetTmpl, err := se.storage.GetVersion(ctx, name, targetVersion)
 	if err != nil {
-		return nil, fmt.Errorf("%s %d: %w", ErrMsgVersionGetFailed, targetVersion, err)
+		return nil, NewVersionGetError(targetVersion, err)
 	}
 
 	// Create new template from target
@@ -177,7 +177,7 @@ func (se *StorageEngine) RollbackToVersion(ctx context.Context, name string, tar
 	// Save creates a new version
 	err = se.storage.Save(ctx, newTmpl)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", ErrMsgVersionSaveRollback, err)
+		return nil, NewVersioningError(ErrMsgVersionSaveRollback, err)
 	}
 
 	return newTmpl, nil
@@ -188,13 +188,13 @@ func (se *StorageEngine) CloneVersion(ctx context.Context, sourceName string, so
 	// Get source version
 	sourceTmpl, err := se.storage.GetVersion(ctx, sourceName, sourceVersion)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", ErrMsgVersionGetSource, err)
+		return nil, NewVersioningError(ErrMsgVersionGetSource, err)
 	}
 
 	// Check new name doesn't exist
 	exists, _ := se.storage.Exists(ctx, newName)
 	if exists {
-		return nil, fmt.Errorf("%s: %s", ErrMsgVersionTemplateExists, newName)
+		return nil, NewVersionTemplateExistsError(newName)
 	}
 
 	// Create clone
@@ -217,7 +217,7 @@ func (se *StorageEngine) CloneVersion(ctx context.Context, sourceName string, so
 
 	err = se.storage.Save(ctx, clone)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", ErrMsgVersionSaveClone, err)
+		return nil, NewVersioningError(ErrMsgVersionSaveClone, err)
 	}
 
 	return clone, nil
@@ -226,7 +226,7 @@ func (se *StorageEngine) CloneVersion(ctx context.Context, sourceName string, so
 // PruneOldVersions removes old versions, keeping only the most recent N versions.
 func (se *StorageEngine) PruneOldVersions(ctx context.Context, name string, keepVersions int) (int, error) {
 	if keepVersions < 1 {
-		return 0, fmt.Errorf("%s", ErrMsgVersionMinimumRequired)
+		return 0, NewVersioningError(ErrMsgVersionMinimumRequired, nil)
 	}
 
 	versions, err := se.storage.ListVersions(ctx, name)
@@ -255,7 +255,7 @@ func (se *StorageEngine) PruneOldVersions(ctx context.Context, name string, keep
 // GetVersionDelta returns changes between two consecutive versions.
 func (se *StorageEngine) GetVersionDelta(ctx context.Context, name string, version int) (*VersionDiff, error) {
 	if version <= 1 {
-		return nil, fmt.Errorf("%s", ErrMsgVersionNoPrevious)
+		return nil, NewVersioningError(ErrMsgVersionNoPrevious, nil)
 	}
 	return se.CompareVersions(ctx, name, version-1, version)
 }

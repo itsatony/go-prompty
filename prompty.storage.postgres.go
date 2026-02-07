@@ -130,11 +130,15 @@ func NewPostgresStorage(config PostgresConfig) (*PostgresStorage, error) {
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
-		return nil, &StorageError{
+		closeErr := db.Close()
+		storageErr := &StorageError{
 			Message: ErrMsgPostgresConnectionFailed,
 			Cause:   err,
 		}
+		if closeErr != nil {
+			storageErr.Cause = fmt.Errorf("%w (close error: %v)", err, closeErr)
+		}
+		return nil, storageErr
 	}
 
 	storage := &PostgresStorage{
@@ -145,7 +149,9 @@ func NewPostgresStorage(config PostgresConfig) (*PostgresStorage, error) {
 	// Run migrations if configured
 	if config.AutoMigrate {
 		if err := storage.RunMigrations(ctx); err != nil {
-			db.Close()
+			if closeErr := db.Close(); closeErr != nil {
+				return nil, fmt.Errorf("%w (close error: %v)", err, closeErr)
+			}
 			return nil, err
 		}
 	}

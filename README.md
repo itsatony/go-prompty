@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/itsatony/go-prompty)](https://goreportcard.com/report/github.com/itsatony/go-prompty)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Test Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen.svg)](https://github.com/itsatony/go-prompty)
-[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/itsatony/go-prompty/releases/tag/v2.1.0)
+[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](https://github.com/itsatony/go-prompty/releases/tag/v2.2.0)
 
 ```yaml
 ---
@@ -42,6 +42,7 @@ You are assisting {~prompty.var name="user.name" default="a user" /~}.
 | **Environment aware** | Access env vars with `prompty.env` |
 | **Conversation support** | Message tags for chat/LLM API integration |
 | **Agent definitions** | Skills, tools, constraints, and catalog generation |
+| **Actionable errors** | Error messages include solution hints (e.g., "use default=") |
 | **Production ready** | Access control, multi-tenancy, audit logging |
 
 ## Installation
@@ -99,7 +100,8 @@ Please respond in {~prompty.var name="language" default="English" /~}.`
 - [Built-in Tags](#built-in-tags)
 - [Template Inheritance](#promptyextends--promptyblock--promptyparent---template-inheritance)
 - [Expression Language](#expression-language)
-- [Inference Configuration](#inference-configuration)
+- [Prompt Configuration](#prompt-configuration)
+- [Agent Definitions & Compilation](#agent-definitions--compilation)
 - [Custom Resolvers](#custom-resolvers)
 - [Custom Functions](#custom-functions)
 - [Storage & Persistence](#storage--persistence)
@@ -773,6 +775,204 @@ if tmpl.HasPrompt() {
 
 ---
 
+## Agent Definitions & Compilation
+
+v2.1 introduces full agent support: define agents with skills, tools, constraints, and message templates, then compile them into structured output ready for LLM APIs.
+
+### Document Types
+
+| Type | Description | Skills | Tools | Constraints |
+|------|-------------|--------|-------|-------------|
+| `prompt` | Simple prompt template | No | No | No |
+| `skill` | Reusable capability (default) | No | Yes | Yes |
+| `agent` | Full agent definition | Yes | Yes | Yes |
+
+### Defining an Agent
+
+```yaml
+---
+name: research-agent
+description: AI research assistant
+type: agent
+execution:
+  provider: openai
+  model: gpt-4
+  temperature: 0.3
+skills:
+  - slug: web-search
+    injection: system_prompt
+  - slug: summarizer
+    injection: user_context
+tools:
+  functions:
+    - name: search_web
+      description: Search the web for information
+      parameters:
+        type: object
+        properties:
+          query: {type: string}
+        required: [query]
+constraints:
+  behavioral:
+    - Always cite sources
+  safety:
+    - Never fabricate references
+context:
+  company: Acme Corp
+messages:
+  - role: system
+    content: |
+      You are a research assistant for {~prompty.var name="context.company" /~}.
+      {~prompty.skills_catalog format="detailed" /~}
+  - role: user
+    content: '{~prompty.var name="input.query" /~}'
+---
+```
+
+### Compiling an Agent
+
+```go
+// Parse the agent definition
+agent, _ := prompty.Parse([]byte(agentYAML))
+
+// Set up a resolver for skill references
+resolver := prompty.NewMapDocumentResolver()
+resolver.AddSkill("web-search", &prompty.Prompt{
+    Name:        "web-search",
+    Description: "Searches the web for information",
+    Type:        prompty.DocumentTypeSkill,
+    Body:        "Use search tools to find relevant information.",
+})
+
+// Compile the agent
+compiled, _ := agent.CompileAgent(ctx, map[string]any{
+    "query": "Latest quantum computing advances",
+}, &prompty.CompileOptions{
+    Resolver:            resolver,
+    SkillsCatalogFormat: prompty.CatalogFormatDetailed,
+})
+
+// Access compiled output
+for _, msg := range compiled.Messages {
+    fmt.Printf("[%s]: %s\n", msg.Role, msg.Content)
+}
+fmt.Println("Model:", compiled.Execution.Model)
+```
+
+### DocumentResolver
+
+`DocumentResolver` resolves prompts, skills, and agents by slug during compilation:
+
+```go
+type DocumentResolver interface {
+    ResolvePrompt(ctx context.Context, slug string) (*Prompt, error)
+    ResolveSkill(ctx context.Context, ref string) (*Prompt, error)
+    ResolveAgent(ctx context.Context, slug string) (*Prompt, error)
+}
+```
+
+**Built-in implementations:**
+
+| Resolver | Description |
+|----------|-------------|
+| `MapDocumentResolver` | In-memory map for testing and simple cases (thread-safe) |
+| `StorageDocumentResolver` | Backed by any `TemplateStorage` (memory, filesystem, PostgreSQL) |
+| `NoopDocumentResolver` | Always returns errors (default when no resolver configured) |
+
+### Skill Activation
+
+Activate a specific skill within a compiled agent. The skill body is resolved, compiled, and injected into messages based on the injection mode:
+
+```go
+compiled, _ := agent.ActivateSkill(ctx, "web-search", input, &prompty.CompileOptions{
+    Resolver: resolver,
+})
+// Skill content is injected into the system prompt (or user context)
+```
+
+**Injection modes:**
+- `system_prompt` — Appends skill content to the system message
+- `user_context` — Adds skill content as a user message
+- `none` — No automatic injection
+
+### Catalog Generation
+
+Generate catalogs of available skills and tools in multiple formats:
+
+```go
+// Skills catalog
+catalog, _ := prompty.GenerateSkillsCatalog(ctx, agent.Skills, resolver, prompty.CatalogFormatDetailed)
+
+// Tools catalog (JSON schema for function calling)
+toolsCatalog, _ := prompty.GenerateToolsCatalog(agent.Tools, prompty.CatalogFormatFunctionCalling)
+```
+
+**Catalog formats:**
+
+| Format | Description |
+|--------|-------------|
+| `""` (default) | Markdown bullet list |
+| `"detailed"` | Full descriptions, parameters, injection modes |
+| `"compact"` | Single-line, semicolon-separated |
+| `"function_calling"` | JSON schema for OpenAI-style tool use (tools only) |
+
+Use catalog tags inside agent message templates:
+```
+{~prompty.skills_catalog format="detailed" /~}
+{~prompty.tools_catalog format="function_calling" /~}
+```
+
+### Execution Config Merging
+
+`CompileOptions` supports 3-layer precedence for execution config: agent definition → skill override → runtime input. Use `ExecutionConfig.Merge()` for manual merging:
+
+```go
+// Base config from agent
+base := agent.Execution
+
+// Skill-specific overrides
+skillOverride := &prompty.ExecutionConfig{Temperature: floatPtr(0.1)}
+
+// Merged: skill values override base where set
+effective := base.Merge(skillOverride)
+```
+
+### Provider Message Serialization
+
+Convert compiled messages to LLM provider-specific formats for direct API submission:
+
+```go
+compiled, _ := agent.CompileAgent(ctx, input, opts)
+
+// OpenAI: []map[string]any with role/content
+openAIMsgs := compiled.ToOpenAIMessages()
+
+// Anthropic: {system: "...", messages: [...]} (system extracted)
+anthropicPayload := compiled.ToAnthropicMessages()
+
+// Gemini: {system_instruction: {...}, contents: [...]} (assistant → model)
+geminiPayload := compiled.ToGeminiContents()
+
+// Or auto-dispatch by provider name
+msgs, _ := compiled.ToProviderMessages("openai")
+```
+
+### Agent Validation
+
+Use `ValidateAsAgent()` before compilation to catch configuration issues early:
+
+```go
+if err := agent.ValidateAsAgent(); err != nil {
+    log.Fatal("Agent config invalid:", err)
+}
+```
+
+This checks: agent type, execution config with provider/model, and body or messages present.
+
+**Deep Dive:** See [examples/agent_compilation](examples/agent_compilation/), [examples/document_resolver](examples/document_resolver/), and [examples/catalog_generation](examples/catalog_generation/).
+
+---
+
 ## Custom Resolvers
 
 Extend go-prompty with custom tag handlers.
@@ -1331,6 +1531,8 @@ func (p *Prompt) Compile(ctx context.Context, input map[string]any, opts Compile
 func (p *Prompt) CompileAgent(ctx context.Context, input map[string]any, opts CompileOptions) (*CompiledPrompt, error)
 func (p *Prompt) ActivateSkill(ctx context.Context, skillSlug string, input map[string]any, opts CompileOptions) (*CompiledPrompt, error)
 func (p *Prompt) ValidateForExecution() error
+func (p *Prompt) ValidateAsAgent() error
+func (p *Prompt) AgentDryRun(ctx context.Context, opts *CompileOptions) *AgentDryRunResult
 func (p *Prompt) IsAgentSkillsCompatible() bool
 func (p *Prompt) StripExtensions() *Prompt
 func (p *Prompt) ExportToSkillMD(body string) (string, error)
@@ -1402,6 +1604,102 @@ type CompiledPrompt struct {
 type CompiledMessage struct {
     Role    string
     Content string
+    Cache   bool
+}
+
+// Provider message serialization
+func (cp *CompiledPrompt) ToOpenAIMessages() []map[string]any
+func (cp *CompiledPrompt) ToAnthropicMessages() map[string]any
+func (cp *CompiledPrompt) ToGeminiContents() map[string]any
+func (cp *CompiledPrompt) ToProviderMessages(provider string) (any, error)
+
+// Functional options
+func NewCompileOptions(options ...CompileOption) *CompileOptions
+func WithResolver(r DocumentResolver) CompileOption
+func WithCompileEngine(e *Engine) CompileOption
+func WithSkillsCatalogFormat(f CatalogFormat) CompileOption
+func WithToolsCatalogFormat(f CatalogFormat) CompileOption
+```
+
+</details>
+
+<details>
+<summary><strong>TemplateRunner Interface</strong></summary>
+
+```go
+// Common interface for resolver management shared by Engine and StorageEngine
+type TemplateRunner interface {
+    RegisterResolver(r Resolver) error
+    HasResolver(tagName string) bool
+    ListResolvers() []string
+    ResolverCount() int
+}
+
+// Both Engine and StorageEngine satisfy TemplateRunner,
+// allowing generic code to work with either:
+func configureRunner(runner prompty.TemplateRunner) {
+    runner.RegisterResolver(myCustomResolver)
+}
+```
+
+</details>
+
+<details>
+<summary><strong>AgentExecutor</strong></summary>
+
+```go
+// High-level wrapper: parse → validate → compile in one call
+func NewAgentExecutor(options ...AgentExecutorOption) *AgentExecutor
+
+// Functional options
+func WithAgentResolver(r DocumentResolver) AgentExecutorOption
+func WithAgentEngine(e *Engine) AgentExecutorOption
+func WithAgentSkillsCatalogFormat(f CatalogFormat) AgentExecutorOption
+func WithAgentToolsCatalogFormat(f CatalogFormat) AgentExecutorOption
+
+// Methods
+func (ae *AgentExecutor) Execute(ctx context.Context, source string, input map[string]any) (*CompiledPrompt, error)
+func (ae *AgentExecutor) ExecuteFile(ctx context.Context, path string, input map[string]any) (*CompiledPrompt, error)
+func (ae *AgentExecutor) ExecutePrompt(ctx context.Context, prompt *Prompt, input map[string]any) (*CompiledPrompt, error)
+func (ae *AgentExecutor) ActivateSkill(ctx context.Context, source string, skillSlug string, input map[string]any, runtimeExec *ExecutionConfig) (*CompiledPrompt, error)
+```
+
+Example:
+```go
+executor := prompty.NewAgentExecutor(
+    prompty.WithAgentResolver(myResolver),
+    prompty.WithAgentSkillsCatalogFormat(prompty.CatalogFormatDetailed),
+)
+compiled, err := executor.Execute(ctx, agentYAML, map[string]any{"query": "hello"})
+```
+
+</details>
+
+<details>
+<summary><strong>Agent Dry Run</strong></summary>
+
+```go
+// Validate all refs and templates without producing output
+func (p *Prompt) AgentDryRun(ctx context.Context, opts *CompileOptions) *AgentDryRunResult
+
+type AgentDryRunResult struct {
+    Issues         []AgentDryRunIssue
+    SkillsResolved int
+    ToolsDefined   int
+    MessageCount   int
+}
+
+func (r *AgentDryRunResult) OK() bool
+func (r *AgentDryRunResult) HasErrors() bool
+func (r *AgentDryRunResult) String() string
+```
+
+Example:
+```go
+prompt, _ := prompty.Parse(agentYAML)
+result := prompt.AgentDryRun(ctx, &prompty.CompileOptions{Resolver: myResolver})
+if result.HasErrors() {
+    fmt.Println(result.String()) // Shows all issues
 }
 ```
 
@@ -1542,6 +1840,10 @@ Use \{~ for literal delimiters.
 | [inheritance](examples/inheritance/) | Template inheritance with extends/block/parent |
 | [custom_functions](examples/custom_functions/) | Registering custom expression functions |
 | [custom_resolver](examples/custom_resolver/) | Creating custom tag handlers |
+| [agent_compilation](examples/agent_compilation/) | v2.1 agent definition, compilation, and skill activation |
+| [document_resolver](examples/document_resolver/) | v2.1 DocumentResolver implementations (Map, Storage, Noop) |
+| [catalog_generation](examples/catalog_generation/) | v2.1 catalog generation in all formats (default, detailed, compact, function_calling) |
+| [prompt_import_export](examples/prompt_import_export/) | v2.1 prompt serialization, import/export, zip archives |
 | [storage](examples/storage/) | Template storage and versioning |
 | [storage_persistence](examples/storage_persistence/) | Filesystem storage |
 | [access_rbac](examples/access_rbac/) | RBAC access control |
@@ -1556,6 +1858,7 @@ Use \{~ for literal delimiters.
 
 | Guide | Description |
 |-------|-------------|
+| [MIGRATION_V2.1.md](docs/MIGRATION_V2.1.md) | Migration guide from v1.x/v2.0 to v2.1 |
 | [INFERENCE_CONFIG.md](docs/INFERENCE_CONFIG.md) | Legacy v1 model configuration reference (deprecated in v2.1) |
 | [STORAGE.md](docs/STORAGE.md) | Storage architecture, versioning, PostgreSQL |
 | [CUSTOM_STORAGE.md](docs/CUSTOM_STORAGE.md) | Implementing custom backends |

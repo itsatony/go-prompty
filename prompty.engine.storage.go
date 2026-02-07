@@ -2,6 +2,7 @@ package prompty
 
 import (
 	"context"
+	"strings"
 	"sync"
 )
 
@@ -154,11 +155,22 @@ func (se *StorageEngine) Save(ctx context.Context, tmpl *StoredTemplate) error {
 
 	// Extract PromptConfig from source if not already set
 	if tmpl.PromptConfig == nil && tmpl.Source != "" {
-		parsed, err := se.engine.Parse(tmpl.Source)
-		if err == nil && parsed.HasPrompt() {
+		parsed, parseErr := se.engine.Parse(tmpl.Source)
+		if parseErr != nil {
+			// Only treat as error if source has complete YAML frontmatter delimiters.
+			// Sources that start with "---" but lack a closing "---" are plain text
+			// (e.g., "---\nCopyright 2024") and should not fail the save.
+			if hasCompleteFrontmatter(tmpl.Source) {
+				return &StorageError{
+					Message: ErrMsgPromptConfigParseFailed,
+					Name:    tmpl.Name,
+					Cause:   parseErr,
+				}
+			}
+			// Non-frontmatter source: skip PromptConfig extraction
+		} else if parsed.HasPrompt() {
 			tmpl.PromptConfig = parsed.Prompt()
 		}
-		// If parsing fails, we skip setting PromptConfig (validation already passed)
 	}
 
 	// Save to storage
@@ -328,6 +340,24 @@ func (se *StorageEngine) MustRegisterResolver(resolver Resolver) {
 	se.engine.MustRegister(resolver)
 }
 
+// HasResolver checks if a resolver is registered for the given tag name.
+// This delegates to the underlying engine and satisfies the TemplateRunner interface.
+func (se *StorageEngine) HasResolver(tagName string) bool {
+	return se.engine.HasResolver(tagName)
+}
+
+// ListResolvers returns all registered resolver tag names in sorted order.
+// This delegates to the underlying engine and satisfies the TemplateRunner interface.
+func (se *StorageEngine) ListResolvers() []string {
+	return se.engine.ListResolvers()
+}
+
+// ResolverCount returns the number of registered resolvers.
+// This delegates to the underlying engine and satisfies the TemplateRunner interface.
+func (se *StorageEngine) ResolverCount() int {
+	return se.engine.ResolverCount()
+}
+
 // RegisterFunc registers a custom function with the underlying engine.
 func (se *StorageEngine) RegisterFunc(f *Func) error {
 	return se.engine.RegisterFunc(f)
@@ -338,10 +368,26 @@ func (se *StorageEngine) MustRegisterFunc(f *Func) {
 	se.engine.MustRegisterFunc(f)
 }
 
+// hasCompleteFrontmatter checks if the source has opening and closing YAML frontmatter delimiters.
+// Returns false for sources that start with "---" but lack a closing delimiter (e.g., "---\nCopyright").
+func hasCompleteFrontmatter(source string) bool {
+	if !strings.HasPrefix(source, YAMLFrontmatterDelimiter) {
+		return false
+	}
+	// Must have newline after opening delimiter
+	rest := source[len(YAMLFrontmatterDelimiter):]
+	if len(rest) == 0 || (rest[0] != '\n' && !(len(rest) > 1 && rest[0] == '\r' && rest[1] == '\n')) {
+		return false
+	}
+	// Look for closing delimiter
+	return strings.Contains(rest, "\n"+YAMLFrontmatterDelimiter)
+}
+
 // Storage error messages
 const (
 	ErrMsgNilStorage                  = "storage is nil"
 	ErrMsgInvalidTemplateSource       = "template source is invalid"
+	ErrMsgPromptConfigParseFailed     = "template validated but prompt config extraction failed"
 	ErrMsgStorageDoesNotSupportLabels = "storage backend does not support labels"
 	ErrMsgStorageDoesNotSupportStatus = "storage backend does not support status"
 )
