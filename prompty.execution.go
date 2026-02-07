@@ -21,6 +21,14 @@ type ExecutionConfig struct {
 	TopK          *int     `yaml:"top_k,omitempty" json:"top_k,omitempty"`
 	StopSequences []string `yaml:"stop_sequences,omitempty" json:"stop_sequences,omitempty"`
 
+	// Extended inference parameters (v2.3)
+	MinP              *float64           `yaml:"min_p,omitempty" json:"min_p,omitempty"`
+	RepetitionPenalty *float64           `yaml:"repetition_penalty,omitempty" json:"repetition_penalty,omitempty"`
+	Seed              *int               `yaml:"seed,omitempty" json:"seed,omitempty"`
+	Logprobs          *int               `yaml:"logprobs,omitempty" json:"logprobs,omitempty"`
+	StopTokenIDs      []int              `yaml:"stop_token_ids,omitempty" json:"stop_token_ids,omitempty"`
+	LogitBias         map[string]float64 `yaml:"logit_bias,omitempty" json:"logit_bias,omitempty"`
+
 	// Extended thinking configuration (Anthropic)
 	Thinking *ThinkingConfig `yaml:"thinking,omitempty" json:"thinking,omitempty"`
 
@@ -68,6 +76,41 @@ func (e *ExecutionConfig) Validate() error {
 		return NewPromptValidationError("top_k must be non-negative", "")
 	}
 
+	// Validate min_p range if set
+	if e.MinP != nil {
+		if *e.MinP < 0.0 || *e.MinP > 1.0 {
+			return NewPromptValidationError(ErrMsgMinPOutOfRange, "")
+		}
+	}
+
+	// Validate repetition_penalty if set
+	if e.RepetitionPenalty != nil {
+		if *e.RepetitionPenalty <= 0.0 {
+			return NewPromptValidationError(ErrMsgRepetitionPenaltyOutOfRange, "")
+		}
+	}
+
+	// Validate logprobs range if set
+	if e.Logprobs != nil {
+		if *e.Logprobs < 0 || *e.Logprobs > 20 {
+			return NewPromptValidationError(ErrMsgLogprobsOutOfRange, "")
+		}
+	}
+
+	// Validate stop_token_ids if set
+	for _, id := range e.StopTokenIDs {
+		if id < 0 {
+			return NewPromptValidationError(ErrMsgStopTokenIDNegative, "")
+		}
+	}
+
+	// Validate logit_bias values if set
+	for _, v := range e.LogitBias {
+		if v < -100.0 || v > 100.0 {
+			return NewPromptValidationError(ErrMsgLogitBiasValueOutOfRange, "")
+		}
+	}
+
 	// Validate thinking config if set
 	if e.Thinking != nil && e.Thinking.Enabled {
 		if e.Thinking.BudgetTokens != nil && *e.Thinking.BudgetTokens <= 0 {
@@ -108,6 +151,33 @@ func (e *ExecutionConfig) Clone() *ExecutionConfig {
 	if e.StopSequences != nil {
 		clone.StopSequences = make([]string, len(e.StopSequences))
 		copy(clone.StopSequences, e.StopSequences)
+	}
+
+	if e.MinP != nil {
+		v := *e.MinP
+		clone.MinP = &v
+	}
+	if e.RepetitionPenalty != nil {
+		v := *e.RepetitionPenalty
+		clone.RepetitionPenalty = &v
+	}
+	if e.Seed != nil {
+		v := *e.Seed
+		clone.Seed = &v
+	}
+	if e.Logprobs != nil {
+		v := *e.Logprobs
+		clone.Logprobs = &v
+	}
+	if e.StopTokenIDs != nil {
+		clone.StopTokenIDs = make([]int, len(e.StopTokenIDs))
+		copy(clone.StopTokenIDs, e.StopTokenIDs)
+	}
+	if e.LogitBias != nil {
+		clone.LogitBias = make(map[string]float64, len(e.LogitBias))
+		for k, v := range e.LogitBias {
+			clone.LogitBias[k] = v
+		}
 	}
 
 	if e.Thinking != nil {
@@ -291,6 +361,84 @@ func (e *ExecutionConfig) HasGuidedDecoding() bool {
 	return e != nil && e.GuidedDecoding != nil
 }
 
+// GetMinP returns min_p and whether it was set.
+func (e *ExecutionConfig) GetMinP() (float64, bool) {
+	if e == nil || e.MinP == nil {
+		return 0, false
+	}
+	return *e.MinP, true
+}
+
+// HasMinP returns true if min_p is configured.
+func (e *ExecutionConfig) HasMinP() bool {
+	return e != nil && e.MinP != nil
+}
+
+// GetRepetitionPenalty returns repetition_penalty and whether it was set.
+func (e *ExecutionConfig) GetRepetitionPenalty() (float64, bool) {
+	if e == nil || e.RepetitionPenalty == nil {
+		return 0, false
+	}
+	return *e.RepetitionPenalty, true
+}
+
+// HasRepetitionPenalty returns true if repetition_penalty is configured.
+func (e *ExecutionConfig) HasRepetitionPenalty() bool {
+	return e != nil && e.RepetitionPenalty != nil
+}
+
+// GetSeed returns seed and whether it was set.
+func (e *ExecutionConfig) GetSeed() (int, bool) {
+	if e == nil || e.Seed == nil {
+		return 0, false
+	}
+	return *e.Seed, true
+}
+
+// HasSeed returns true if seed is configured.
+func (e *ExecutionConfig) HasSeed() bool {
+	return e != nil && e.Seed != nil
+}
+
+// GetLogprobs returns logprobs and whether it was set.
+func (e *ExecutionConfig) GetLogprobs() (int, bool) {
+	if e == nil || e.Logprobs == nil {
+		return 0, false
+	}
+	return *e.Logprobs, true
+}
+
+// HasLogprobs returns true if logprobs is configured.
+func (e *ExecutionConfig) HasLogprobs() bool {
+	return e != nil && e.Logprobs != nil
+}
+
+// GetStopTokenIDs returns stop_token_ids or nil.
+func (e *ExecutionConfig) GetStopTokenIDs() []int {
+	if e == nil {
+		return nil
+	}
+	return e.StopTokenIDs
+}
+
+// HasStopTokenIDs returns true if stop_token_ids is configured.
+func (e *ExecutionConfig) HasStopTokenIDs() bool {
+	return e != nil && len(e.StopTokenIDs) > 0
+}
+
+// GetLogitBias returns logit_bias or nil.
+func (e *ExecutionConfig) GetLogitBias() map[string]float64 {
+	if e == nil {
+		return nil
+	}
+	return e.LogitBias
+}
+
+// HasLogitBias returns true if logit_bias is configured.
+func (e *ExecutionConfig) HasLogitBias() bool {
+	return e != nil && len(e.LogitBias) > 0
+}
+
 // GetEffectiveProvider detects the intended provider from configuration.
 // Returns the explicit provider if set, otherwise infers from config shape or model name.
 func (e *ExecutionConfig) GetEffectiveProvider() string {
@@ -305,6 +453,9 @@ func (e *ExecutionConfig) GetEffectiveProvider() string {
 
 	// Infer from configuration shape
 	if e.GuidedDecoding != nil {
+		return ProviderVLLM
+	}
+	if e.MinP != nil || e.RepetitionPenalty != nil || len(e.StopTokenIDs) > 0 {
 		return ProviderVLLM
 	}
 	if e.Thinking != nil && e.Thinking.Enabled {
@@ -348,6 +499,24 @@ func (e *ExecutionConfig) ToMap() map[string]any {
 	if len(e.StopSequences) > 0 {
 		result[ParamKeyStop] = e.StopSequences
 	}
+	if e.MinP != nil {
+		result[ParamKeyMinP] = *e.MinP
+	}
+	if e.RepetitionPenalty != nil {
+		result[ParamKeyRepetitionPenalty] = *e.RepetitionPenalty
+	}
+	if e.Seed != nil {
+		result[ParamKeySeed] = *e.Seed
+	}
+	if e.Logprobs != nil {
+		result[ParamKeyLogprobs] = *e.Logprobs
+	}
+	if len(e.StopTokenIDs) > 0 {
+		result[ParamKeyStopTokenIDs] = e.StopTokenIDs
+	}
+	if len(e.LogitBias) > 0 {
+		result[ParamKeyLogitBias] = e.LogitBias
+	}
 
 	return result
 }
@@ -374,6 +543,17 @@ func (e *ExecutionConfig) ToOpenAI() map[string]any {
 	}
 	if len(e.StopSequences) > 0 {
 		result[ParamKeyStop] = e.StopSequences
+	}
+
+	if e.Seed != nil {
+		result[ParamKeySeed] = *e.Seed
+	}
+	if e.Logprobs != nil {
+		result[ParamKeyLogprobs] = true
+		result[ParamKeyTopLogprobs] = *e.Logprobs
+	}
+	if len(e.LogitBias) > 0 {
+		result[ParamKeyLogitBias] = e.LogitBias
 	}
 
 	if e.ResponseFormat != nil {
@@ -413,6 +593,9 @@ func (e *ExecutionConfig) ToAnthropic() map[string]any {
 	}
 	if len(e.StopSequences) > 0 {
 		result["stop_sequences"] = e.StopSequences
+	}
+	if e.Seed != nil {
+		result[ParamKeySeed] = *e.Seed
 	}
 
 	// Handle extended thinking
@@ -511,6 +694,24 @@ func (e *ExecutionConfig) ToVLLM() map[string]any {
 	}
 	if len(e.StopSequences) > 0 {
 		result[ParamKeyStop] = e.StopSequences
+	}
+	if e.MinP != nil {
+		result[ParamKeyMinP] = *e.MinP
+	}
+	if e.RepetitionPenalty != nil {
+		result[ParamKeyRepetitionPenalty] = *e.RepetitionPenalty
+	}
+	if e.Seed != nil {
+		result[ParamKeySeed] = *e.Seed
+	}
+	if e.Logprobs != nil {
+		result[ParamKeyLogprobs] = *e.Logprobs
+	}
+	if len(e.StopTokenIDs) > 0 {
+		result[ParamKeyStopTokenIDs] = e.StopTokenIDs
+	}
+	if len(e.LogitBias) > 0 {
+		result[ParamKeyLogitBias] = e.LogitBias
 	}
 
 	// Add guided decoding parameters
@@ -611,6 +812,22 @@ func (e *ExecutionConfig) Merge(other *ExecutionConfig) *ExecutionConfig {
 	if len(other.StopSequences) > 0 {
 		result.StopSequences = make([]string, len(other.StopSequences))
 		copy(result.StopSequences, other.StopSequences)
+	}
+
+	result.MinP = coalesceFloat64Ptr(other.MinP, result.MinP)
+	result.RepetitionPenalty = coalesceFloat64Ptr(other.RepetitionPenalty, result.RepetitionPenalty)
+	result.Seed = coalesceIntPtr(other.Seed, result.Seed)
+	result.Logprobs = coalesceIntPtr(other.Logprobs, result.Logprobs)
+
+	if len(other.StopTokenIDs) > 0 {
+		result.StopTokenIDs = make([]int, len(other.StopTokenIDs))
+		copy(result.StopTokenIDs, other.StopTokenIDs)
+	}
+	if len(other.LogitBias) > 0 {
+		result.LogitBias = make(map[string]float64, len(other.LogitBias))
+		for k, v := range other.LogitBias {
+			result.LogitBias[k] = v
+		}
 	}
 
 	if other.Thinking != nil {

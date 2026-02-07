@@ -142,6 +142,13 @@ const (
 	ErrMsgEnumEmptyValues            = "enum constraint requires at least one value"
 	ErrMsgGuidedDecodingConflict     = "only one guided decoding constraint allowed"
 
+	// Inference parameter validation messages (v2.3)
+	ErrMsgMinPOutOfRange              = "min_p must be between 0.0 and 1.0"
+	ErrMsgRepetitionPenaltyOutOfRange = "repetition_penalty must be greater than 0.0"
+	ErrMsgLogprobsOutOfRange          = "logprobs must be between 0 and 20"
+	ErrMsgStopTokenIDNegative         = "stop_token_ids values must be non-negative"
+	ErrMsgLogitBiasValueOutOfRange    = "logit_bias values must be between -100.0 and 100.0"
+
 	// v2.0 Prompt validation messages
 	ErrMsgPromptNameRequired        = "prompt name is required"
 	ErrMsgPromptNameTooLong         = "prompt name exceeds maximum length"

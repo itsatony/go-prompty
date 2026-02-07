@@ -338,7 +338,7 @@ messages:
 
 **Key v2.1 Types:**
 - `Prompt`: Full prompt configuration with document type, skills, tools, context, constraints, messages
-- `ExecutionConfig`: LLM execution parameters with `Merge()` for 3-layer precedence
+- `ExecutionConfig`: LLM execution parameters with `Merge()` for 3-layer precedence. Extended in v2.3 with `MinP`, `RepetitionPenalty`, `Seed`, `Logprobs`, `StopTokenIDs`, `LogitBias`
 - `SkopeConfig`: Platform integration fields
 - `SkillRef`: Skill reference with injection mode and execution overrides
 - `ToolsConfig`: Tool definitions with function defs and MCP servers
@@ -496,12 +496,40 @@ execution:
 ---
 ```
 
+**Extended Inference Parameters (v2.3):**
+```yaml
+---
+name: vllm-sampler
+execution:
+  provider: vllm
+  model: meta-llama/Llama-2-7b-hf
+  temperature: 0.8
+  min_p: 0.1
+  repetition_penalty: 1.2
+  seed: 42
+  logprobs: 5
+  stop_token_ids: [50256, 50257]
+  logit_bias:
+    "100": 5.0
+    "200": -10.0
+---
+```
+
+| Parameter | Type | Range | Providers |
+|-----------|------|-------|-----------|
+| `min_p` | `*float64` | [0.0, 1.0] | vLLM |
+| `repetition_penalty` | `*float64` | > 0.0 | vLLM |
+| `seed` | `*int` | any int | OpenAI, Anthropic, vLLM |
+| `logprobs` | `*int` | [0, 20] | OpenAI (dual-field), vLLM |
+| `stop_token_ids` | `[]int` | each >= 0 | vLLM |
+| `logit_bias` | `map[string]float64` | values [-100, 100] | OpenAI, vLLM |
+
 ### Provider Detection
 
 The `GetEffectiveProvider()` method on `ExecutionConfig` auto-detects the provider from:
 1. Explicit `provider` field
 2. Presence of `thinking` config or claude model name → Anthropic
-3. Presence of `guided_decoding` → vLLM
+3. Presence of `guided_decoding`, `min_p`, `repetition_penalty`, or `stop_token_ids` → vLLM
 4. Model name prefix (gpt-, claude-, gemini-)
 
 ### Provider Serialization

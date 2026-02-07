@@ -689,18 +689,24 @@ for _, msg := range messages {
 
 Parameters are set directly in the `execution:` block:
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `provider` | string | Provider: openai, anthropic, google, vllm, azure |
-| `model` | string | Model name (e.g., gpt-4, claude-3-sonnet) |
-| `temperature` | float | Sampling temperature (0.0-2.0) |
-| `max_tokens` | int | Maximum tokens to generate |
-| `top_p` | float | Nucleus sampling (0.0-1.0) |
-| `top_k` | int | Top-k sampling |
-| `stop_sequences` | []string | Stop sequences |
-| `response_format` | object | Structured output format |
-| `thinking` | object | Extended thinking (Anthropic) |
-| `guided_decoding` | object | Guided decoding (vLLM) |
+| Parameter | Type | Range | Providers | Description |
+|-----------|------|-------|-----------|-------------|
+| `provider` | string | — | all | Provider: openai, anthropic, google, vllm, azure |
+| `model` | string | — | all | Model name (e.g., gpt-4, claude-3-sonnet) |
+| `temperature` | float | [0.0, 2.0] | all | Sampling temperature |
+| `max_tokens` | int | > 0 | all | Maximum tokens to generate |
+| `top_p` | float | [0.0, 1.0] | all | Nucleus sampling |
+| `top_k` | int | >= 0 | all | Top-k sampling |
+| `stop_sequences` | []string | — | all | Stop sequences |
+| `min_p` | float | [0.0, 1.0] | vLLM | Minimum probability sampling |
+| `repetition_penalty` | float | > 0.0 | vLLM | Repetition penalty multiplier |
+| `seed` | int | any | OpenAI, Anthropic, vLLM | Deterministic sampling seed |
+| `logprobs` | int | [0, 20] | OpenAI, vLLM | Number of log probabilities to return |
+| `stop_token_ids` | []int | each >= 0 | vLLM | Token IDs that trigger stop |
+| `logit_bias` | map | values [-100, 100] | OpenAI, vLLM | Token logit bias adjustments |
+| `response_format` | object | — | all | Structured output format |
+| `thinking` | object | — | Anthropic | Extended thinking configuration |
+| `guided_decoding` | object | — | vLLM | Guided decoding constraints |
 
 **Legacy Reference:** See [docs/INFERENCE_CONFIG.md](docs/INFERENCE_CONFIG.md) for v1 configuration documentation (deprecated in v2.1).
 
@@ -1541,21 +1547,27 @@ func (p *Prompt) ExportToSkillMD(body string) (string, error)
 </details>
 
 <details>
-<summary><strong>ExecutionConfig (v2.1)</strong></summary>
+<summary><strong>ExecutionConfig (v2.3)</strong></summary>
 
 ```go
 type ExecutionConfig struct {
-    Provider       string              // openai, anthropic, google, vllm, azure
-    Model          string              // Model name
-    Temperature    *float64            // 0.0-2.0
-    MaxTokens      *int                // Max output tokens
-    TopP           *float64            // Nucleus sampling
-    TopK           *int                // Top-k sampling
-    StopSequences  []string            // Stop sequences
-    Thinking       *ThinkingConfig     // Claude extended thinking
-    ResponseFormat *ResponseFormat     // Structured output
-    GuidedDecoding *GuidedDecoding     // vLLM guided decoding
-    ProviderOptions map[string]any     // Provider-specific options
+    Provider          string              // openai, anthropic, google, vllm, azure
+    Model             string              // Model name
+    Temperature       *float64            // 0.0-2.0
+    MaxTokens         *int                // Max output tokens
+    TopP              *float64            // Nucleus sampling
+    TopK              *int                // Top-k sampling
+    StopSequences     []string            // Stop sequences
+    MinP              *float64            // v2.3: Min-p sampling [0.0, 1.0] (vLLM)
+    RepetitionPenalty *float64            // v2.3: Repetition penalty > 0.0 (vLLM)
+    Seed              *int                // v2.3: Deterministic seed (OpenAI, Anthropic, vLLM)
+    Logprobs          *int                // v2.3: Log probabilities [0, 20] (OpenAI, vLLM)
+    StopTokenIDs      []int               // v2.3: Stop token IDs (vLLM)
+    LogitBias         map[string]float64  // v2.3: Logit bias [-100, 100] (OpenAI, vLLM)
+    Thinking          *ThinkingConfig     // Claude extended thinking
+    ResponseFormat    *ResponseFormat     // Structured output
+    GuidedDecoding    *GuidedDecoding     // vLLM guided decoding
+    ProviderOptions   map[string]any      // Provider-specific options
 }
 
 func (c *ExecutionConfig) Validate() error
@@ -1563,6 +1575,12 @@ func (c *ExecutionConfig) Clone() *ExecutionConfig
 func (c *ExecutionConfig) Merge(other *ExecutionConfig) *ExecutionConfig  // v2.1: 3-layer precedence merge
 func (c *ExecutionConfig) GetTemperature() (float64, bool)
 func (c *ExecutionConfig) GetMaxTokens() (int, bool)
+func (c *ExecutionConfig) GetMinP() (float64, bool)                      // v2.3
+func (c *ExecutionConfig) GetRepetitionPenalty() (float64, bool)         // v2.3
+func (c *ExecutionConfig) GetSeed() (int, bool)                         // v2.3
+func (c *ExecutionConfig) GetLogprobs() (int, bool)                     // v2.3
+func (c *ExecutionConfig) GetStopTokenIDs() []int                       // v2.3
+func (c *ExecutionConfig) GetLogitBias() map[string]float64             // v2.3
 func (c *ExecutionConfig) HasThinking() bool
 func (c *ExecutionConfig) ToOpenAI() map[string]any
 func (c *ExecutionConfig) ToAnthropic() map[string]any

@@ -287,13 +287,19 @@ const (
 
 // Model parameter map keys (for ToMap conversion)
 const (
-	ParamKeyTemperature      = "temperature"
-	ParamKeyMaxTokens        = "max_tokens"
-	ParamKeyTopP             = "top_p"
-	ParamKeyFrequencyPenalty = "frequency_penalty"
-	ParamKeyPresencePenalty  = "presence_penalty"
-	ParamKeyStop             = "stop"
-	ParamKeySeed             = "seed"
+	ParamKeyTemperature        = "temperature"
+	ParamKeyMaxTokens          = "max_tokens"
+	ParamKeyTopP               = "top_p"
+	ParamKeyFrequencyPenalty   = "frequency_penalty"
+	ParamKeyPresencePenalty    = "presence_penalty"
+	ParamKeyStop               = "stop"
+	ParamKeySeed               = "seed"
+	ParamKeyMinP               = "min_p"
+	ParamKeyRepetitionPenalty  = "repetition_penalty"
+	ParamKeyLogprobs           = "logprobs"
+	ParamKeyTopLogprobs        = "top_logprobs"
+	ParamKeyStopTokenIDs       = "stop_token_ids"
+	ParamKeyLogitBias          = "logit_bias"
 )
 
 // Error format strings for type validation

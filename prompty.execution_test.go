@@ -688,6 +688,547 @@ func TestExecutionConfig_Merge_ResponseFormatOverride(t *testing.T) {
 	assert.Equal(t, "override_schema", result.ResponseFormat.JSONSchema.Name)
 }
 
+// v2.3 extended inference parameter tests
+
+func TestExecutionConfig_Validate_MinP(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+
+	tests := []struct {
+		name    string
+		config  *ExecutionConfig
+		wantErr bool
+	}{
+		{name: "min_p valid 0.0", config: &ExecutionConfig{MinP: f(0.0)}, wantErr: false},
+		{name: "min_p valid 0.5", config: &ExecutionConfig{MinP: f(0.5)}, wantErr: false},
+		{name: "min_p valid 1.0", config: &ExecutionConfig{MinP: f(1.0)}, wantErr: false},
+		{name: "min_p too low", config: &ExecutionConfig{MinP: f(-0.1)}, wantErr: true},
+		{name: "min_p too high", config: &ExecutionConfig{MinP: f(1.1)}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), ErrMsgMinPOutOfRange)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExecutionConfig_Validate_RepetitionPenalty(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+
+	tests := []struct {
+		name    string
+		config  *ExecutionConfig
+		wantErr bool
+	}{
+		{name: "valid 1.0", config: &ExecutionConfig{RepetitionPenalty: f(1.0)}, wantErr: false},
+		{name: "valid 2.5", config: &ExecutionConfig{RepetitionPenalty: f(2.5)}, wantErr: false},
+		{name: "valid 0.01", config: &ExecutionConfig{RepetitionPenalty: f(0.01)}, wantErr: false},
+		{name: "zero", config: &ExecutionConfig{RepetitionPenalty: f(0.0)}, wantErr: true},
+		{name: "negative", config: &ExecutionConfig{RepetitionPenalty: f(-1.0)}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), ErrMsgRepetitionPenaltyOutOfRange)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExecutionConfig_Validate_Seed(t *testing.T) {
+	i := func(v int) *int { return &v }
+
+	// Seed has no range restriction — any int is valid
+	tests := []struct {
+		name   string
+		config *ExecutionConfig
+	}{
+		{name: "positive", config: &ExecutionConfig{Seed: i(42)}},
+		{name: "zero", config: &ExecutionConfig{Seed: i(0)}},
+		{name: "negative", config: &ExecutionConfig{Seed: i(-1)}},
+		{name: "large", config: &ExecutionConfig{Seed: i(999999999)}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.NoError(t, tt.config.Validate())
+		})
+	}
+}
+
+func TestExecutionConfig_Validate_Logprobs(t *testing.T) {
+	i := func(v int) *int { return &v }
+
+	tests := []struct {
+		name    string
+		config  *ExecutionConfig
+		wantErr bool
+	}{
+		{name: "valid 0", config: &ExecutionConfig{Logprobs: i(0)}, wantErr: false},
+		{name: "valid 5", config: &ExecutionConfig{Logprobs: i(5)}, wantErr: false},
+		{name: "valid 20", config: &ExecutionConfig{Logprobs: i(20)}, wantErr: false},
+		{name: "negative", config: &ExecutionConfig{Logprobs: i(-1)}, wantErr: true},
+		{name: "too high", config: &ExecutionConfig{Logprobs: i(21)}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), ErrMsgLogprobsOutOfRange)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExecutionConfig_Validate_StopTokenIDs(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *ExecutionConfig
+		wantErr bool
+	}{
+		{name: "valid", config: &ExecutionConfig{StopTokenIDs: []int{0, 1, 50256}}, wantErr: false},
+		{name: "empty", config: &ExecutionConfig{StopTokenIDs: []int{}}, wantErr: false},
+		{name: "negative", config: &ExecutionConfig{StopTokenIDs: []int{100, -1}}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), ErrMsgStopTokenIDNegative)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExecutionConfig_Validate_LogitBias(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *ExecutionConfig
+		wantErr bool
+	}{
+		{name: "valid", config: &ExecutionConfig{LogitBias: map[string]float64{"100": 5.0, "200": -5.0}}, wantErr: false},
+		{name: "boundary low", config: &ExecutionConfig{LogitBias: map[string]float64{"1": -100.0}}, wantErr: false},
+		{name: "boundary high", config: &ExecutionConfig{LogitBias: map[string]float64{"1": 100.0}}, wantErr: false},
+		{name: "too low", config: &ExecutionConfig{LogitBias: map[string]float64{"1": -100.1}}, wantErr: true},
+		{name: "too high", config: &ExecutionConfig{LogitBias: map[string]float64{"1": 100.1}}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), ErrMsgLogitBiasValueOutOfRange)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExecutionConfig_Clone_ExtendedParams(t *testing.T) {
+	minP := 0.1
+	repPen := 1.2
+	seed := 42
+	logprobs := 5
+
+	original := &ExecutionConfig{
+		MinP:              &minP,
+		RepetitionPenalty: &repPen,
+		Seed:              &seed,
+		Logprobs:          &logprobs,
+		StopTokenIDs:      []int{50256, 50257},
+		LogitBias:         map[string]float64{"100": 5.0, "200": -10.0},
+	}
+
+	clone := original.Clone()
+
+	// Verify equality
+	assert.Equal(t, *original.MinP, *clone.MinP)
+	assert.Equal(t, *original.RepetitionPenalty, *clone.RepetitionPenalty)
+	assert.Equal(t, *original.Seed, *clone.Seed)
+	assert.Equal(t, *original.Logprobs, *clone.Logprobs)
+	assert.Equal(t, original.StopTokenIDs, clone.StopTokenIDs)
+	assert.Equal(t, original.LogitBias, clone.LogitBias)
+
+	// Verify deep copy independence
+	*clone.MinP = 0.9
+	assert.NotEqual(t, *original.MinP, *clone.MinP)
+
+	*clone.Seed = 999
+	assert.NotEqual(t, *original.Seed, *clone.Seed)
+
+	clone.StopTokenIDs[0] = 12345
+	assert.NotEqual(t, original.StopTokenIDs[0], clone.StopTokenIDs[0])
+
+	clone.LogitBias["100"] = 99.0
+	assert.NotEqual(t, original.LogitBias["100"], clone.LogitBias["100"])
+}
+
+func TestExecutionConfig_Getters_ExtendedParams(t *testing.T) {
+	minP := 0.1
+	repPen := 1.5
+	seed := 42
+	logprobs := 5
+
+	config := &ExecutionConfig{
+		MinP:              &minP,
+		RepetitionPenalty: &repPen,
+		Seed:              &seed,
+		Logprobs:          &logprobs,
+		StopTokenIDs:      []int{50256},
+		LogitBias:         map[string]float64{"100": 5.0},
+	}
+
+	gotMinP, ok := config.GetMinP()
+	assert.True(t, ok)
+	assert.Equal(t, 0.1, gotMinP)
+	assert.True(t, config.HasMinP())
+
+	gotRepPen, ok := config.GetRepetitionPenalty()
+	assert.True(t, ok)
+	assert.Equal(t, 1.5, gotRepPen)
+	assert.True(t, config.HasRepetitionPenalty())
+
+	gotSeed, ok := config.GetSeed()
+	assert.True(t, ok)
+	assert.Equal(t, 42, gotSeed)
+	assert.True(t, config.HasSeed())
+
+	gotLogprobs, ok := config.GetLogprobs()
+	assert.True(t, ok)
+	assert.Equal(t, 5, gotLogprobs)
+	assert.True(t, config.HasLogprobs())
+
+	assert.Equal(t, []int{50256}, config.GetStopTokenIDs())
+	assert.True(t, config.HasStopTokenIDs())
+
+	assert.Equal(t, map[string]float64{"100": 5.0}, config.GetLogitBias())
+	assert.True(t, config.HasLogitBias())
+
+	// nil config
+	var nilConfig *ExecutionConfig
+	_, ok = nilConfig.GetMinP()
+	assert.False(t, ok)
+	assert.False(t, nilConfig.HasMinP())
+	_, ok = nilConfig.GetRepetitionPenalty()
+	assert.False(t, ok)
+	_, ok = nilConfig.GetSeed()
+	assert.False(t, ok)
+	_, ok = nilConfig.GetLogprobs()
+	assert.False(t, ok)
+	assert.Nil(t, nilConfig.GetStopTokenIDs())
+	assert.False(t, nilConfig.HasStopTokenIDs())
+	assert.Nil(t, nilConfig.GetLogitBias())
+	assert.False(t, nilConfig.HasLogitBias())
+}
+
+func TestExecutionConfig_GetEffectiveProvider_VLLMHints(t *testing.T) {
+	minP := 0.1
+	repPen := 1.2
+
+	tests := []struct {
+		name   string
+		config *ExecutionConfig
+		want   string
+	}{
+		{
+			name:   "min_p hints vllm",
+			config: &ExecutionConfig{MinP: &minP},
+			want:   ProviderVLLM,
+		},
+		{
+			name:   "repetition_penalty hints vllm",
+			config: &ExecutionConfig{RepetitionPenalty: &repPen},
+			want:   ProviderVLLM,
+		},
+		{
+			name:   "stop_token_ids hints vllm",
+			config: &ExecutionConfig{StopTokenIDs: []int{50256}},
+			want:   ProviderVLLM,
+		},
+		{
+			name:   "seed does not hint (cross-provider)",
+			config: &ExecutionConfig{Seed: func() *int { v := 42; return &v }()},
+			want:   "",
+		},
+		{
+			name:   "logprobs does not hint (cross-provider)",
+			config: &ExecutionConfig{Logprobs: func() *int { v := 5; return &v }()},
+			want:   "",
+		},
+		{
+			name:   "logit_bias does not hint (cross-provider)",
+			config: &ExecutionConfig{LogitBias: map[string]float64{"100": 5.0}},
+			want:   "",
+		},
+		{
+			name:   "explicit provider overrides vllm hint",
+			config: &ExecutionConfig{Provider: "openai", MinP: &minP},
+			want:   "openai",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.config.GetEffectiveProvider())
+		})
+	}
+}
+
+func TestExecutionConfig_ToOpenAI_ExtendedParams(t *testing.T) {
+	seed := 42
+	logprobs := 5
+	logprobsZero := 0
+
+	t.Run("seed and logprobs and logit_bias", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model:     "gpt-4",
+			Seed:      &seed,
+			Logprobs:  &logprobs,
+			LogitBias: map[string]float64{"100": 5.0, "200": -10.0},
+		}
+
+		result := config.ToOpenAI()
+
+		assert.Equal(t, 42, result[ParamKeySeed])
+		// OpenAI uses dual fields: logprobs=true + top_logprobs=N
+		assert.Equal(t, true, result[ParamKeyLogprobs])
+		assert.Equal(t, 5, result[ParamKeyTopLogprobs])
+		assert.Equal(t, map[string]float64{"100": 5.0, "200": -10.0}, result[ParamKeyLogitBias])
+	})
+
+	t.Run("logprobs zero still emits dual fields", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Logprobs: &logprobsZero,
+		}
+
+		result := config.ToOpenAI()
+
+		assert.Equal(t, true, result[ParamKeyLogprobs])
+		assert.Equal(t, 0, result[ParamKeyTopLogprobs])
+	})
+
+	t.Run("vllm-only params not emitted", func(t *testing.T) {
+		minP := 0.1
+		repPen := 1.2
+		config := &ExecutionConfig{
+			MinP:              &minP,
+			RepetitionPenalty: &repPen,
+			StopTokenIDs:      []int{50256},
+		}
+
+		result := config.ToOpenAI()
+
+		_, hasMinP := result[ParamKeyMinP]
+		_, hasRepPen := result[ParamKeyRepetitionPenalty]
+		_, hasStopTokenIDs := result[ParamKeyStopTokenIDs]
+		assert.False(t, hasMinP)
+		assert.False(t, hasRepPen)
+		assert.False(t, hasStopTokenIDs)
+	})
+}
+
+func TestExecutionConfig_ToAnthropic_ExtendedParams(t *testing.T) {
+	seed := 42
+	minP := 0.1
+	logprobs := 5
+
+	config := &ExecutionConfig{
+		Model:    "claude-3-opus",
+		Seed:     &seed,
+		MinP:     &minP,
+		Logprobs: &logprobs,
+		LogitBias: map[string]float64{"100": 5.0},
+		StopTokenIDs: []int{50256},
+	}
+
+	result := config.ToAnthropic()
+
+	// Seed is supported
+	assert.Equal(t, 42, result[ParamKeySeed])
+
+	// Others should not be present
+	_, hasMinP := result[ParamKeyMinP]
+	_, hasLogprobs := result[ParamKeyLogprobs]
+	_, hasLogitBias := result[ParamKeyLogitBias]
+	_, hasStopTokenIDs := result[ParamKeyStopTokenIDs]
+	assert.False(t, hasMinP)
+	assert.False(t, hasLogprobs)
+	assert.False(t, hasLogitBias)
+	assert.False(t, hasStopTokenIDs)
+}
+
+func TestExecutionConfig_ToVLLM_ExtendedParams(t *testing.T) {
+	minP := 0.1
+	repPen := 1.2
+	seed := 42
+	logprobs := 5
+
+	config := &ExecutionConfig{
+		Model:             "llama-2-7b",
+		MinP:              &minP,
+		RepetitionPenalty: &repPen,
+		Seed:              &seed,
+		Logprobs:          &logprobs,
+		StopTokenIDs:      []int{50256, 50257},
+		LogitBias:         map[string]float64{"100": 5.0},
+	}
+
+	result := config.ToVLLM()
+
+	assert.Equal(t, 0.1, result[ParamKeyMinP])
+	assert.Equal(t, 1.2, result[ParamKeyRepetitionPenalty])
+	assert.Equal(t, 42, result[ParamKeySeed])
+	assert.Equal(t, 5, result[ParamKeyLogprobs])
+	assert.Equal(t, []int{50256, 50257}, result[ParamKeyStopTokenIDs])
+	assert.Equal(t, map[string]float64{"100": 5.0}, result[ParamKeyLogitBias])
+}
+
+func TestExecutionConfig_ToMap_ExtendedParams(t *testing.T) {
+	minP := 0.1
+	repPen := 1.2
+	seed := 42
+	logprobs := 5
+
+	config := &ExecutionConfig{
+		MinP:              &minP,
+		RepetitionPenalty: &repPen,
+		Seed:              &seed,
+		Logprobs:          &logprobs,
+		StopTokenIDs:      []int{50256},
+		LogitBias:         map[string]float64{"100": 5.0},
+	}
+
+	m := config.ToMap()
+
+	assert.Equal(t, 0.1, m[ParamKeyMinP])
+	assert.Equal(t, 1.2, m[ParamKeyRepetitionPenalty])
+	assert.Equal(t, 42, m[ParamKeySeed])
+	assert.Equal(t, 5, m[ParamKeyLogprobs])
+	assert.Equal(t, []int{50256}, m[ParamKeyStopTokenIDs])
+	assert.Equal(t, map[string]float64{"100": 5.0}, m[ParamKeyLogitBias])
+}
+
+func TestExecutionConfig_Merge_ExtendedParams(t *testing.T) {
+	t.Run("pointer override", func(t *testing.T) {
+		baseMinP := 0.1
+		baseSeed := 42
+		base := &ExecutionConfig{
+			MinP: &baseMinP,
+			Seed: &baseSeed,
+		}
+
+		overrideMinP := 0.5
+		override := &ExecutionConfig{
+			MinP: &overrideMinP,
+		}
+
+		result := base.Merge(override)
+		assert.Equal(t, 0.5, *result.MinP)
+		assert.Equal(t, 42, *result.Seed)
+	})
+
+	t.Run("stop_token_ids replacement", func(t *testing.T) {
+		base := &ExecutionConfig{
+			StopTokenIDs: []int{1, 2, 3},
+		}
+		override := &ExecutionConfig{
+			StopTokenIDs: []int{50256},
+		}
+
+		result := base.Merge(override)
+		assert.Equal(t, []int{50256}, result.StopTokenIDs)
+
+		// Verify deep copy
+		result.StopTokenIDs[0] = 99999
+		assert.Equal(t, 50256, override.StopTokenIDs[0])
+	})
+
+	t.Run("logit_bias full replacement", func(t *testing.T) {
+		base := &ExecutionConfig{
+			LogitBias: map[string]float64{"100": 5.0, "200": -10.0},
+		}
+		override := &ExecutionConfig{
+			LogitBias: map[string]float64{"300": 50.0},
+		}
+
+		result := base.Merge(override)
+		// LogitBias is fully replaced, not key-merged
+		assert.Equal(t, map[string]float64{"300": 50.0}, result.LogitBias)
+
+		// Verify deep copy
+		result.LogitBias["300"] = 99.0
+		assert.Equal(t, 50.0, override.LogitBias["300"])
+	})
+
+	t.Run("nil override keeps base", func(t *testing.T) {
+		baseRepPen := 1.5
+		baseLogprobs := 10
+		base := &ExecutionConfig{
+			RepetitionPenalty: &baseRepPen,
+			Logprobs:          &baseLogprobs,
+			StopTokenIDs:      []int{1, 2},
+			LogitBias:         map[string]float64{"100": 5.0},
+		}
+		override := &ExecutionConfig{}
+
+		result := base.Merge(override)
+		assert.Equal(t, 1.5, *result.RepetitionPenalty)
+		assert.Equal(t, 10, *result.Logprobs)
+		assert.Equal(t, []int{1, 2}, result.StopTokenIDs)
+		assert.Equal(t, map[string]float64{"100": 5.0}, result.LogitBias)
+	})
+}
+
+func TestExecutionConfig_ToGemini_NoExtendedParams(t *testing.T) {
+	seed := 42
+	logprobs := 5
+	minP := 0.1
+
+	config := &ExecutionConfig{
+		Model:    "gemini-pro",
+		Seed:     &seed,
+		Logprobs: &logprobs,
+		MinP:     &minP,
+	}
+
+	result := config.ToGemini()
+
+	// None of the extended params should appear in Gemini output
+	genConfig, ok := result["generationConfig"]
+	if ok {
+		gc := genConfig.(map[string]any)
+		_, hasSeed := gc[ParamKeySeed]
+		_, hasLogprobs := gc[ParamKeyLogprobs]
+		_, hasMinP := gc[ParamKeyMinP]
+		assert.False(t, hasSeed)
+		assert.False(t, hasLogprobs)
+		assert.False(t, hasMinP)
+	}
+	_, hasSeed := result[ParamKeySeed]
+	assert.False(t, hasSeed)
+}
+
 func TestExecutionConfig_JSONAndYAML(t *testing.T) {
 	temp := 0.7
 	config := &ExecutionConfig{
