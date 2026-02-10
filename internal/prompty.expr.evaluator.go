@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -76,10 +77,10 @@ func (e *ExprEvaluator) checkContext() error {
 	select {
 	case <-e.evalCtx.Done():
 		err := e.evalCtx.Err()
-		if err == context.Canceled {
+		if errors.Is(err, context.Canceled) {
 			return NewExprEvalError(ErrMsgExprCancelled, "")
 		}
-		if err == context.DeadlineExceeded {
+		if errors.Is(err, context.DeadlineExceeded) {
 			return NewExprEvalError(ErrMsgExprTimeout, "")
 		}
 		return NewExprEvalError(ErrMsgExprContextDone, err.Error())

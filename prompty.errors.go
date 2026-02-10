@@ -424,34 +424,34 @@ func NewMessageTagError(msg string, tagPos Position) error {
 func NewLabelNotFoundError(templateName, label string) error {
 	return cuserr.NewNotFoundError(ErrCodeLabel, ErrMsgLabelNotFound).
 		WithMetadata(MetaKeyTemplateName, templateName).
-		WithMetadata("label", label)
+		WithMetadata(MetaKeyLabel, label)
 }
 
 // NewInvalidLabelNameError creates an error for invalid label name.
 func NewInvalidLabelNameError(label, reason string) error {
 	return cuserr.NewValidationError(ErrCodeLabel, ErrMsgInvalidLabelName).
-		WithMetadata("label", label).
+		WithMetadata(MetaKeyLabel, label).
 		WithMetadata(MetaKeyReason, reason)
 }
 
 // NewInvalidStatusTransitionError creates an error for invalid status transition.
 func NewInvalidStatusTransitionError(from, to DeploymentStatus) error {
 	return cuserr.NewValidationError(ErrCodeStatus, ErrMsgStatusTransitionDenied).
-		WithMetadata("from_status", string(from)).
-		WithMetadata("to_status", string(to))
+		WithMetadata(MetaKeyFromStatus, string(from)).
+		WithMetadata(MetaKeyToStatus, string(to))
 }
 
 // NewArchivedVersionError creates an error for operations on archived versions.
 func NewArchivedVersionError(templateName string, version int) error {
 	return cuserr.NewValidationError(ErrCodeStatus, ErrMsgArchivedVersionReadOnly).
 		WithMetadata(MetaKeyTemplateName, templateName).
-		WithMetadata("version", strconv.Itoa(version))
+		WithMetadata(MetaKeyVersion, strconv.Itoa(version))
 }
 
 // NewInvalidDeploymentStatusError creates an error for invalid deployment status value.
 func NewInvalidDeploymentStatusError(status string) error {
 	return cuserr.NewValidationError(ErrCodeStatus, ErrMsgInvalidDeploymentStatus).
-		WithMetadata("status", status)
+		WithMetadata(MetaKeyStatus, status)
 }
 
 // NewSchemaValidationError creates an error for schema validation failures.
@@ -463,7 +463,7 @@ func NewSchemaValidationError(msg, path string) error {
 // NewSchemaProviderError creates an error for provider-specific schema issues.
 func NewSchemaProviderError(msg, provider string) error {
 	return cuserr.NewValidationError(ErrCodeSchema, msg).
-		WithMetadata("provider", provider)
+		WithMetadata(MetaKeyProvider, provider)
 }
 
 // NewPromptValidationError creates an error for prompt validation failures.
@@ -603,7 +603,7 @@ func NewCompileBodyError(cause error) error {
 // NewProviderMessageError creates an error for unsupported provider in message serialization.
 func NewProviderMessageError(provider string) error {
 	return cuserr.NewValidationError(ErrCodeCompile, ErrMsgUnsupportedMsgProvider).
-		WithMetadata("provider", provider)
+		WithMetadata(MetaKeyProvider, provider)
 }
 
 // NewInvalidDocumentTypeError creates an error for invalid document type.

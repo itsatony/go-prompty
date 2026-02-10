@@ -70,7 +70,10 @@ func (i *InheritanceInfo) GetBlock(name string) (*BlockNode, bool) {
 // AddBlock adds a block to the inheritance info
 func (i *InheritanceInfo) AddBlock(block *BlockNode) error {
 	if i.Blocks[block.Name] != nil {
-		return fmt.Errorf("%s: %s", ErrMsgBlockDuplicateName, block.Name)
+		return &ParserError{
+			Message:  ErrMsgBlockDuplicateName + ": " + block.Name,
+			Position: block.pos,
+		}
 	}
 	i.Blocks[block.Name] = block
 	return nil
@@ -149,31 +152,31 @@ func ExtractInheritanceInfo(root *RootNode) (*InheritanceInfo, error) {
 			if node.Name == TagNameExtends {
 				// Check if extends is first significant tag
 				if foundExtends {
-					return nil, fmt.Errorf("%s at %s", ErrMsgExtendsMultiple, node.Pos())
+					return nil, &ParserError{Message: ErrMsgExtendsMultiple, Position: node.Pos()}
 				}
 
 				// Extends should be first or preceded only by text/whitespace
 				if !isFirstSignificantNode(root.Children[:i]) {
-					return nil, fmt.Errorf("%s at %s", ErrMsgExtendsNotFirst, node.Pos())
+					return nil, &ParserError{Message: ErrMsgExtendsNotFirst, Position: node.Pos()}
 				}
 
 				templateName, ok := node.Attributes.Get(AttrTemplate)
 				if !ok {
-					return nil, fmt.Errorf("%s at %s", ErrMsgExtendsMissingTemplate, node.Pos())
+					return nil, &ParserError{Message: ErrMsgExtendsMissingTemplate, Position: node.Pos()}
 				}
 
 				foundExtends = true
 				inheritanceInfo = NewInheritanceInfo(templateName, node.Pos())
 			} else if node.Name == TagNameParent && inheritanceInfo == nil {
 				// Parent tag found outside of inheritance context
-				return nil, fmt.Errorf("%s at %s", ErrMsgParentOutsideBlock, node.Pos())
+				return nil, &ParserError{Message: ErrMsgParentOutsideBlock, Position: node.Pos()}
 			}
 
 		case *BlockNode:
 			// Collect blocks
 			if inheritanceInfo != nil {
 				if err := inheritanceInfo.AddBlock(node); err != nil {
-					return nil, fmt.Errorf("%s at %s", err.Error(), node.Pos())
+					return nil, err
 				}
 			}
 		}

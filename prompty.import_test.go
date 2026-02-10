@@ -88,10 +88,11 @@ func TestImport_ZipNoDocument(t *testing.T) {
 	var buf bytes.Buffer
 	w := zip.NewWriter(&buf)
 	f, _ := w.Create("readme.txt")
-	f.Write([]byte("not a skill"))
+	_, err := f.Write([]byte("not a skill"))
+	require.NoError(t, err)
 	w.Close()
 
-	_, err := Import(buf.Bytes(), "package.zip")
+	_, err = Import(buf.Bytes(), "package.zip")
 	require.Error(t, err)
 }
 
@@ -120,7 +121,8 @@ type: agent
 Agent body here.`
 
 	f, _ := w.Create("AGENT.md")
-	f.Write([]byte(doc))
+	_, err := f.Write([]byte(doc))
+	require.NoError(t, err)
 	w.Close()
 
 	result, err := ImportDirectory(buf.Bytes())

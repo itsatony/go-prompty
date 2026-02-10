@@ -194,6 +194,12 @@ const (
 	MetaKeyPromptSlug   = "prompt_slug"     // v2.0: Prompt slug for reference errors
 	MetaKeyPromptName   = "prompt_name"     // v2.0: Prompt name for validation errors
 	MetaKeyRefChain     = "reference_chain" // v2.0: Reference chain for circular detection
+	MetaKeyLabel        = "label"           // Label name for label operations
+	MetaKeyFromStatus   = "from_status"     // Source status in transitions
+	MetaKeyToStatus     = "to_status"       // Target status in transitions
+	MetaKeyVersion      = "version"         // Version number
+	MetaKeyStatus       = "status"          // Deployment status value
+	MetaKeyProvider     = "provider"        // LLM provider name
 )
 
 // Escape sequence constants
@@ -480,10 +486,14 @@ const (
 	ErrMsgPostgresTransactionFailed = "PostgreSQL transaction failed"
 	ErrMsgPostgresScanFailed        = "failed to scan PostgreSQL result"
 	ErrMsgPostgresMarshalFailed     = "failed to marshal data for PostgreSQL"
-	ErrMsgPostgresUnmarshalFailed   = "failed to unmarshal PostgreSQL data"
-	ErrMsgPostgresMigrationFailed   = "PostgreSQL migration failed"
-	ErrMsgPostgresEmptyConnString   = "PostgreSQL connection string is empty"
-	ErrMsgPostgresAlreadyClosed     = "PostgreSQL storage is already closed"
+	ErrMsgPostgresUnmarshalFailed       = "failed to unmarshal PostgreSQL data"
+	ErrMsgPostgresUnmarshalMetadata     = "failed to unmarshal PostgreSQL metadata"
+	ErrMsgPostgresUnmarshalPromptConfig = "failed to unmarshal PostgreSQL prompt config"
+	ErrMsgPostgresUnmarshalTags         = "failed to unmarshal PostgreSQL tags"
+	ErrMsgPostgresMigrationFailed       = "PostgreSQL migration failed"
+	ErrMsgPostgresCloseAfterError       = "PostgreSQL close failed after error"
+	ErrMsgPostgresEmptyConnString       = "PostgreSQL connection string is empty"
+	ErrMsgPostgresAlreadyClosed         = "PostgreSQL storage is already closed"
 )
 
 // Access control message formats

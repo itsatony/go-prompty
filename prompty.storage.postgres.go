@@ -136,7 +136,7 @@ func NewPostgresStorage(config PostgresConfig) (*PostgresStorage, error) {
 			Cause:   err,
 		}
 		if closeErr != nil {
-			storageErr.Cause = fmt.Errorf("%w (close error: %v)", err, closeErr)
+			storageErr.Cause = errors.Join(err, closeErr)
 		}
 		return nil, storageErr
 	}
@@ -150,7 +150,10 @@ func NewPostgresStorage(config PostgresConfig) (*PostgresStorage, error) {
 	if config.AutoMigrate {
 		if err := storage.RunMigrations(ctx); err != nil {
 			if closeErr := db.Close(); closeErr != nil {
-				return nil, fmt.Errorf("%w (close error: %v)", err, closeErr)
+				return nil, &StorageError{
+					Message: ErrMsgPostgresCloseAfterError,
+					Cause:   errors.Join(err, closeErr),
+				}
 			}
 			return nil, err
 		}
@@ -808,7 +811,8 @@ func (s *PostgresStorage) RunMigrations(ctx context.Context) error {
 			_ = tx.Rollback()
 			return &StorageError{
 				Message: ErrMsgPostgresMigrationFailed,
-				Cause:   fmt.Errorf("migration %d failed: %w", m.Version, err),
+				Cause:   err,
+				Version: m.Version,
 			}
 		}
 
@@ -1068,7 +1072,10 @@ func (s *PostgresStorage) unmarshalTemplate(id, name, source string, version int
 	// Unmarshal metadata
 	if len(metadataJSON) > 0 && string(metadataJSON) != "null" {
 		if err := json.Unmarshal(metadataJSON, &tmpl.Metadata); err != nil {
-			return nil, fmt.Errorf("%s: metadata: %w", ErrMsgPostgresUnmarshalFailed, err)
+			return nil, &StorageError{
+				Message: ErrMsgPostgresUnmarshalMetadata,
+				Cause:   err,
+			}
 		}
 	}
 
@@ -1076,7 +1083,10 @@ func (s *PostgresStorage) unmarshalTemplate(id, name, source string, version int
 	if promptConfigJSONStr.Valid && promptConfigJSONStr.String != "" && promptConfigJSONStr.String != "null" {
 		var cfg Prompt
 		if err := json.Unmarshal([]byte(promptConfigJSONStr.String), &cfg); err != nil {
-			return nil, fmt.Errorf("%s: prompt_config: %w", ErrMsgPostgresUnmarshalFailed, err)
+			return nil, &StorageError{
+				Message: ErrMsgPostgresUnmarshalPromptConfig,
+				Cause:   err,
+			}
 		}
 		tmpl.PromptConfig = &cfg
 	}
@@ -1084,7 +1094,10 @@ func (s *PostgresStorage) unmarshalTemplate(id, name, source string, version int
 	// Unmarshal tags
 	if len(tagsJSON) > 0 && string(tagsJSON) != "null" {
 		if err := json.Unmarshal(tagsJSON, &tmpl.Tags); err != nil {
-			return nil, fmt.Errorf("%s: tags: %w", ErrMsgPostgresUnmarshalFailed, err)
+			return nil, &StorageError{
+				Message: ErrMsgPostgresUnmarshalTags,
+				Cause:   err,
+			}
 		}
 	}
 
