@@ -63,10 +63,10 @@ func ExportSkillDirectory(prompt *Prompt, resources map[string][]byte) ([]byte, 
 func documentFilename(dt DocumentType) string {
 	switch dt {
 	case DocumentTypeAgent:
-		return "AGENT.md"
+		return DocumentFilenameAgent
 	case DocumentTypePrompt:
-		return "PROMPT.md"
+		return DocumentFilenamePrompt
 	default:
-		return "SKILL.md"
+		return DocumentFilenameSkill
 	}
 }

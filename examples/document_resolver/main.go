@@ -47,7 +47,7 @@ func main() {
 		Type:        prompty.DocumentTypeSkill,
 		Body:        "Analyze the sentiment of the provided text. Classify as positive, negative, or neutral.",
 		Execution: &prompty.ExecutionConfig{
-			Provider:    "openai",
+			Provider:    prompty.ProviderOpenAI,
 			Model:       "gpt-4",
 			Temperature: floatPtr(0.1),
 		},

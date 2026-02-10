@@ -117,7 +117,7 @@ func TestPrompt_Validate(t *testing.T) {
 					"author": "test",
 				},
 				Execution: &ExecutionConfig{
-					Provider: "openai",
+					Provider: ProviderOpenAI,
 					Model:    "gpt-4",
 				},
 				Skope: &SkopeConfig{
@@ -244,7 +244,7 @@ sample:
 					"author": "test",
 				},
 				Execution: &ExecutionConfig{
-					Provider: "openai",
+					Provider: ProviderOpenAI,
 					Model:    "gpt-4",
 				},
 				Skope: &SkopeConfig{
@@ -301,7 +301,7 @@ func TestPrompt_Clone(t *testing.T) {
 			"author": "test",
 		},
 		Execution: &ExecutionConfig{
-			Provider: "openai",
+			Provider: ProviderOpenAI,
 			Model:    "gpt-4",
 		},
 		Skope: &SkopeConfig{
@@ -344,7 +344,7 @@ func TestPrompt_Getters(t *testing.T) {
 			"author": "test",
 		},
 		Execution: &ExecutionConfig{
-			Provider: "openai",
+			Provider: ProviderOpenAI,
 		},
 		Skope: &SkopeConfig{
 			Slug: "test-slug",
@@ -564,7 +564,7 @@ func TestPrompt_StripExtensions(t *testing.T) {
 		Name:        "test",
 		Description: "test",
 		License:     "MIT",
-		Execution:   &ExecutionConfig{Provider: "openai"},
+		Execution:   &ExecutionConfig{Provider: ProviderOpenAI},
 		Skope:       &SkopeConfig{Visibility: "public"},
 	}
 
@@ -593,7 +593,7 @@ func TestPrompt_ValidateAsAgent(t *testing.T) {
 				Description: "A test agent",
 				Type:        DocumentTypeAgent,
 				Execution: &ExecutionConfig{
-					Provider: "openai",
+					Provider: ProviderOpenAI,
 					Model:    "gpt-4",
 				},
 				Body: "You are a helpful assistant.",
@@ -607,7 +607,7 @@ func TestPrompt_ValidateAsAgent(t *testing.T) {
 				Description: "A test agent",
 				Type:        DocumentTypeAgent,
 				Execution: &ExecutionConfig{
-					Provider: "anthropic",
+					Provider: ProviderAnthropic,
 					Model:    "claude-sonnet-4-5",
 				},
 				Messages: []MessageTemplate{
@@ -623,7 +623,7 @@ func TestPrompt_ValidateAsAgent(t *testing.T) {
 				Description: "A skill",
 				Type:        DocumentTypeSkill,
 				Execution: &ExecutionConfig{
-					Provider: "openai",
+					Provider: ProviderOpenAI,
 					Model:    "gpt-4",
 				},
 				Body: "Body.",
@@ -663,7 +663,7 @@ func TestPrompt_ValidateAsAgent(t *testing.T) {
 				Description: "An agent without model",
 				Type:        DocumentTypeAgent,
 				Execution: &ExecutionConfig{
-					Provider: "openai",
+					Provider: ProviderOpenAI,
 				},
 				Body: "Body.",
 			},
@@ -677,7 +677,7 @@ func TestPrompt_ValidateAsAgent(t *testing.T) {
 				Description: "An agent with nothing",
 				Type:        DocumentTypeAgent,
 				Execution: &ExecutionConfig{
-					Provider: "openai",
+					Provider: ProviderOpenAI,
 					Model:    "gpt-4",
 				},
 			},

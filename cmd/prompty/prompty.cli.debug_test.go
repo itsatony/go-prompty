@@ -40,7 +40,7 @@ func TestDebug_WithDataFile(t *testing.T) {
 	defer os.Remove(tmpTemplate)
 
 	tmpData := filepath.Join(os.TempDir(), "test_data.json")
-	err := os.WriteFile(tmpData, []byte(`{"userName":"Bob"}`), 0644)
+	err := os.WriteFile(tmpData, []byte(`{"userName":"Bob"}`), FilePermissions)
 	require.NoError(t, err)
 	defer os.Remove(tmpData)
 
@@ -309,7 +309,7 @@ func createDebugTempFile(t *testing.T, content string) string {
 	t.Helper()
 	tmpDir := os.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test_debug_template.txt")
-	err := os.WriteFile(tmpFile, []byte(content), 0644)
+	err := os.WriteFile(tmpFile, []byte(content), FilePermissions)
 	require.NoError(t, err)
 	return tmpFile
 }

@@ -257,7 +257,7 @@ func main() {
 	cachedStorage := prompty.NewCachedStorage(prompty.NewMemoryStorage(), prompty.CacheConfig{
 		TTL:              1 * time.Hour,
 		MaxEntries:       100,
-		NegativeCacheTTL: 30 * time.Second,
+		NegativeCacheTTL: prompty.DefaultNegativeCacheTTL,
 	})
 	defer cachedStorage.Close()
 

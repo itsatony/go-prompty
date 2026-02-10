@@ -627,7 +627,7 @@ func TestParser_BlockTagWithAttributes(t *testing.T) {
 
 	role, ok := tagNode.Attributes.Get("role")
 	assert.True(t, ok)
-	assert.Equal(t, "system", role)
+	assert.Equal(t, RoleSystem, role)
 
 	priority, ok := tagNode.Attributes.Get("priority")
 	assert.True(t, ok)

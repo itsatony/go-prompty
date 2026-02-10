@@ -38,9 +38,9 @@ type CacheConfig struct {
 // DefaultCacheConfig returns the default caching configuration.
 func DefaultCacheConfig() CacheConfig {
 	return CacheConfig{
-		TTL:              5 * time.Minute,
-		MaxEntries:       1000,
-		NegativeCacheTTL: 30 * time.Second,
+		TTL:              DefaultCacheTTL,
+		MaxEntries:       DefaultCacheMaxEntries,
+		NegativeCacheTTL: DefaultNegativeCacheTTL,
 	}
 }
 
@@ -56,10 +56,10 @@ type cacheEntry struct {
 // NewCachedStorage wraps a storage with caching.
 func NewCachedStorage(storage TemplateStorage, config CacheConfig) *CachedStorage {
 	if config.TTL == 0 {
-		config.TTL = 5 * time.Minute
+		config.TTL = DefaultCacheTTL
 	}
 	if config.MaxEntries == 0 {
-		config.MaxEntries = 1000
+		config.MaxEntries = DefaultCacheMaxEntries
 	}
 
 	return &CachedStorage{

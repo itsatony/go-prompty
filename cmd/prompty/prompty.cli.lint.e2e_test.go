@@ -21,7 +21,7 @@ func createTempTemplate(t *testing.T, content string) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "template.txt")
-	err := os.WriteFile(tmpFile, []byte(content), 0644)
+	err := os.WriteFile(tmpFile, []byte(content), FilePermissions)
 	require.NoError(t, err)
 	return tmpFile
 }

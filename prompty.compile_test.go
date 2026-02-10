@@ -46,7 +46,7 @@ func TestPrompt_CompileAgent_Basic(t *testing.T) {
 		Description: "A test agent",
 		Type:        DocumentTypeAgent,
 		Execution: &ExecutionConfig{
-			Provider: "openai",
+			Provider: ProviderOpenAI,
 			Model:    "gpt-4",
 		},
 		Body: "You are a helpful assistant.",
@@ -63,7 +63,7 @@ func TestPrompt_CompileAgent_Basic(t *testing.T) {
 
 	// Execution should be cloned
 	require.NotNil(t, compiled.Execution)
-	assert.Equal(t, "openai", compiled.Execution.Provider)
+	assert.Equal(t, ProviderOpenAI, compiled.Execution.Provider)
 	assert.Equal(t, "gpt-4", compiled.Execution.Model)
 }
 
@@ -342,7 +342,7 @@ func TestPrompt_ActivateSkill_ExecutionMerge(t *testing.T) {
 		Description: "Agent with execution",
 		Type:        DocumentTypeAgent,
 		Execution: &ExecutionConfig{
-			Provider:    "openai",
+			Provider:    ProviderOpenAI,
 			Model:       "gpt-4",
 			Temperature: &agentTemp,
 		},
@@ -375,7 +375,7 @@ func TestPrompt_ActivateSkill_ExecutionMerge(t *testing.T) {
 	require.NotNil(t, compiled.Execution)
 
 	// Provider from agent
-	assert.Equal(t, "openai", compiled.Execution.Provider)
+	assert.Equal(t, ProviderOpenAI, compiled.Execution.Provider)
 	// Model overridden by skill ref execution
 	assert.Equal(t, "gpt-4-turbo", compiled.Execution.Model)
 	// Temperature from resolved skill (then overridden by ref if ref had one)
@@ -396,11 +396,11 @@ func TestPrompt_ValidateForExecution(t *testing.T) {
 	require.Error(t, p.ValidateForExecution())
 
 	// No model
-	p.Execution = &ExecutionConfig{Provider: "openai"}
+	p.Execution = &ExecutionConfig{Provider: ProviderOpenAI}
 	require.Error(t, p.ValidateForExecution())
 
 	// Valid
-	p.Execution = &ExecutionConfig{Provider: "openai", Model: "gpt-4"}
+	p.Execution = &ExecutionConfig{Provider: ProviderOpenAI, Model: "gpt-4"}
 	require.NoError(t, p.ValidateForExecution())
 }
 
@@ -706,7 +706,7 @@ func TestAgentDryRun_ValidAgent(t *testing.T) {
 		Description: "A valid test agent",
 		Type:        DocumentTypeAgent,
 		Execution: &ExecutionConfig{
-			Provider: "openai",
+			Provider: ProviderOpenAI,
 			Model:    "gpt-4",
 		},
 		Messages: []MessageTemplate{
@@ -736,7 +736,7 @@ func TestAgentDryRun_UnresolvableSkill(t *testing.T) {
 		Description: "Agent with unresolvable skill",
 		Type:        DocumentTypeAgent,
 		Execution: &ExecutionConfig{
-			Provider: "openai",
+			Provider: ProviderOpenAI,
 			Model:    "gpt-4",
 		},
 		Skills: []SkillRef{
@@ -758,7 +758,7 @@ func TestAgentDryRun_InvalidMessageTemplate(t *testing.T) {
 		Description: "Agent with invalid message",
 		Type:        DocumentTypeAgent,
 		Execution: &ExecutionConfig{
-			Provider: "openai",
+			Provider: ProviderOpenAI,
 			Model:    "gpt-4",
 		},
 		Messages: []MessageTemplate{
@@ -786,7 +786,7 @@ func TestAgentDryRun_InvalidBody(t *testing.T) {
 		Description: "Agent with invalid body",
 		Type:        DocumentTypeAgent,
 		Execution: &ExecutionConfig{
-			Provider: "openai",
+			Provider: ProviderOpenAI,
 			Model:    "gpt-4",
 		},
 		Messages: []MessageTemplate{
@@ -814,7 +814,7 @@ func TestAgentDryRun_NoResolver(t *testing.T) {
 		Description: "Agent with skills but no resolver",
 		Type:        DocumentTypeAgent,
 		Execution: &ExecutionConfig{
-			Provider: "openai",
+			Provider: ProviderOpenAI,
 			Model:    "gpt-4",
 		},
 		Skills: []SkillRef{
@@ -842,7 +842,7 @@ func TestAgentDryRun_MultipleIssues(t *testing.T) {
 		Description: "Agent with multiple issues",
 		Type:        DocumentTypeAgent,
 		Execution: &ExecutionConfig{
-			Provider: "openai",
+			Provider: ProviderOpenAI,
 			Model:    "gpt-4",
 		},
 		Skills: []SkillRef{

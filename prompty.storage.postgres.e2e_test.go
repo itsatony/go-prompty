@@ -39,7 +39,7 @@ func setupPostgresContainer(t *testing.T) (*PostgresStorage, func()) {
 	storage, err := NewPostgresStorage(PostgresConfig{
 		ConnectionString: connStr,
 		AutoMigrate:      true,
-		QueryTimeout:     30 * time.Second,
+		QueryTimeout:     PostgresDefaultQueryTimeout,
 	})
 	require.NoError(t, err, "failed to create postgres storage")
 
@@ -802,7 +802,7 @@ func TestPostgres_E2E_PromptConfigPersistence(t *testing.T) {
 			Name:        "config-prompt",
 			Description: "A test prompt config",
 			Execution: &ExecutionConfig{
-				Provider:    "anthropic",
+				Provider:    ProviderAnthropic,
 				Model:       "claude-3-opus",
 				Temperature: &temp,
 				MaxTokens:   &maxTokens,
@@ -835,7 +835,7 @@ func TestPostgres_E2E_PromptConfigPersistence(t *testing.T) {
 
 		assert.Equal(t, "config-prompt", retrieved.PromptConfig.Name)
 		require.NotNil(t, retrieved.PromptConfig.Execution)
-		assert.Equal(t, "anthropic", retrieved.PromptConfig.Execution.Provider)
+		assert.Equal(t, ProviderAnthropic, retrieved.PromptConfig.Execution.Provider)
 		assert.Equal(t, "claude-3-opus", retrieved.PromptConfig.Execution.Model)
 		require.NotNil(t, retrieved.PromptConfig.Inputs)
 		assert.Contains(t, retrieved.PromptConfig.Inputs, "query")
@@ -847,7 +847,7 @@ func TestPostgres_E2E_PromptConfigPersistence(t *testing.T) {
 			Name:        "updated-config",
 			Description: "Updated prompt config",
 			Execution: &ExecutionConfig{
-				Provider:    "openai",
+				Provider:    ProviderOpenAI,
 				Model:       "gpt-4",
 				Temperature: &temp,
 			},
@@ -867,13 +867,13 @@ func TestPostgres_E2E_PromptConfigPersistence(t *testing.T) {
 		latest, err := storage.Get(ctx, "config-test")
 		require.NoError(t, err)
 		require.NotNil(t, latest.PromptConfig)
-		assert.Equal(t, "openai", latest.PromptConfig.Execution.Provider)
+		assert.Equal(t, ProviderOpenAI, latest.PromptConfig.Execution.Provider)
 
 		// Verify old version still has old config
 		v1, err := storage.GetVersion(ctx, "config-test", 1)
 		require.NoError(t, err)
 		require.NotNil(t, v1.PromptConfig)
-		assert.Equal(t, "anthropic", v1.PromptConfig.Execution.Provider)
+		assert.Equal(t, ProviderAnthropic, v1.PromptConfig.Execution.Provider)
 	})
 
 	t.Run("NilPromptConfig", func(t *testing.T) {

@@ -76,7 +76,7 @@ func TestMessageResolver_Resolve_StartMarker(t *testing.T) {
 	execCtx := &messageTestContextAccessor{}
 
 	attrs := Attributes{
-		AttrRole: "user",
+		AttrRole: RoleUser,
 	}
 
 	result, err := resolver.Resolve(ctx, execCtx, attrs)
@@ -94,7 +94,7 @@ func TestMessageResolver_Resolve_WithCacheTrue(t *testing.T) {
 	execCtx := &messageTestContextAccessor{}
 
 	attrs := Attributes{
-		AttrRole:  "system",
+		AttrRole:  RoleSystem,
 		AttrCache: "true",
 	}
 
@@ -112,7 +112,7 @@ func TestExtractMessages_SingleMessage(t *testing.T) {
 	messages := ExtractMessages(output)
 	require.Len(t, messages, 1)
 
-	assert.Equal(t, "user", messages[0].Role)
+	assert.Equal(t, RoleUser, messages[0].Role)
 	assert.Equal(t, "Hello, World!", messages[0].Content)
 	assert.False(t, messages[0].Cache)
 }
@@ -124,11 +124,11 @@ func TestExtractMessages_MultipleMessages(t *testing.T) {
 	messages := ExtractMessages(output)
 	require.Len(t, messages, 2)
 
-	assert.Equal(t, "system", messages[0].Role)
+	assert.Equal(t, RoleSystem, messages[0].Role)
 	assert.Equal(t, "You are a helpful assistant.", messages[0].Content)
 	assert.True(t, messages[0].Cache)
 
-	assert.Equal(t, "user", messages[1].Role)
+	assert.Equal(t, RoleUser, messages[1].Role)
 	assert.Equal(t, "What is 2+2?", messages[1].Content)
 	assert.False(t, messages[1].Cache)
 }
@@ -148,7 +148,7 @@ func TestExtractMessages_MessagesWithContent(t *testing.T) {
 	messages := ExtractMessages(output)
 	require.Len(t, messages, 1)
 
-	assert.Equal(t, "assistant", messages[0].Role)
+	assert.Equal(t, RoleAssistant, messages[0].Role)
 	assert.Equal(t, "Here is my response.\n\nWith multiple lines.", messages[0].Content)
 }
 
@@ -161,10 +161,10 @@ func TestExtractMessages_FullConversation(t *testing.T) {
 	messages := ExtractMessages(output)
 	require.Len(t, messages, 4)
 
-	assert.Equal(t, "system", messages[0].Role)
-	assert.Equal(t, "user", messages[1].Role)
-	assert.Equal(t, "assistant", messages[2].Role)
-	assert.Equal(t, "user", messages[3].Role)
+	assert.Equal(t, RoleSystem, messages[0].Role)
+	assert.Equal(t, RoleUser, messages[1].Role)
+	assert.Equal(t, RoleAssistant, messages[2].Role)
+	assert.Equal(t, RoleUser, messages[3].Role)
 
 	assert.Equal(t, "Hello!", messages[1].Content)
 	assert.Equal(t, "Hi there! How can I help you?", messages[2].Content)
@@ -201,7 +201,7 @@ func TestExtractMessages_EmptyContent(t *testing.T) {
 	messages := ExtractMessages(output)
 	require.Len(t, messages, 1)
 
-	assert.Equal(t, "user", messages[0].Role)
+	assert.Equal(t, RoleUser, messages[0].Role)
 	assert.Equal(t, "", messages[0].Content) // Empty content after TrimSpace
 	assert.False(t, messages[0].Cache)
 }
@@ -212,7 +212,7 @@ func TestExtractMessages_WhitespaceOnlyContent(t *testing.T) {
 	messages := ExtractMessages(output)
 	require.Len(t, messages, 1)
 
-	assert.Equal(t, "user", messages[0].Role)
+	assert.Equal(t, RoleUser, messages[0].Role)
 	assert.Equal(t, "", messages[0].Content) // Whitespace trimmed to empty
 	assert.False(t, messages[0].Cache)
 }
@@ -224,7 +224,7 @@ func TestExtractMessages_ContentWithColons(t *testing.T) {
 	messages := ExtractMessages(output)
 	require.Len(t, messages, 1)
 
-	assert.Equal(t, "user", messages[0].Role)
+	assert.Equal(t, RoleUser, messages[0].Role)
 	assert.Equal(t, "Time is 10:30:45 AM", messages[0].Content)
 }
 
@@ -235,7 +235,7 @@ func TestExtractMessages_ContentWithNewlines(t *testing.T) {
 	messages := ExtractMessages(output)
 	require.Len(t, messages, 1)
 
-	assert.Equal(t, "assistant", messages[0].Role)
+	assert.Equal(t, RoleAssistant, messages[0].Role)
 	assert.Equal(t, content, messages[0].Content)
 }
 
@@ -251,7 +251,7 @@ func TestExtractMessages_VeryLongContent(t *testing.T) {
 	messages := ExtractMessages(output)
 	require.Len(t, messages, 1)
 
-	assert.Equal(t, "user", messages[0].Role)
+	assert.Equal(t, RoleUser, messages[0].Role)
 	// Content is trimmed, so we check it ends properly
 	assert.True(t, len(messages[0].Content) > 1000)
 }
@@ -263,7 +263,7 @@ func TestExtractMessages_UnicodeContent(t *testing.T) {
 	messages := ExtractMessages(output)
 	require.Len(t, messages, 1)
 
-	assert.Equal(t, "user", messages[0].Role)
+	assert.Equal(t, RoleUser, messages[0].Role)
 	assert.Equal(t, content, messages[0].Content)
 }
 
@@ -344,9 +344,9 @@ func TestExtractMessages_MixedValidAndMalformed(t *testing.T) {
 	messages := ExtractMessages(output)
 	require.Len(t, messages, 2) // Only the two valid messages extracted
 
-	assert.Equal(t, "user", messages[0].Role)
+	assert.Equal(t, RoleUser, messages[0].Role)
 	assert.Equal(t, "First message", messages[0].Content)
-	assert.Equal(t, "assistant", messages[1].Role)
+	assert.Equal(t, RoleAssistant, messages[1].Role)
 	assert.Equal(t, "Second message", messages[1].Content)
 }
 
@@ -362,7 +362,7 @@ func TestExtractMessages_MalformedMidstreamCanCorrupt(t *testing.T) {
 
 	// First message is extracted correctly
 	require.True(t, len(messages) >= 1)
-	assert.Equal(t, "user", messages[0].Role)
+	assert.Equal(t, RoleUser, messages[0].Role)
 	assert.Equal(t, "First message", messages[0].Content)
 
 	// The malformed marker causes subsequent parsing issues, so we don't

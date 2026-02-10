@@ -42,7 +42,7 @@ This is the body content.`
 
 	// Execution
 	require.NotNil(t, p.Execution)
-	assert.Equal(t, "openai", p.Execution.Provider)
+	assert.Equal(t, ProviderOpenAI, p.Execution.Provider)
 	assert.Equal(t, "gpt-4", p.Execution.Model)
 
 	// Skills

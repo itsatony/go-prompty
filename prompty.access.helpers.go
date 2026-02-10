@@ -140,8 +140,8 @@ type CachedCheckerConfig struct {
 // DefaultCachedCheckerConfig returns sensible defaults.
 func DefaultCachedCheckerConfig() CachedCheckerConfig {
 	return CachedCheckerConfig{
-		TTL:        5 * time.Minute,
-		MaxEntries: 10000,
+		TTL:        DefaultAccessCacheTTL,
+		MaxEntries: DefaultAccessCacheMaxEntries,
 		KeyFunc:    defaultCacheKey,
 	}
 }
@@ -155,10 +155,10 @@ type cachedDecision struct {
 // NewCachedChecker wraps a checker with caching.
 func NewCachedChecker(checker AccessChecker, config CachedCheckerConfig) *CachedChecker {
 	if config.TTL == 0 {
-		config.TTL = 5 * time.Minute
+		config.TTL = DefaultAccessCacheTTL
 	}
 	if config.MaxEntries == 0 {
-		config.MaxEntries = 10000
+		config.MaxEntries = DefaultAccessCacheMaxEntries
 	}
 	if config.KeyFunc == nil {
 		config.KeyFunc = defaultCacheKey

@@ -300,7 +300,7 @@ func checkLoopRules(source string, ruleSet *lintRuleSet) []lintIssue {
 			}
 		}
 
-		if maxDepth > 2 {
+		if maxDepth > LintMaxNestedLoopDepth {
 			line, col := positionFromOffset(source, maxDepthPos)
 			issues = append(issues, lintIssue{
 				RuleID:   LintRuleLOOP002,
@@ -332,7 +332,7 @@ func checkExpressionRules(source string, ruleSet *lintRuleSet) []lintIssue {
 		if len(match) >= 4 {
 			expr := source[match[2]:match[3]]
 			operatorCount := len(operatorPattern.FindAllString(expr, -1))
-			if operatorCount > 3 {
+			if operatorCount > LintMaxExpressionOperators {
 				line, col := positionFromOffset(source, match[0])
 				issues = append(issues, lintIssue{
 					RuleID:   LintRuleEXPR001,

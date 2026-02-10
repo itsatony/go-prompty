@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -611,7 +610,7 @@ func TestCachedStorageEngine_FilesystemStorage(t *testing.T) {
 
 	// Wrap with result caching
 	cachedEngine := NewCachedStorageEngine(baseEngine, ResultCacheConfig{
-		TTL:        5 * time.Minute,
+		TTL:        DefaultResultCacheTTL,
 		MaxEntries: 100,
 	})
 	defer cachedEngine.Close()

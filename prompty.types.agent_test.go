@@ -119,7 +119,7 @@ func TestSkillRef_Clone(t *testing.T) {
 		Version:   "v3",
 		Injection: SkillInjectionSystemPrompt,
 		Inline:    &InlineSkill{Slug: "inline", Description: "desc", Body: "body"},
-		Execution: &ExecutionConfig{Provider: "openai", Model: "gpt-4"},
+		Execution: &ExecutionConfig{Provider: ProviderOpenAI, Model: "gpt-4"},
 	}
 
 	clone := original.Clone()

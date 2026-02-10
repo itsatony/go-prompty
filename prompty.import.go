@@ -34,9 +34,9 @@ func Import(data []byte, filename string) (*ImportResult, error) {
 
 	ext := strings.ToLower(filepath.Ext(filename))
 	switch ext {
-	case ".md":
+	case FileExtensionMarkdown:
 		return importMarkdown(data)
-	case ".zip":
+	case FileExtensionZip:
 		return ImportDirectory(data)
 	default:
 		// Try as markdown

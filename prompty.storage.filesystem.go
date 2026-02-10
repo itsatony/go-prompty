@@ -68,7 +68,7 @@ func NewFilesystemStorage(root string) (*FilesystemStorage, error) {
 	}
 
 	// Create root directory if it doesn't exist
-	if err := os.MkdirAll(root, 0755); err != nil {
+	if err := os.MkdirAll(root, FilesystemDirPermissions); err != nil {
 		return nil, &StorageError{
 			Message: ErrMsgCreateStorageDir,
 			Name:    root,
@@ -195,7 +195,7 @@ func (s *FilesystemStorage) Save(ctx context.Context, tmpl *StoredTemplate) erro
 
 	// Create template directory
 	templateDir := filepath.Join(s.root, tmpl.Name)
-	if err := os.MkdirAll(templateDir, 0755); err != nil {
+	if err := os.MkdirAll(templateDir, FilesystemDirPermissions); err != nil {
 		return &StorageError{Message: ErrMsgCreateStorageDir, Name: templateDir, Cause: err}
 	}
 
@@ -231,13 +231,13 @@ func (s *FilesystemStorage) Save(ctx context.Context, tmpl *StoredTemplate) erro
 	}
 
 	// Write to file
-	filename := filepath.Join(templateDir, "v"+intToStr(nextVersion)+".json")
+	filename := filepath.Join(templateDir, FilesystemVersionPrefix+intToStr(nextVersion)+FilesystemVersionSuffix)
 	data, err := json.MarshalIndent(stored, "", "  ")
 	if err != nil {
 		return &StorageError{Message: ErrMsgMarshalTemplate, Name: tmpl.Name, Cause: err}
 	}
 
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	if err := os.WriteFile(filename, data, FilesystemFilePermissions); err != nil {
 		return &StorageError{Message: ErrMsgWriteTemplate, Name: filename, Cause: err}
 	}
 
@@ -299,7 +299,7 @@ func (s *FilesystemStorage) DeleteVersion(ctx context.Context, name string, vers
 		return NewStorageClosedError()
 	}
 
-	filename := filepath.Join(s.root, name, "v"+intToStr(version)+".json")
+	filename := filepath.Join(s.root, name, FilesystemVersionPrefix+intToStr(version)+FilesystemVersionSuffix)
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		return NewStorageVersionNotFoundError(name, version)
 	}
@@ -513,8 +513,8 @@ func (s *FilesystemStorage) listVersionsInternal(name string) ([]int, error) {
 			continue
 		}
 		filename := entry.Name()
-		if strings.HasPrefix(filename, "v") && strings.HasSuffix(filename, ".json") {
-			versionStr := filename[1 : len(filename)-5]
+		if strings.HasPrefix(filename, FilesystemVersionPrefix) && strings.HasSuffix(filename, FilesystemVersionSuffix) {
+			versionStr := filename[len(FilesystemVersionPrefix) : len(filename)-len(FilesystemVersionSuffix)]
 			version := parseVersionNumber(versionStr)
 			if version > 0 {
 				versions = append(versions, version)
@@ -529,7 +529,7 @@ func (s *FilesystemStorage) listVersionsInternal(name string) ([]int, error) {
 
 // loadTemplate loads a template from disk.
 func (s *FilesystemStorage) loadTemplate(name string, version int) (*StoredTemplate, error) {
-	filename := filepath.Join(s.root, name, "v"+intToStr(version)+".json")
+	filename := filepath.Join(s.root, name, FilesystemVersionPrefix+intToStr(version)+FilesystemVersionSuffix)
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -797,7 +797,7 @@ func (s *FilesystemStorage) saveLabels(templateName string, labels *filesystemLa
 		return &StorageError{Message: ErrMsgMarshalLabels, Name: templateName, Cause: err}
 	}
 
-	if err := os.WriteFile(labelsPath, data, 0644); err != nil {
+	if err := os.WriteFile(labelsPath, data, FilesystemFilePermissions); err != nil {
 		return &StorageError{Message: ErrMsgWriteLabels, Name: labelsPath, Cause: err}
 	}
 
@@ -852,13 +852,13 @@ func (s *FilesystemStorage) SetStatus(ctx context.Context, templateName string, 
 	tmpl.UpdatedAt = time.Now()
 
 	// Save back to file
-	filename := filepath.Join(s.root, templateName, "v"+intToStr(version)+".json")
+	filename := filepath.Join(s.root, templateName, FilesystemVersionPrefix+intToStr(version)+FilesystemVersionSuffix)
 	data, err := json.MarshalIndent(tmpl, "", "  ")
 	if err != nil {
 		return &StorageError{Message: ErrMsgMarshalTemplate, Name: templateName, Cause: err}
 	}
 
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	if err := os.WriteFile(filename, data, FilesystemFilePermissions); err != nil {
 		return &StorageError{Message: ErrMsgWriteTemplate, Name: filename, Cause: err}
 	}
 

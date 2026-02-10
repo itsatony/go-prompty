@@ -140,6 +140,35 @@ const (
 	DefaultMaxFrontmatterSize = 64 * 1024        // 64KB - DoS protection for YAML frontmatter
 )
 
+// Cache configuration defaults
+const (
+	DefaultCacheTTL              = 5 * time.Minute
+	DefaultCacheMaxEntries       = 1000
+	DefaultNegativeCacheTTL      = 30 * time.Second
+	DefaultAccessCacheTTL        = 5 * time.Minute
+	DefaultAccessCacheMaxEntries = 10000
+	DefaultResultCacheTTL        = 5 * time.Minute
+	DefaultResultCacheMaxEntries = 1000
+	DefaultResultCacheMaxSize    = 1 << 20 // 1MB
+)
+
+// Filesystem storage constants
+const (
+	FilesystemDirPermissions  = 0755
+	FilesystemFilePermissions = 0644
+	FilesystemVersionPrefix   = "v"
+	FilesystemVersionSuffix   = ".json"
+)
+
+// Document export/import constants
+const (
+	DocumentFilenameAgent  = "AGENT.md"
+	DocumentFilenamePrompt = "PROMPT.md"
+	DocumentFilenameSkill  = "SKILL.md"
+	FileExtensionMarkdown  = ".md"
+	FileExtensionZip       = ".zip"
+)
+
 // Metadata keys for cuserr.WithMetadata
 const (
 	MetaKeyLine         = "line"

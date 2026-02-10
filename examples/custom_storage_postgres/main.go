@@ -60,7 +60,7 @@ func NewPostgresStorage(connectionString string) (*PostgresStorage, error) {
 	// Configure connection pool for production use
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxLifetime(prompty.PostgresDefaultConnMaxLifetime)
 
 	return &PostgresStorage{db: db}, nil
 }

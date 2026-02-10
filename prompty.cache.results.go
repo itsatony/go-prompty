@@ -56,9 +56,9 @@ type ResultCacheStats struct {
 // DefaultResultCacheConfig returns sensible defaults for result caching.
 func DefaultResultCacheConfig() ResultCacheConfig {
 	return ResultCacheConfig{
-		TTL:           5 * time.Minute,
-		MaxEntries:    1000,
-		MaxResultSize: 1 << 20, // 1MB
+		TTL:           DefaultResultCacheTTL,
+		MaxEntries:    DefaultResultCacheMaxEntries,
+		MaxResultSize: DefaultResultCacheMaxSize,
 		KeyPrefix:     "",
 	}
 }
@@ -66,13 +66,13 @@ func DefaultResultCacheConfig() ResultCacheConfig {
 // NewResultCache creates a new result cache.
 func NewResultCache(config ResultCacheConfig) *ResultCache {
 	if config.TTL == 0 {
-		config.TTL = 5 * time.Minute
+		config.TTL = DefaultResultCacheTTL
 	}
 	if config.MaxEntries == 0 {
-		config.MaxEntries = 1000
+		config.MaxEntries = DefaultResultCacheMaxEntries
 	}
 	if config.MaxResultSize == 0 {
-		config.MaxResultSize = 1 << 20
+		config.MaxResultSize = DefaultResultCacheMaxSize
 	}
 
 	return &ResultCache{

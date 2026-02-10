@@ -285,6 +285,20 @@ const (
 	FilePermissions = 0644
 )
 
+// Lint rule thresholds
+const (
+	LintMaxNestedLoopDepth     = 2
+	LintMaxExpressionOperators = 3
+)
+
+// Debug command thresholds
+const (
+	DebugMaxLevenshteinDistance = 2
+	DebugMaxSuggestions         = 3
+	DebugMaxValuePreviewLength  = 30
+	DebugTruncationSuffix       = "..."
+)
+
 // Format string constants
 const (
 	FmtErrorWithDetail = "%s: %s\n"

@@ -14,7 +14,7 @@ func TestPrompt_Serialize_Default(t *testing.T) {
 		Description: "A test prompt",
 		Type:        DocumentTypeAgent,
 		Execution: &ExecutionConfig{
-			Provider:    "openai",
+			Provider:    ProviderOpenAI,
 			Model:       "gpt-4",
 			Temperature: &temp,
 		},
@@ -40,7 +40,7 @@ func TestPrompt_Serialize_Default(t *testing.T) {
 	assert.Contains(t, content, "---")
 	assert.Contains(t, content, "test-prompt")
 	assert.Contains(t, content, "agent")
-	assert.Contains(t, content, "openai")
+	assert.Contains(t, content, ProviderOpenAI)
 	assert.Contains(t, content, "search-skill")
 	assert.Contains(t, content, "Acme")
 	assert.Contains(t, content, "You are a helpful assistant.")
@@ -52,7 +52,7 @@ func TestPrompt_Serialize_AgentSkillsExport(t *testing.T) {
 		Description: "A test prompt",
 		Type:        DocumentTypeAgent,
 		Execution: &ExecutionConfig{
-			Provider: "openai",
+			Provider: ProviderOpenAI,
 			Model:    "gpt-4",
 		},
 		Skills: []SkillRef{
@@ -77,7 +77,7 @@ func TestPrompt_Serialize_Full(t *testing.T) {
 		Description: "Full prompt with all fields",
 		Type:        DocumentTypeSkill,
 		Execution: &ExecutionConfig{
-			Provider: "anthropic",
+			Provider: ProviderAnthropic,
 		},
 		Skope: &SkopeConfig{
 			Visibility: SkopeVisibilityPublic,
@@ -90,7 +90,7 @@ func TestPrompt_Serialize_Full(t *testing.T) {
 
 	content := string(data)
 	assert.Contains(t, content, "full-prompt")
-	assert.Contains(t, content, "anthropic")
+	assert.Contains(t, content, ProviderAnthropic)
 	assert.Contains(t, content, "public")
 }
 

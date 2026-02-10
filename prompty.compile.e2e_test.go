@@ -53,7 +53,7 @@ Department: {~prompty.var name="department" /~}.`
 
 	// Verify parsed fields
 	require.NotNil(t, p.Execution)
-	assert.Equal(t, "openai", p.Execution.Provider)
+	assert.Equal(t, ProviderOpenAI, p.Execution.Provider)
 
 	require.NotNil(t, p.Context)
 	assert.Equal(t, "Acme Corp", p.Context["company"])
@@ -90,7 +90,7 @@ Department: {~prompty.var name="department" /~}.`
 
 	// Execution should be preserved
 	require.NotNil(t, compiled.Execution)
-	assert.Equal(t, "openai", compiled.Execution.Provider)
+	assert.Equal(t, ProviderOpenAI, compiled.Execution.Provider)
 
 	// Tools should be preserved
 	require.NotNil(t, compiled.Tools)
@@ -280,7 +280,7 @@ body`
 	require.NotNil(t, compiled.Execution)
 
 	// Provider: from agent (not overridden)
-	assert.Equal(t, "openai", compiled.Execution.Provider)
+	assert.Equal(t, ProviderOpenAI, compiled.Execution.Provider)
 	// Model: from skill ref execution (overrides agent)
 	assert.Equal(t, "gpt-4-turbo", compiled.Execution.Model)
 	// Temperature: from resolved skill (overrides agent)

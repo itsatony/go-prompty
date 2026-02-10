@@ -29,7 +29,7 @@ func TestExecutionConfig_Validate(t *testing.T) {
 		{
 			name: "valid config",
 			config: &ExecutionConfig{
-				Provider:    "openai",
+				Provider:    ProviderOpenAI,
 				Model:       "gpt-4",
 				Temperature: temp(0.7),
 				MaxTokens:   maxTokens(1000),
@@ -117,7 +117,7 @@ func TestExecutionConfig_Clone(t *testing.T) {
 	budgetTokens := 5000
 
 	original := &ExecutionConfig{
-		Provider:      "openai",
+		Provider:      ProviderOpenAI,
 		Model:         "gpt-4",
 		Temperature:   &temp,
 		MaxTokens:     &maxTokens,
@@ -167,7 +167,7 @@ func TestExecutionConfig_Getters(t *testing.T) {
 	topK := 40
 
 	config := &ExecutionConfig{
-		Provider:      "openai",
+		Provider:      ProviderOpenAI,
 		Model:         "gpt-4",
 		Temperature:   &temp,
 		MaxTokens:     &maxTokens,
@@ -185,7 +185,7 @@ func TestExecutionConfig_Getters(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, "openai", config.GetProvider())
+	assert.Equal(t, ProviderOpenAI, config.GetProvider())
 	assert.Equal(t, "gpt-4", config.GetModel())
 
 	gotTemp, ok := config.GetTemperature()
@@ -236,10 +236,10 @@ func TestExecutionConfig_GetEffectiveProvider(t *testing.T) {
 		{
 			name: "explicit provider",
 			config: &ExecutionConfig{
-				Provider: "anthropic",
+				Provider: ProviderAnthropic,
 				Model:    "gpt-4",
 			},
-			want: "anthropic",
+			want: ProviderAnthropic,
 		},
 		{
 			name: "infer from guided decoding",
@@ -479,13 +479,13 @@ func TestExecutionConfig_Merge_NilReceiver(t *testing.T) {
 	var a *ExecutionConfig
 	temp := 0.7
 	b := &ExecutionConfig{
-		Provider:    "openai",
+		Provider:    ProviderOpenAI,
 		Model:       "gpt-4",
 		Temperature: &temp,
 	}
 	result := a.Merge(b)
 	require.NotNil(t, result)
-	assert.Equal(t, "openai", result.Provider)
+	assert.Equal(t, ProviderOpenAI, result.Provider)
 	assert.Equal(t, "gpt-4", result.Model)
 	assert.Equal(t, 0.7, *result.Temperature)
 
@@ -497,13 +497,13 @@ func TestExecutionConfig_Merge_NilReceiver(t *testing.T) {
 func TestExecutionConfig_Merge_NilOther(t *testing.T) {
 	temp := 0.8
 	a := &ExecutionConfig{
-		Provider:    "anthropic",
+		Provider:    ProviderAnthropic,
 		Model:       "claude-3",
 		Temperature: &temp,
 	}
 	result := a.Merge(nil)
 	require.NotNil(t, result)
-	assert.Equal(t, "anthropic", result.Provider)
+	assert.Equal(t, ProviderAnthropic, result.Provider)
 	assert.Equal(t, "claude-3", result.Model)
 	assert.Equal(t, 0.8, *result.Temperature)
 
@@ -517,7 +517,7 @@ func TestExecutionConfig_Merge_PartialOverride(t *testing.T) {
 	baseMaxTokens := 1000
 	baseTopP := 0.9
 	base := &ExecutionConfig{
-		Provider:      "openai",
+		Provider:      ProviderOpenAI,
 		Model:         "gpt-3.5-turbo",
 		Temperature:   &baseTemp,
 		MaxTokens:     &baseMaxTokens,
@@ -543,7 +543,7 @@ func TestExecutionConfig_Merge_PartialOverride(t *testing.T) {
 	require.NotNil(t, result)
 
 	// Provider kept from base (override was empty)
-	assert.Equal(t, "openai", result.Provider)
+	assert.Equal(t, ProviderOpenAI, result.Provider)
 	// Model overridden
 	assert.Equal(t, "gpt-4", result.Model)
 	// Temperature overridden
@@ -566,7 +566,7 @@ func TestExecutionConfig_Merge_ThreeLayerChain(t *testing.T) {
 	agentTemp := 0.3
 	agentMaxTokens := 2000
 	agent := &ExecutionConfig{
-		Provider:    "openai",
+		Provider:    ProviderOpenAI,
 		Model:       "gpt-4",
 		Temperature: &agentTemp,
 		MaxTokens:   &agentMaxTokens,
@@ -587,7 +587,7 @@ func TestExecutionConfig_Merge_ThreeLayerChain(t *testing.T) {
 	require.NotNil(t, result)
 
 	// Provider from agent (not overridden)
-	assert.Equal(t, "openai", result.Provider)
+	assert.Equal(t, ProviderOpenAI, result.Provider)
 	// Model from agent (not overridden)
 	assert.Equal(t, "gpt-4", result.Model)
 	// Temperature from skill (overrides agent)
@@ -983,8 +983,8 @@ func TestExecutionConfig_GetEffectiveProvider_VLLMHints(t *testing.T) {
 		},
 		{
 			name:   "explicit provider overrides vllm hint",
-			config: &ExecutionConfig{Provider: "openai", MinP: &minP},
-			want:   "openai",
+			config: &ExecutionConfig{Provider: ProviderOpenAI, MinP: &minP},
+			want:   ProviderOpenAI,
 		},
 	}
 
@@ -1232,18 +1232,18 @@ func TestExecutionConfig_ToGemini_NoExtendedParams(t *testing.T) {
 func TestExecutionConfig_JSONAndYAML(t *testing.T) {
 	temp := 0.7
 	config := &ExecutionConfig{
-		Provider:    "openai",
+		Provider:    ProviderOpenAI,
 		Model:       "gpt-4",
 		Temperature: &temp,
 	}
 
 	jsonStr, err := config.JSON()
 	require.NoError(t, err)
-	assert.Contains(t, jsonStr, "openai")
+	assert.Contains(t, jsonStr, ProviderOpenAI)
 	assert.Contains(t, jsonStr, "gpt-4")
 
 	yamlStr, err := config.YAML()
 	require.NoError(t, err)
-	assert.Contains(t, yamlStr, "openai")
+	assert.Contains(t, yamlStr, ProviderOpenAI)
 	assert.Contains(t, yamlStr, "gpt-4")
 }

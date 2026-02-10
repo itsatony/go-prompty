@@ -23,7 +23,7 @@ func createTempDataFile(t *testing.T, data map[string]any) string {
 	tmpFile := filepath.Join(tmpDir, "data.json")
 	jsonBytes, err := json.Marshal(data)
 	require.NoError(t, err)
-	err = os.WriteFile(tmpFile, jsonBytes, 0644)
+	err = os.WriteFile(tmpFile, jsonBytes, FilePermissions)
 	require.NoError(t, err)
 	return tmpFile
 }

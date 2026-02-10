@@ -173,6 +173,7 @@ type CostEstimate struct {
 
 // Pricing constants (per 1K tokens, input only, as of late 2024)
 const (
+	TokenPricingUnit       = 1000.0 // tokens per pricing unit (1K)
 	PriceGPT4Per1K         = 0.03
 	PriceGPT4oPer1K        = 0.005
 	PriceGPT35Per1K        = 0.0015
@@ -187,12 +188,12 @@ func (e *TokenEstimate) EstimateCost() *CostEstimate {
 
 	return &CostEstimate{
 		InputTokens:      inputTokens,
-		GPT4Cost:         float64(inputTokens) / 1000.0 * PriceGPT4Per1K,
-		GPT4oCost:        float64(inputTokens) / 1000.0 * PriceGPT4oPer1K,
-		GPT35Cost:        float64(inputTokens) / 1000.0 * PriceGPT35Per1K,
-		ClaudeOpusCost:   float64(inputTokens) / 1000.0 * PriceClaudeOpusPer1K,
-		ClaudeSonnetCost: float64(inputTokens) / 1000.0 * PriceClaudeSonnetPer1K,
-		ClaudeHaikuCost:  float64(inputTokens) / 1000.0 * PriceClaudeHaikuPer1K,
+		GPT4Cost:         float64(inputTokens) / TokenPricingUnit * PriceGPT4Per1K,
+		GPT4oCost:        float64(inputTokens) / TokenPricingUnit * PriceGPT4oPer1K,
+		GPT35Cost:        float64(inputTokens) / TokenPricingUnit * PriceGPT35Per1K,
+		ClaudeOpusCost:   float64(inputTokens) / TokenPricingUnit * PriceClaudeOpusPer1K,
+		ClaudeSonnetCost: float64(inputTokens) / TokenPricingUnit * PriceClaudeSonnetPer1K,
+		ClaudeHaikuCost:  float64(inputTokens) / TokenPricingUnit * PriceClaudeHaikuPer1K,
 	}
 }
 
@@ -211,7 +212,7 @@ func (e *TokenEstimate) EstimateCostForModel(model string, pricePerThousand floa
 	default:
 		tokens = e.EstimatedGeneric
 	}
-	return float64(tokens) / 1000.0 * pricePerThousand
+	return float64(tokens) / TokenPricingUnit * pricePerThousand
 }
 
 // Helper functions

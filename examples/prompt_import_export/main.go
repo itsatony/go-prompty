@@ -40,7 +40,7 @@ func main() {
 		Type:        prompty.DocumentTypeSkill,
 		License:     "MIT",
 		Execution: &prompty.ExecutionConfig{
-			Provider:    "openai",
+			Provider:    prompty.ProviderOpenAI,
 			Model:       "gpt-4",
 			Temperature: floatPtr(0.2),
 			MaxTokens:   intPtr(4096),

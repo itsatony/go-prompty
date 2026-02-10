@@ -103,7 +103,7 @@ func TestValidateForExecution_ErrorConstants(t *testing.T) {
 	assert.Contains(t, err.Error(), ErrMsgNoProvider)
 
 	// No model
-	p.Execution = &ExecutionConfig{Provider: "openai"}
+	p.Execution = &ExecutionConfig{Provider: ProviderOpenAI}
 	err = p.ValidateForExecution()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), ErrMsgNoModel)

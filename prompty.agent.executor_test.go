@@ -112,7 +112,7 @@ func TestAgentExecutor_ExecuteFile_Valid(t *testing.T) {
 	// Write agent source to a temp file
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test-agent.md")
-	err := os.WriteFile(path, []byte(testAgentSource), 0644)
+	err := os.WriteFile(path, []byte(testAgentSource), FilesystemFilePermissions)
 	require.NoError(t, err)
 
 	ae := NewAgentExecutor()

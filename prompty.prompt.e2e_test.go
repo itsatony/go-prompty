@@ -35,7 +35,7 @@ Hello {~prompty.var name="user" /~}!`
 
 	// Execution config should be present
 	require.NotNil(t, prompt.Execution)
-	assert.Equal(t, "openai", prompt.Execution.Provider)
+	assert.Equal(t, ProviderOpenAI, prompt.Execution.Provider)
 	assert.Equal(t, "gpt-4", prompt.Execution.Model)
 
 	temp, ok := prompt.Execution.GetTemperature()
@@ -143,7 +143,7 @@ Process: {~prompty.var name="query" /~}`
 
 	// Execution
 	require.NotNil(t, prompt.Execution)
-	assert.Equal(t, "anthropic", prompt.Execution.Provider)
+	assert.Equal(t, ProviderAnthropic, prompt.Execution.Provider)
 	assert.Equal(t, "claude-sonnet-4-5", prompt.Execution.Model)
 	assert.True(t, prompt.Execution.HasThinking())
 	require.NotNil(t, prompt.Execution.Thinking)

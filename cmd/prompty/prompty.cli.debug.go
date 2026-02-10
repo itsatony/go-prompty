@@ -228,14 +228,14 @@ func findSimilarKeys(path string, data map[string]any) []string {
 		// Simple similarity: contains or prefix match
 		if strings.Contains(keyLower, pathLower) || strings.Contains(pathLower, keyLower) {
 			suggestions = append(suggestions, key)
-		} else if levenshteinDistance(pathLower, keyLower) <= 2 {
+		} else if levenshteinDistance(pathLower, keyLower) <= DebugMaxLevenshteinDistance {
 			suggestions = append(suggestions, key)
 		}
 	}
 
 	// Limit suggestions
-	if len(suggestions) > 3 {
-		suggestions = suggestions[:3]
+	if len(suggestions) > DebugMaxSuggestions {
+		suggestions = suggestions[:DebugMaxSuggestions]
 	}
 
 	return suggestions
@@ -326,8 +326,8 @@ func outputDebugText(output *debugOutput, verbose bool, stdout io.Writer) int {
 	for _, v := range output.Variables {
 		if v.Exists {
 			valueStr := fmt.Sprintf("%v", v.Value)
-			if len(valueStr) > 30 {
-				valueStr = valueStr[:27] + "..."
+			if len(valueStr) > DebugMaxValuePreviewLength {
+				valueStr = valueStr[:DebugMaxValuePreviewLength-3] + DebugTruncationSuffix
 			}
 			fmt.Fprintf(stdout, DebugTextVarExists+FmtNewline, v.Name, v.Line, valueStr)
 		} else {

@@ -46,7 +46,7 @@ func TestExportToSkillMD(t *testing.T) {
 					"author": "test",
 				},
 				Execution: &ExecutionConfig{
-					Provider: "openai",
+					Provider: ProviderOpenAI,
 					Model:    "gpt-4",
 				},
 				Skope: &SkopeConfig{
@@ -295,7 +295,7 @@ func TestSkillMD_MergeExecution(t *testing.T) {
 	}
 
 	exec := &ExecutionConfig{
-		Provider: "openai",
+		Provider: ProviderOpenAI,
 		Model:    "gpt-4",
 	}
 
@@ -303,7 +303,7 @@ func TestSkillMD_MergeExecution(t *testing.T) {
 
 	assert.Equal(t, "test", result.Name)
 	assert.NotNil(t, result.Execution)
-	assert.Equal(t, "openai", result.Execution.Provider)
+	assert.Equal(t, ProviderOpenAI, result.Execution.Provider)
 
 	// Original should not be modified
 	assert.Nil(t, skillMD.Prompt.Execution)
@@ -350,7 +350,7 @@ func TestSkillMD_NilHandling(t *testing.T) {
 	clone := nilSkillMD.Clone()
 	assert.Nil(t, clone)
 
-	exec := nilSkillMD.MergeExecution(&ExecutionConfig{Provider: "openai"})
+	exec := nilSkillMD.MergeExecution(&ExecutionConfig{Provider: ProviderOpenAI})
 	assert.NotNil(t, exec.Execution)
 
 	skope := nilSkillMD.MergeSkope(&SkopeConfig{Visibility: "public"})
