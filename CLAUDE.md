@@ -57,6 +57,7 @@ github.com/itsatony/go-prompty/v2/
 ├── prompty.types.agent.go        # v2.1: SkillRef, ToolsConfig, ConstraintsConfig
 ├── prompty.types.shared.go       # v2.1: ResponseFormat, GuidedDecoding, InputDef
 ├── prompty.types.tools.go        # v2.1: FunctionDef, ModelParameters
+├── prompty.types.media.go        # v2.5: ImageConfig, AudioConfig, EmbeddingConfig, AsyncConfig
 ├── prompty.compile.go            # v2.1: CompileAgent, ActivateSkill, Compile, AgentDryRun
 ├── prompty.catalog.go            # v2.1: Catalog generation (skills, tools)
 ├── prompty.document.resolver.go  # v2.1: DocumentResolver interface + impls
@@ -544,6 +545,57 @@ anthropicFormat, _ := exec.ProviderFormat(ProviderAnthropic)
 geminiFormat, _ := exec.ProviderFormat(ProviderGemini)
 vllmFormat, _ := exec.ProviderFormat(ProviderVLLM)
 ```
+
+### Media Generation Parameters (v2.5)
+
+ExecutionConfig supports multimodal AI generation via nested config structs:
+
+| Config | Fields | Providers |
+|--------|--------|-----------|
+| `Modality` | `text`, `image`, `audio_speech`, `audio_transcription`, `music`, `sound_effects`, `embedding` | All (execution intent signal) |
+| `Image` | `width`, `height`, `size`, `quality`, `style`, `aspect_ratio`, `negative_prompt`, `num_images`, `guidance_scale`, `steps`, `strength` | OpenAI (size/quality/style/n), Gemini (aspectRatio/numberOfImages) |
+| `Audio` | `voice`, `voice_id`, `speed`, `output_format`, `duration`, `language` | OpenAI (voice/speed/response_format) |
+| `Embedding` | `dimensions`, `format` | OpenAI (dimensions/encoding_format) |
+| `Streaming` | `enabled`, `method` (`sse`/`websocket`) | All (stream: true) |
+| `Async` | `enabled`, `poll_interval_seconds`, `poll_timeout_seconds` | Application-level |
+
+**YAML Example (Image Generation):**
+```yaml
+---
+name: image-gen
+execution:
+  modality: image
+  provider: openai
+  model: dall-e-3
+  image:
+    size: "1024x1024"
+    quality: hd
+    style: vivid
+    num_images: 2
+---
+```
+
+**YAML Example (Audio TTS):**
+```yaml
+---
+name: tts-narrator
+execution:
+  modality: audio_speech
+  provider: openai
+  model: tts-1-hd
+  audio:
+    voice: alloy
+    speed: 1.25
+    output_format: mp3
+---
+```
+
+**Provider serialization rules for media params:**
+- **ToOpenAI**: image (size/quality/style/n), audio (voice/speed/response_format), embedding (dimensions/encoding_format), streaming (stream:true)
+- **ToAnthropic**: streaming only (stream:true). No media generation params
+- **ToGemini**: image (aspectRatio/numberOfImages in generationConfig), streaming (stream:true)
+- **ToVLLM**: streaming only (stream:true). No media params (text inference only)
+- **GetEffectiveProvider**: Media params do NOT hint provider (they span multiple providers)
 
 ## Deployment-Aware Versioning
 

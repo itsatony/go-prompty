@@ -1446,6 +1446,59 @@ engine, err := prompty.New(
 
 ---
 
+## Media Generation (v2.5)
+
+ExecutionConfig supports multimodal AI generation via nested config structs for image, audio, embedding, and more:
+
+```yaml
+---
+name: image-gen
+execution:
+  modality: image
+  provider: openai
+  model: dall-e-3
+  image:
+    size: "1024x1024"
+    quality: hd
+    style: vivid
+    num_images: 2
+---
+```
+
+```yaml
+---
+name: tts-narrator
+execution:
+  modality: audio_speech
+  provider: openai
+  model: tts-1-hd
+  audio:
+    voice: alloy
+    speed: 1.25
+    output_format: mp3
+---
+```
+
+```yaml
+---
+name: embedder
+execution:
+  modality: embedding
+  provider: openai
+  model: text-embedding-3-small
+  embedding:
+    dimensions: 1536
+    format: float
+  streaming:
+    enabled: true
+    method: sse
+---
+```
+
+Supported modalities: `text`, `image`, `audio_speech`, `audio_transcription`, `music`, `sound_effects`, `embedding`.
+
+---
+
 ## API Reference
 
 <details>

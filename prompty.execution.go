@@ -36,6 +36,18 @@ type ExecutionConfig struct {
 	ResponseFormat *ResponseFormat `yaml:"response_format,omitempty" json:"response_format,omitempty"`
 	GuidedDecoding *GuidedDecoding `yaml:"guided_decoding,omitempty" json:"guided_decoding,omitempty"`
 
+	// v2.5 Modality — execution intent signal (e.g., "text", "image", "audio_speech", "embedding")
+	Modality string `yaml:"modality,omitempty" json:"modality,omitempty"`
+
+	// v2.5 Media generation configs
+	Image     *ImageConfig     `yaml:"image,omitempty" json:"image,omitempty"`
+	Audio     *AudioConfig     `yaml:"audio,omitempty" json:"audio,omitempty"`
+	Embedding *EmbeddingConfig `yaml:"embedding,omitempty" json:"embedding,omitempty"`
+
+	// v2.5 Execution mode configs
+	Streaming *StreamingConfig `yaml:"streaming,omitempty" json:"streaming,omitempty"`
+	Async     *AsyncConfig     `yaml:"async,omitempty" json:"async,omitempty"`
+
 	// Provider-specific options (passthrough)
 	ProviderOptions map[string]any `yaml:"provider_options,omitempty" json:"provider_options,omitempty"`
 }
@@ -55,25 +67,25 @@ func (e *ExecutionConfig) Validate() error {
 	// Validate temperature range if set
 	if e.Temperature != nil {
 		if *e.Temperature < 0.0 || *e.Temperature > 2.0 {
-			return NewPromptValidationError("temperature must be between 0.0 and 2.0", "")
+			return NewPromptValidationError(ErrMsgTemperatureOutOfRange, "")
 		}
 	}
 
 	// Validate top_p range if set
 	if e.TopP != nil {
 		if *e.TopP < 0.0 || *e.TopP > 1.0 {
-			return NewPromptValidationError("top_p must be between 0.0 and 1.0", "")
+			return NewPromptValidationError(ErrMsgTopPOutOfRange, "")
 		}
 	}
 
 	// Validate max_tokens if set
 	if e.MaxTokens != nil && *e.MaxTokens <= 0 {
-		return NewPromptValidationError("max_tokens must be positive", "")
+		return NewPromptValidationError(ErrMsgMaxTokensInvalid, "")
 	}
 
 	// Validate top_k if set
 	if e.TopK != nil && *e.TopK < 0 {
-		return NewPromptValidationError("top_k must be non-negative", "")
+		return NewPromptValidationError(ErrMsgTopKInvalid, "")
 	}
 
 	// Validate min_p range if set
@@ -114,7 +126,39 @@ func (e *ExecutionConfig) Validate() error {
 	// Validate thinking config if set
 	if e.Thinking != nil && e.Thinking.Enabled {
 		if e.Thinking.BudgetTokens != nil && *e.Thinking.BudgetTokens <= 0 {
-			return NewPromptValidationError("thinking.budget_tokens must be positive", "")
+			return NewPromptValidationError(ErrMsgThinkingBudgetInvalid, "")
+		}
+	}
+
+	// Validate modality if set
+	if e.Modality != "" && !isValidModality(e.Modality) {
+		return NewPromptValidationError(ErrMsgInvalidModality, "")
+	}
+
+	// Validate media configs
+	if e.Image != nil {
+		if err := e.Image.Validate(); err != nil {
+			return err
+		}
+	}
+	if e.Audio != nil {
+		if err := e.Audio.Validate(); err != nil {
+			return err
+		}
+	}
+	if e.Embedding != nil {
+		if err := e.Embedding.Validate(); err != nil {
+			return err
+		}
+	}
+	if e.Streaming != nil {
+		if err := e.Streaming.Validate(); err != nil {
+			return err
+		}
+	}
+	if e.Async != nil {
+		if err := e.Async.Validate(); err != nil {
+			return err
 		}
 	}
 
@@ -195,6 +239,24 @@ func (e *ExecutionConfig) Clone() *ExecutionConfig {
 	}
 	if e.GuidedDecoding != nil {
 		clone.GuidedDecoding = cloneGuidedDecoding(e.GuidedDecoding)
+	}
+
+	// v2.5 media fields
+	clone.Modality = e.Modality
+	if e.Image != nil {
+		clone.Image = e.Image.Clone()
+	}
+	if e.Audio != nil {
+		clone.Audio = e.Audio.Clone()
+	}
+	if e.Embedding != nil {
+		clone.Embedding = e.Embedding.Clone()
+	}
+	if e.Streaming != nil {
+		clone.Streaming = e.Streaming.Clone()
+	}
+	if e.Async != nil {
+		clone.Async = e.Async.Clone()
 	}
 
 	if e.ProviderOptions != nil {
@@ -439,6 +501,84 @@ func (e *ExecutionConfig) HasLogitBias() bool {
 	return e != nil && len(e.LogitBias) > 0
 }
 
+// GetModality returns the modality string or empty.
+func (e *ExecutionConfig) GetModality() string {
+	if e == nil {
+		return ""
+	}
+	return e.Modality
+}
+
+// HasModality returns true if modality is configured.
+func (e *ExecutionConfig) HasModality() bool {
+	return e != nil && e.Modality != ""
+}
+
+// GetImage returns the image config or nil.
+func (e *ExecutionConfig) GetImage() *ImageConfig {
+	if e == nil {
+		return nil
+	}
+	return e.Image
+}
+
+// HasImage returns true if image config is configured.
+func (e *ExecutionConfig) HasImage() bool {
+	return e != nil && e.Image != nil
+}
+
+// GetAudio returns the audio config or nil.
+func (e *ExecutionConfig) GetAudio() *AudioConfig {
+	if e == nil {
+		return nil
+	}
+	return e.Audio
+}
+
+// HasAudio returns true if audio config is configured.
+func (e *ExecutionConfig) HasAudio() bool {
+	return e != nil && e.Audio != nil
+}
+
+// GetEmbedding returns the embedding config or nil.
+func (e *ExecutionConfig) GetEmbedding() *EmbeddingConfig {
+	if e == nil {
+		return nil
+	}
+	return e.Embedding
+}
+
+// HasEmbedding returns true if embedding config is configured.
+func (e *ExecutionConfig) HasEmbedding() bool {
+	return e != nil && e.Embedding != nil
+}
+
+// GetStreaming returns the streaming config or nil.
+func (e *ExecutionConfig) GetStreaming() *StreamingConfig {
+	if e == nil {
+		return nil
+	}
+	return e.Streaming
+}
+
+// HasStreaming returns true if streaming config is configured.
+func (e *ExecutionConfig) HasStreaming() bool {
+	return e != nil && e.Streaming != nil
+}
+
+// GetAsync returns the async config or nil.
+func (e *ExecutionConfig) GetAsync() *AsyncConfig {
+	if e == nil {
+		return nil
+	}
+	return e.Async
+}
+
+// HasAsync returns true if async config is configured.
+func (e *ExecutionConfig) HasAsync() bool {
+	return e != nil && e.Async != nil
+}
+
 // GetEffectiveProvider detects the intended provider from configuration.
 // Returns the explicit provider if set, otherwise infers from config shape or model name.
 func (e *ExecutionConfig) GetEffectiveProvider() string {
@@ -518,6 +658,26 @@ func (e *ExecutionConfig) ToMap() map[string]any {
 		result[ParamKeyLogitBias] = e.LogitBias
 	}
 
+	// v2.5 media fields
+	if e.Modality != "" {
+		result[ParamKeyModality] = e.Modality
+	}
+	if e.Image != nil {
+		result[ParamKeyImage] = e.Image.ToMap()
+	}
+	if e.Audio != nil {
+		result[ParamKeyAudio] = e.Audio.ToMap()
+	}
+	if e.Embedding != nil {
+		result[ParamKeyEmbedding] = e.Embedding.ToMap()
+	}
+	if e.Streaming != nil {
+		result[ParamKeyStreaming] = e.Streaming.ToMap()
+	}
+	if e.Async != nil {
+		result[ParamKeyAsync] = e.Async.ToMap()
+	}
+
 	return result
 }
 
@@ -557,7 +717,15 @@ func (e *ExecutionConfig) ToOpenAI() map[string]any {
 	}
 
 	if e.ResponseFormat != nil {
-		result["response_format"] = e.ResponseFormat.ToOpenAI()
+		result[ParamKeyResponseFormat] = e.ResponseFormat.ToOpenAI()
+	}
+
+	// v2.5 OpenAI media params
+	e.openAIImageParams(result)
+	e.openAIAudioParams(result)
+	e.openAIEmbeddingParams(result)
+	if e.Streaming != nil && e.Streaming.Enabled {
+		result[ParamKeyStream] = true
 	}
 
 	// Merge provider options
@@ -566,6 +734,59 @@ func (e *ExecutionConfig) ToOpenAI() map[string]any {
 	}
 
 	return result
+}
+
+// openAIImageParams adds OpenAI image generation params to the result map.
+func (e *ExecutionConfig) openAIImageParams(result map[string]any) {
+	if e.Image == nil {
+		return
+	}
+	size := e.Image.EffectiveSize()
+	if size != "" {
+		result[ParamKeyImageSize] = size
+	}
+	if e.Image.Quality != "" {
+		result[ParamKeyImageQuality] = e.Image.Quality
+	}
+	if e.Image.Style != "" {
+		result[ParamKeyImageStyle] = e.Image.Style
+	}
+	if e.Image.NumImages != nil {
+		result[ParamKeyImageN] = *e.Image.NumImages
+	}
+}
+
+// openAIAudioParams adds OpenAI audio/TTS params to the result map.
+func (e *ExecutionConfig) openAIAudioParams(result map[string]any) {
+	if e.Audio == nil {
+		return
+	}
+	if e.Audio.Voice != "" {
+		result[ParamKeyVoice] = e.Audio.Voice
+	}
+	if e.Audio.Speed != nil {
+		result[ParamKeySpeed] = *e.Audio.Speed
+	}
+	if e.Audio.OutputFormat != "" {
+		// Only set response_format for audio if structured output response_format is not already set.
+		// These target different OpenAI endpoints (TTS vs chat completions) but share the same key.
+		if _, hasRF := result[ParamKeyResponseFormat]; !hasRF {
+			result[ParamKeyResponseFormat] = e.Audio.OutputFormat
+		}
+	}
+}
+
+// openAIEmbeddingParams adds OpenAI embedding params to the result map.
+func (e *ExecutionConfig) openAIEmbeddingParams(result map[string]any) {
+	if e.Embedding == nil {
+		return
+	}
+	if e.Embedding.Dimensions != nil {
+		result[ParamKeyDimensions] = *e.Embedding.Dimensions
+	}
+	if e.Embedding.Format != "" {
+		result[ParamKeyEncodingFormat] = e.Embedding.Format
+	}
 }
 
 // ToAnthropic converts the execution config to Anthropic API format.
@@ -614,6 +835,11 @@ func (e *ExecutionConfig) ToAnthropic() map[string]any {
 		result["output_format"] = e.ResponseFormat.ToAnthropic()
 	}
 
+	// v2.5: streaming only — no media generation params for Anthropic
+	if e.Streaming != nil && e.Streaming.Enabled {
+		result[ParamKeyStream] = true
+	}
+
 	// Merge provider options
 	for k, v := range e.ProviderOptions {
 		result[k] = v
@@ -657,8 +883,23 @@ func (e *ExecutionConfig) ToGemini() map[string]any {
 		genConfig["responseSchema"] = e.ResponseFormat.ToGemini()
 	}
 
+	// v2.5 Gemini image params in generationConfig
+	if e.Image != nil {
+		if e.Image.AspectRatio != "" {
+			genConfig[ParamKeyAspectRatio] = e.Image.AspectRatio
+		}
+		if e.Image.NumImages != nil {
+			genConfig[ParamKeyGeminiNumImages] = *e.Image.NumImages
+		}
+	}
+
 	if len(genConfig) > 0 {
 		result["generationConfig"] = genConfig
+	}
+
+	// v2.5: streaming
+	if e.Streaming != nil && e.Streaming.Enabled {
+		result[ParamKeyStream] = true
 	}
 
 	// Merge provider options
@@ -720,6 +961,11 @@ func (e *ExecutionConfig) ToVLLM() map[string]any {
 		for k, v := range gdParams {
 			result[k] = v
 		}
+	}
+
+	// v2.5: streaming only — no media params for vLLM (text inference only)
+	if e.Streaming != nil && e.Streaming.Enabled {
+		result[ParamKeyStream] = true
 	}
 
 	// Merge provider options
@@ -843,6 +1089,26 @@ func (e *ExecutionConfig) Merge(other *ExecutionConfig) *ExecutionConfig {
 	}
 	if other.GuidedDecoding != nil {
 		result.GuidedDecoding = cloneGuidedDecoding(other.GuidedDecoding)
+	}
+
+	// v2.5 media fields
+	if other.Modality != "" {
+		result.Modality = other.Modality
+	}
+	if other.Image != nil {
+		result.Image = other.Image.Clone()
+	}
+	if other.Audio != nil {
+		result.Audio = other.Audio.Clone()
+	}
+	if other.Embedding != nil {
+		result.Embedding = other.Embedding.Clone()
+	}
+	if other.Streaming != nil {
+		result.Streaming = other.Streaming.Clone()
+	}
+	if other.Async != nil {
+		result.Async = other.Async.Clone()
 	}
 
 	// Merge provider options (other wins on conflict)

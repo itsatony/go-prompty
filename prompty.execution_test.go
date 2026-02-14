@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestExecutionConfig_Validate(t *testing.T) {
@@ -345,7 +346,7 @@ func TestExecutionConfig_ToOpenAI(t *testing.T) {
 	assert.Equal(t, "gpt-4", result["model"])
 	assert.Equal(t, 0.7, result[ParamKeyTemperature])
 	assert.Equal(t, 1000, result[ParamKeyMaxTokens])
-	assert.NotNil(t, result["response_format"])
+	assert.NotNil(t, result[ParamKeyResponseFormat])
 	assert.Equal(t, "option", result["custom"])
 }
 
@@ -1247,3 +1248,640 @@ func TestExecutionConfig_JSONAndYAML(t *testing.T) {
 	assert.Contains(t, yamlStr, ProviderOpenAI)
 	assert.Contains(t, yamlStr, "gpt-4")
 }
+
+// ==================== v2.5 Media Generation Tests ====================
+
+func TestExecutionConfig_Validate_Modality(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *ExecutionConfig
+		wantErr bool
+	}{
+		{name: "valid text", config: &ExecutionConfig{Modality: ModalityText}, wantErr: false},
+		{name: "valid image", config: &ExecutionConfig{Modality: ModalityImage}, wantErr: false},
+		{name: "valid audio_speech", config: &ExecutionConfig{Modality: ModalityAudioSpeech}, wantErr: false},
+		{name: "valid embedding", config: &ExecutionConfig{Modality: ModalityEmbedding}, wantErr: false},
+		{name: "empty modality", config: &ExecutionConfig{}, wantErr: false},
+		{name: "invalid modality", config: &ExecutionConfig{Modality: "video"}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), ErrMsgInvalidModality)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExecutionConfig_Validate_MediaConfigs(t *testing.T) {
+	t.Run("invalid image propagates", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Image: &ImageConfig{Width: func() *int { v := 0; return &v }()},
+		}
+		err := config.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), ErrMsgImageWidthOutOfRange)
+	})
+
+	t.Run("invalid audio propagates", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Audio: &AudioConfig{Speed: func() *float64 { v := 0.1; return &v }()},
+		}
+		err := config.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), ErrMsgAudioSpeedOutOfRange)
+	})
+
+	t.Run("invalid embedding propagates", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Embedding: &EmbeddingConfig{Dimensions: func() *int { v := 0; return &v }()},
+		}
+		err := config.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), ErrMsgEmbeddingDimensionsOutOfRange)
+	})
+
+	t.Run("invalid streaming propagates", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Streaming: &StreamingConfig{Enabled: true, Method: "grpc"},
+		}
+		err := config.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), ErrMsgStreamInvalidMethod)
+	})
+
+	t.Run("invalid async propagates", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Async: &AsyncConfig{PollIntervalSeconds: func() *float64 { v := -1.0; return &v }()},
+		}
+		err := config.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), ErrMsgAsyncPollIntervalInvalid)
+	})
+
+	t.Run("valid media config", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Modality: ModalityImage,
+			Image: &ImageConfig{
+				Width:   func() *int { v := 1024; return &v }(),
+				Height:  func() *int { v := 1024; return &v }(),
+				Quality: ImageQualityHD,
+			},
+			Streaming: &StreamingConfig{Enabled: true, Method: StreamMethodSSE},
+		}
+		assert.NoError(t, config.Validate())
+	})
+}
+
+func TestExecutionConfig_Clone_MediaFields(t *testing.T) {
+	original := &ExecutionConfig{
+		Provider: ProviderOpenAI,
+		Model:    "dall-e-3",
+		Modality: ModalityImage,
+		Image: &ImageConfig{
+			Width:   func() *int { v := 1024; return &v }(),
+			Height:  func() *int { v := 1024; return &v }(),
+			Quality: ImageQualityHD,
+			Style:   ImageStyleVivid,
+		},
+		Audio: &AudioConfig{
+			Voice:        "alloy",
+			Speed:        func() *float64 { v := 1.5; return &v }(),
+			OutputFormat: AudioFormatMP3,
+		},
+		Embedding: &EmbeddingConfig{
+			Dimensions: func() *int { v := 1536; return &v }(),
+			Format:     EmbeddingFormatFloat,
+		},
+		Streaming: &StreamingConfig{
+			Enabled: true,
+			Method:  StreamMethodSSE,
+		},
+		Async: &AsyncConfig{
+			Enabled:             true,
+			PollIntervalSeconds: func() *float64 { v := 2.0; return &v }(),
+			PollTimeoutSeconds:  func() *float64 { v := 60.0; return &v }(),
+		},
+	}
+
+	clone := original.Clone()
+	require.NotNil(t, clone)
+
+	// Verify equality
+	assert.Equal(t, original.Modality, clone.Modality)
+	assert.Equal(t, *original.Image.Width, *clone.Image.Width)
+	assert.Equal(t, original.Image.Quality, clone.Image.Quality)
+	assert.Equal(t, original.Audio.Voice, clone.Audio.Voice)
+	assert.Equal(t, *original.Audio.Speed, *clone.Audio.Speed)
+	assert.Equal(t, *original.Embedding.Dimensions, *clone.Embedding.Dimensions)
+	assert.Equal(t, original.Streaming.Enabled, clone.Streaming.Enabled)
+	assert.Equal(t, original.Streaming.Method, clone.Streaming.Method)
+	assert.Equal(t, original.Async.Enabled, clone.Async.Enabled)
+
+	// Verify deep copy independence
+	*clone.Image.Width = 512
+	assert.NotEqual(t, *original.Image.Width, *clone.Image.Width)
+
+	*clone.Audio.Speed = 2.0
+	assert.NotEqual(t, *original.Audio.Speed, *clone.Audio.Speed)
+
+	*clone.Embedding.Dimensions = 3072
+	assert.NotEqual(t, *original.Embedding.Dimensions, *clone.Embedding.Dimensions)
+
+	*clone.Async.PollIntervalSeconds = 10.0
+	assert.NotEqual(t, *original.Async.PollIntervalSeconds, *clone.Async.PollIntervalSeconds)
+}
+
+func TestExecutionConfig_Merge_MediaFields(t *testing.T) {
+	t.Run("modality override", func(t *testing.T) {
+		base := &ExecutionConfig{Modality: ModalityText}
+		override := &ExecutionConfig{Modality: ModalityImage}
+		result := base.Merge(override)
+		assert.Equal(t, ModalityImage, result.Modality)
+	})
+
+	t.Run("modality empty keeps base", func(t *testing.T) {
+		base := &ExecutionConfig{Modality: ModalityImage}
+		override := &ExecutionConfig{}
+		result := base.Merge(override)
+		assert.Equal(t, ModalityImage, result.Modality)
+	})
+
+	t.Run("image override", func(t *testing.T) {
+		base := &ExecutionConfig{
+			Image: &ImageConfig{Quality: ImageQualityStandard},
+		}
+		override := &ExecutionConfig{
+			Image: &ImageConfig{Quality: ImageQualityHD},
+		}
+		result := base.Merge(override)
+		require.NotNil(t, result.Image)
+		assert.Equal(t, ImageQualityHD, result.Image.Quality)
+	})
+
+	t.Run("nil override keeps base image", func(t *testing.T) {
+		base := &ExecutionConfig{
+			Image: &ImageConfig{Quality: ImageQualityHD},
+		}
+		override := &ExecutionConfig{}
+		result := base.Merge(override)
+		require.NotNil(t, result.Image)
+		assert.Equal(t, ImageQualityHD, result.Image.Quality)
+	})
+
+	t.Run("audio override deep copy", func(t *testing.T) {
+		overrideSpeed := 2.0
+		override := &ExecutionConfig{
+			Audio: &AudioConfig{Voice: "echo", Speed: &overrideSpeed},
+		}
+		result := (&ExecutionConfig{}).Merge(override)
+		require.NotNil(t, result.Audio)
+		assert.Equal(t, "echo", result.Audio.Voice)
+
+		// Verify deep copy
+		*result.Audio.Speed = 3.0
+		assert.Equal(t, 2.0, *override.Audio.Speed)
+	})
+
+	t.Run("streaming override", func(t *testing.T) {
+		base := &ExecutionConfig{
+			Streaming: &StreamingConfig{Enabled: false},
+		}
+		override := &ExecutionConfig{
+			Streaming: &StreamingConfig{Enabled: true, Method: StreamMethodSSE},
+		}
+		result := base.Merge(override)
+		require.NotNil(t, result.Streaming)
+		assert.True(t, result.Streaming.Enabled)
+		assert.Equal(t, StreamMethodSSE, result.Streaming.Method)
+	})
+
+	t.Run("async override", func(t *testing.T) {
+		interval := 5.0
+		timeout := 120.0
+		override := &ExecutionConfig{
+			Async: &AsyncConfig{Enabled: true, PollIntervalSeconds: &interval, PollTimeoutSeconds: &timeout},
+		}
+		result := (&ExecutionConfig{}).Merge(override)
+		require.NotNil(t, result.Async)
+		assert.True(t, result.Async.Enabled)
+	})
+
+	t.Run("three-layer merge with media", func(t *testing.T) {
+		agent := &ExecutionConfig{
+			Provider: ProviderOpenAI,
+			Model:    "dall-e-3",
+			Modality: ModalityImage,
+			Image:    &ImageConfig{Quality: ImageQualityStandard, Style: ImageStyleNatural},
+		}
+		skill := &ExecutionConfig{
+			Image: &ImageConfig{Quality: ImageQualityHD},
+		}
+		runtime := &ExecutionConfig{
+			Streaming: &StreamingConfig{Enabled: true},
+		}
+
+		result := agent.Merge(skill).Merge(runtime)
+		assert.Equal(t, ProviderOpenAI, result.Provider)
+		assert.Equal(t, ModalityImage, result.Modality)
+		assert.Equal(t, ImageQualityHD, result.Image.Quality)
+		require.NotNil(t, result.Streaming)
+		assert.True(t, result.Streaming.Enabled)
+	})
+}
+
+func TestExecutionConfig_Getters_MediaFields(t *testing.T) {
+	config := &ExecutionConfig{
+		Modality:  ModalityImage,
+		Image:     &ImageConfig{Quality: ImageQualityHD},
+		Audio:     &AudioConfig{Voice: "alloy"},
+		Embedding: &EmbeddingConfig{Format: EmbeddingFormatFloat},
+		Streaming: &StreamingConfig{Enabled: true},
+		Async:     &AsyncConfig{Enabled: true},
+	}
+
+	assert.Equal(t, ModalityImage, config.GetModality())
+	assert.True(t, config.HasModality())
+	assert.NotNil(t, config.GetImage())
+	assert.True(t, config.HasImage())
+	assert.NotNil(t, config.GetAudio())
+	assert.True(t, config.HasAudio())
+	assert.NotNil(t, config.GetEmbedding())
+	assert.True(t, config.HasEmbedding())
+	assert.NotNil(t, config.GetStreaming())
+	assert.True(t, config.HasStreaming())
+	assert.NotNil(t, config.GetAsync())
+	assert.True(t, config.HasAsync())
+
+	// Test nil config
+	var nilConfig *ExecutionConfig
+	assert.Empty(t, nilConfig.GetModality())
+	assert.False(t, nilConfig.HasModality())
+	assert.Nil(t, nilConfig.GetImage())
+	assert.False(t, nilConfig.HasImage())
+	assert.Nil(t, nilConfig.GetAudio())
+	assert.False(t, nilConfig.HasAudio())
+	assert.Nil(t, nilConfig.GetEmbedding())
+	assert.False(t, nilConfig.HasEmbedding())
+	assert.Nil(t, nilConfig.GetStreaming())
+	assert.False(t, nilConfig.HasStreaming())
+	assert.Nil(t, nilConfig.GetAsync())
+	assert.False(t, nilConfig.HasAsync())
+}
+
+func TestExecutionConfig_ToMap_MediaFields(t *testing.T) {
+	config := &ExecutionConfig{
+		Modality:  ModalityImage,
+		Image:     &ImageConfig{Quality: ImageQualityHD},
+		Audio:     &AudioConfig{Voice: "alloy"},
+		Embedding: &EmbeddingConfig{Format: EmbeddingFormatFloat},
+		Streaming: &StreamingConfig{Enabled: true},
+		Async:     &AsyncConfig{Enabled: true},
+	}
+
+	m := config.ToMap()
+
+	assert.Equal(t, ModalityImage, m[ParamKeyModality])
+	assert.NotNil(t, m[ParamKeyImage])
+	assert.NotNil(t, m[ParamKeyAudio])
+	assert.NotNil(t, m[ParamKeyEmbedding])
+	assert.NotNil(t, m[ParamKeyStreaming])
+	assert.NotNil(t, m[ParamKeyAsync])
+}
+
+func TestExecutionConfig_ToOpenAI_ImageParams(t *testing.T) {
+	numImages := 2
+	config := &ExecutionConfig{
+		Model:    "dall-e-3",
+		Modality: ModalityImage,
+		Image: &ImageConfig{
+			Size:      "1024x1024",
+			Quality:   ImageQualityHD,
+			Style:     ImageStyleVivid,
+			NumImages: &numImages,
+		},
+	}
+
+	result := config.ToOpenAI()
+
+	assert.Equal(t, "dall-e-3", result["model"])
+	assert.Equal(t, "1024x1024", result[ParamKeyImageSize])
+	assert.Equal(t, ImageQualityHD, result[ParamKeyImageQuality])
+	assert.Equal(t, ImageStyleVivid, result[ParamKeyImageStyle])
+	assert.Equal(t, 2, result[ParamKeyImageN])
+}
+
+func TestExecutionConfig_ToOpenAI_AudioTTSParams(t *testing.T) {
+	speed := 1.5
+	config := &ExecutionConfig{
+		Model:    "tts-1-hd",
+		Modality: ModalityAudioSpeech,
+		Audio: &AudioConfig{
+			Voice:        "alloy",
+			Speed:        &speed,
+			OutputFormat: AudioFormatMP3,
+		},
+	}
+
+	result := config.ToOpenAI()
+
+	assert.Equal(t, "tts-1-hd", result["model"])
+	assert.Equal(t, "alloy", result[ParamKeyVoice])
+	assert.Equal(t, 1.5, result[ParamKeySpeed])
+	assert.Equal(t, AudioFormatMP3, result[ParamKeyResponseFormat])
+}
+
+func TestExecutionConfig_ToOpenAI_AudioResponseFormatCollision(t *testing.T) {
+	// When both ResponseFormat (structured output) and Audio.OutputFormat are set,
+	// the structured output response_format should take precedence because
+	// these target different OpenAI endpoints (chat vs TTS).
+	speed := 1.0
+	config := &ExecutionConfig{
+		Model: "gpt-4",
+		ResponseFormat: &ResponseFormat{
+			Type: "json_schema",
+		},
+		Audio: &AudioConfig{
+			Voice:        "alloy",
+			Speed:        &speed,
+			OutputFormat: AudioFormatMP3,
+		},
+	}
+
+	result := config.ToOpenAI()
+
+	// Structured output response_format should win
+	rf := result[ParamKeyResponseFormat]
+	assert.NotEqual(t, AudioFormatMP3, rf, "audio output format should not overwrite structured output response_format")
+}
+
+func TestExecutionConfig_ToOpenAI_EmbeddingParams(t *testing.T) {
+	dims := 1536
+	config := &ExecutionConfig{
+		Model:    "text-embedding-3-small",
+		Modality: ModalityEmbedding,
+		Embedding: &EmbeddingConfig{
+			Dimensions: &dims,
+			Format:     EmbeddingFormatFloat,
+		},
+	}
+
+	result := config.ToOpenAI()
+
+	assert.Equal(t, "text-embedding-3-small", result["model"])
+	assert.Equal(t, 1536, result[ParamKeyDimensions])
+	assert.Equal(t, EmbeddingFormatFloat, result[ParamKeyEncodingFormat])
+}
+
+func TestExecutionConfig_ToOpenAI_Streaming(t *testing.T) {
+	config := &ExecutionConfig{
+		Model:     "gpt-4",
+		Streaming: &StreamingConfig{Enabled: true},
+	}
+
+	result := config.ToOpenAI()
+	assert.Equal(t, true, result[ParamKeyStream])
+}
+
+func TestExecutionConfig_ToOpenAI_StreamingDisabled(t *testing.T) {
+	config := &ExecutionConfig{
+		Model:     "gpt-4",
+		Streaming: &StreamingConfig{Enabled: false},
+	}
+
+	result := config.ToOpenAI()
+	_, hasStream := result[ParamKeyStream]
+	assert.False(t, hasStream)
+}
+
+func TestExecutionConfig_ToAnthropic_Streaming(t *testing.T) {
+	config := &ExecutionConfig{
+		Model:     "claude-3-opus",
+		Streaming: &StreamingConfig{Enabled: true},
+	}
+
+	result := config.ToAnthropic()
+	assert.Equal(t, true, result[ParamKeyStream])
+}
+
+func TestExecutionConfig_ToAnthropic_NoMediaParams(t *testing.T) {
+	numImages := 2
+	config := &ExecutionConfig{
+		Model: "claude-3-opus",
+		Image: &ImageConfig{
+			Quality:   ImageQualityHD,
+			NumImages: &numImages,
+		},
+		Audio: &AudioConfig{Voice: "alloy"},
+	}
+
+	result := config.ToAnthropic()
+
+	// No image or audio params should appear
+	_, hasSize := result[ParamKeyImageSize]
+	_, hasQuality := result[ParamKeyImageQuality]
+	_, hasVoice := result[ParamKeyVoice]
+	assert.False(t, hasSize)
+	assert.False(t, hasQuality)
+	assert.False(t, hasVoice)
+}
+
+func TestExecutionConfig_ToGemini_ImageParams(t *testing.T) {
+	numImages := 4
+	config := &ExecutionConfig{
+		Model:    "gemini-pro",
+		Modality: ModalityImage,
+		Image: &ImageConfig{
+			AspectRatio: "16:9",
+			NumImages:   &numImages,
+		},
+	}
+
+	result := config.ToGemini()
+
+	genConfig, ok := result["generationConfig"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "16:9", genConfig[ParamKeyAspectRatio])
+	assert.Equal(t, 4, genConfig[ParamKeyGeminiNumImages])
+}
+
+func TestExecutionConfig_ToGemini_Streaming(t *testing.T) {
+	config := &ExecutionConfig{
+		Model:     "gemini-pro",
+		Streaming: &StreamingConfig{Enabled: true},
+	}
+
+	result := config.ToGemini()
+	assert.Equal(t, true, result[ParamKeyStream])
+}
+
+func TestExecutionConfig_ToVLLM_NoMediaParams(t *testing.T) {
+	config := &ExecutionConfig{
+		Model: "llama-2-7b",
+		Image: &ImageConfig{Quality: ImageQualityHD},
+		Audio: &AudioConfig{Voice: "alloy"},
+	}
+
+	result := config.ToVLLM()
+
+	_, hasQuality := result[ParamKeyImageQuality]
+	_, hasVoice := result[ParamKeyVoice]
+	assert.False(t, hasQuality)
+	assert.False(t, hasVoice)
+}
+
+func TestExecutionConfig_ToVLLM_Streaming(t *testing.T) {
+	config := &ExecutionConfig{
+		Model:     "llama-2-7b",
+		Streaming: &StreamingConfig{Enabled: true},
+	}
+
+	result := config.ToVLLM()
+	assert.Equal(t, true, result[ParamKeyStream])
+}
+
+func TestExecutionConfig_GetEffectiveProvider_MediaDoesNotHint(t *testing.T) {
+	// Media params should NOT influence provider detection
+	config := &ExecutionConfig{
+		Image:     &ImageConfig{Quality: ImageQualityHD},
+		Audio:     &AudioConfig{Voice: "alloy"},
+		Embedding: &EmbeddingConfig{Format: EmbeddingFormatFloat},
+		Streaming: &StreamingConfig{Enabled: true},
+	}
+
+	assert.Equal(t, "", config.GetEffectiveProvider())
+}
+
+// --- E2E YAML roundtrip tests ---
+
+func TestE2E_ImageGeneration_YAMLRoundtrip(t *testing.T) {
+	yamlStr := `
+modality: image
+provider: openai
+model: dall-e-3
+image:
+  size: "1024x1024"
+  quality: hd
+  style: vivid
+  num_images: 2
+`
+	var config ExecutionConfig
+	err := parseYAMLConfig(yamlStr, &config)
+	require.NoError(t, err)
+
+	assert.Equal(t, ModalityImage, config.Modality)
+	assert.Equal(t, ProviderOpenAI, config.Provider)
+	assert.Equal(t, "dall-e-3", config.Model)
+	require.NotNil(t, config.Image)
+	assert.Equal(t, "1024x1024", config.Image.Size)
+	assert.Equal(t, ImageQualityHD, config.Image.Quality)
+	assert.Equal(t, ImageStyleVivid, config.Image.Style)
+	require.NotNil(t, config.Image.NumImages)
+	assert.Equal(t, 2, *config.Image.NumImages)
+
+	// Validate
+	assert.NoError(t, config.Validate())
+
+	// Clone and verify independence
+	clone := config.Clone()
+	assert.Equal(t, config.Image.Quality, clone.Image.Quality)
+
+	// ToOpenAI
+	openAI := config.ToOpenAI()
+	assert.Equal(t, "1024x1024", openAI[ParamKeyImageSize])
+	assert.Equal(t, ImageQualityHD, openAI[ParamKeyImageQuality])
+	assert.Equal(t, ImageStyleVivid, openAI[ParamKeyImageStyle])
+	assert.Equal(t, 2, openAI[ParamKeyImageN])
+}
+
+func TestE2E_AudioTTS_YAMLRoundtrip(t *testing.T) {
+	yamlStr := `
+modality: audio_speech
+provider: openai
+model: tts-1-hd
+audio:
+  voice: alloy
+  speed: 1.25
+  output_format: mp3
+`
+	var config ExecutionConfig
+	err := parseYAMLConfig(yamlStr, &config)
+	require.NoError(t, err)
+
+	assert.Equal(t, ModalityAudioSpeech, config.Modality)
+	require.NotNil(t, config.Audio)
+	assert.Equal(t, "alloy", config.Audio.Voice)
+	assert.Equal(t, 1.25, *config.Audio.Speed)
+	assert.Equal(t, AudioFormatMP3, config.Audio.OutputFormat)
+
+	assert.NoError(t, config.Validate())
+
+	openAI := config.ToOpenAI()
+	assert.Equal(t, "alloy", openAI[ParamKeyVoice])
+	assert.Equal(t, 1.25, openAI[ParamKeySpeed])
+	assert.Equal(t, AudioFormatMP3, openAI[ParamKeyResponseFormat])
+}
+
+func TestE2E_Embedding_YAMLRoundtrip(t *testing.T) {
+	yamlStr := `
+modality: embedding
+provider: openai
+model: text-embedding-3-small
+embedding:
+  dimensions: 1536
+  format: float
+`
+	var config ExecutionConfig
+	err := parseYAMLConfig(yamlStr, &config)
+	require.NoError(t, err)
+
+	assert.Equal(t, ModalityEmbedding, config.Modality)
+	require.NotNil(t, config.Embedding)
+	assert.Equal(t, 1536, *config.Embedding.Dimensions)
+	assert.Equal(t, EmbeddingFormatFloat, config.Embedding.Format)
+
+	assert.NoError(t, config.Validate())
+
+	openAI := config.ToOpenAI()
+	assert.Equal(t, 1536, openAI[ParamKeyDimensions])
+	assert.Equal(t, EmbeddingFormatFloat, openAI[ParamKeyEncodingFormat])
+}
+
+func TestE2E_StreamingAsync_YAMLRoundtrip(t *testing.T) {
+	yamlStr := `
+provider: openai
+model: gpt-4
+streaming:
+  enabled: true
+  method: sse
+async:
+  enabled: true
+  poll_interval_seconds: 2.0
+  poll_timeout_seconds: 120.0
+`
+	var config ExecutionConfig
+	err := parseYAMLConfig(yamlStr, &config)
+	require.NoError(t, err)
+
+	require.NotNil(t, config.Streaming)
+	assert.True(t, config.Streaming.Enabled)
+	assert.Equal(t, StreamMethodSSE, config.Streaming.Method)
+
+	require.NotNil(t, config.Async)
+	assert.True(t, config.Async.Enabled)
+	assert.Equal(t, 2.0, *config.Async.PollIntervalSeconds)
+	assert.Equal(t, 120.0, *config.Async.PollTimeoutSeconds)
+
+	assert.NoError(t, config.Validate())
+}
+
+// parseYAMLConfig is a test helper to unmarshal YAML into ExecutionConfig.
+func parseYAMLConfig(yamlStr string, config *ExecutionConfig) error {
+	return yaml.Unmarshal([]byte(yamlStr), config)
+}
+

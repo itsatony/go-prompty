@@ -737,3 +737,37 @@ Key differences:
 3. Model config moved to `execution` namespace with flat parameters
 4. Optional `skope` config for platform integration
 5. Agent type supports `skills`, `tools`, `constraints`, and `messages`
+
+## v2.5 Media Generation Parameters
+
+v2.5 extends `ExecutionConfig` with nested structs for multimodal AI generation:
+
+### Media Config Reference
+
+| Config | Field | Type | Range | Description |
+|--------|-------|------|-------|-------------|
+| `image` | `width` | `*int` | 1-8192 | Image width in pixels |
+| `image` | `height` | `*int` | 1-8192 | Image height in pixels |
+| `image` | `size` | `string` | — | Provider-specific size (e.g., "1024x1024") |
+| `image` | `quality` | `string` | standard/hd/low/medium/high | Image quality |
+| `image` | `style` | `string` | natural/vivid | Image style |
+| `image` | `aspect_ratio` | `string` | — | Aspect ratio (e.g., "16:9") |
+| `image` | `negative_prompt` | `string` | — | Content to avoid |
+| `image` | `num_images` | `*int` | 1-10 | Number of images |
+| `image` | `guidance_scale` | `*float64` | 0.0-30.0 | Prompt adherence |
+| `image` | `steps` | `*int` | 1-200 | Diffusion steps |
+| `image` | `strength` | `*float64` | 0.0-1.0 | Transformation strength |
+| `audio` | `voice` | `string` | — | Voice name |
+| `audio` | `voice_id` | `string` | — | Provider-specific voice ID |
+| `audio` | `speed` | `*float64` | 0.25-4.0 | Playback speed |
+| `audio` | `output_format` | `string` | mp3/opus/aac/flac/wav/pcm | Output format |
+| `audio` | `duration` | `*float64` | 0-600 | Max duration in seconds |
+| `audio` | `language` | `string` | — | Language code |
+| `embedding` | `dimensions` | `*int` | 1-65536 | Embedding dimensions |
+| `embedding` | `format` | `string` | float/base64 | Output format |
+| `streaming` | `enabled` | `bool` | — | Enable streaming |
+| `streaming` | `method` | `string` | sse/websocket | Transport method |
+| `async` | `enabled` | `bool` | — | Enable async execution |
+| `async` | `poll_interval_seconds` | `*float64` | >0 | Polling interval |
+| `async` | `poll_timeout_seconds` | `*float64` | >0, >=interval | Polling timeout |
+| (root) | `modality` | `string` | text/image/audio_speech/audio_transcription/music/sound_effects/embedding | Execution intent |

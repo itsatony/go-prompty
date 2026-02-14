@@ -28,8 +28,44 @@ type FunctionDef struct {
 type StreamingConfig struct {
 	// Enabled indicates whether streaming is enabled
 	Enabled bool `yaml:"enabled" json:"enabled"`
-	// ChunkSize is the optional preferred chunk size
-	ChunkSize int `yaml:"chunk_size,omitempty" json:"chunk_size,omitempty"`
+	// Method is the streaming transport method: "sse" or "websocket"
+	Method string `yaml:"method,omitempty" json:"method,omitempty"`
+}
+
+// Validate checks the streaming config for consistency.
+func (c *StreamingConfig) Validate() error {
+	if c == nil {
+		return nil
+	}
+	if c.Enabled && c.Method != "" && !isValidStreamMethod(c.Method) {
+		return NewPromptValidationError(ErrMsgStreamInvalidMethod, "")
+	}
+	return nil
+}
+
+// Clone creates a deep copy of the streaming config.
+func (c *StreamingConfig) Clone() *StreamingConfig {
+	if c == nil {
+		return nil
+	}
+	return &StreamingConfig{
+		Enabled: c.Enabled,
+		Method:  c.Method,
+	}
+}
+
+// ToMap converts the streaming config to a parameter map.
+func (c *StreamingConfig) ToMap() map[string]any {
+	if c == nil {
+		return nil
+	}
+	result := map[string]any{
+		ParamKeyEnabled: c.Enabled,
+	}
+	if c.Method != "" {
+		result[ParamKeyStreamMethod] = c.Method
+	}
+	return result
 }
 
 // RetryConfig configures retry behavior for API calls.

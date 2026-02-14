@@ -243,7 +243,7 @@ func TestToolDefinitionStruct(t *testing.T) {
 func TestStreamingConfigDefaults(t *testing.T) {
 	sc := StreamingConfig{}
 	assert.False(t, sc.Enabled)
-	assert.Equal(t, 0, sc.ChunkSize)
+	assert.Equal(t, "", sc.Method)
 }
 
 // --- RetryConfig ---

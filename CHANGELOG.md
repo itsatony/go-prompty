@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-02-14
+
+### Added
+
+#### Media Generation Parameters
+- **`Modality`** field on `ExecutionConfig`: Execution intent signal (`text`, `image`, `audio_speech`, `audio_transcription`, `music`, `sound_effects`, `embedding`)
+- **`ImageConfig`**: Image generation parameters — width, height, size, quality, style, aspect_ratio, negative_prompt, num_images, guidance_scale, steps, strength
+- **`AudioConfig`**: Audio generation (TTS/transcription) parameters — voice, voice_id, speed, output_format, duration, language
+- **`EmbeddingConfig`**: Embedding generation parameters — dimensions, format
+- **`AsyncConfig`**: Async execution parameters — enabled, poll_interval_seconds, poll_timeout_seconds
+
+#### Execution Mode Configs
+- **`StreamingConfig`** updated: Replaced `ChunkSize` with `Method` field (`sse`/`websocket`), added `Validate()`, `Clone()`, `ToMap()` methods
+- All new configs include `Validate()`, `Clone()`, `ToMap()` methods
+
+#### Provider Serialization
+- **ToOpenAI**: image (size/quality/style/n), audio (voice/speed/response_format), embedding (dimensions/encoding_format), streaming (stream:true)
+- **ToAnthropic**: streaming only (stream:true)
+- **ToGemini**: image (aspectRatio/numberOfImages in generationConfig), streaming (stream:true)
+- **ToVLLM**: streaming only (stream:true)
+
+#### New Accessor Methods
+- 12 new getter/checker methods: `GetModality`/`HasModality`, `GetImage`/`HasImage`, `GetAudio`/`HasAudio`, `GetEmbedding`/`HasEmbedding`, `GetStreaming`/`HasStreaming`, `GetAsync`/`HasAsync`
+
+#### Constants & Validation
+- ~80 new constants for modalities, stream methods, image quality/style, audio formats, embedding formats, param keys, validation limits
+- 18 new error message constants for media validation
+- `ParamKeyResponseFormat`, `ParamKeyGeminiNumImages` for provider serialization keys
+
+### Changed
+- `StreamingConfig.ChunkSize` replaced with `StreamingConfig.Method`
+- `ExecutionConfig.Validate()` now delegates to nested media config validators
+- `ExecutionConfig.Clone()` deep-copies all 6 new fields
+- `ExecutionConfig.Merge()` supports replacement semantics for all media configs
+- `ExecutionConfig.ToMap()` includes media configs as nested maps
+
 ## [2.1.0] - 2026-02-06
 
 ### Added

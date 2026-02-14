@@ -43,7 +43,7 @@ func (s *SkopeConfig) Validate() error {
 
 	// Validate slug format if provided
 	if s.Slug != "" && !slugRegex.MatchString(s.Slug) {
-		return NewPromptValidationError("invalid skope slug format", s.Slug)
+		return NewPromptValidationError(ErrMsgInvalidSkopeSlug, s.Slug)
 	}
 
 	// Validate visibility if provided
@@ -52,13 +52,13 @@ func (s *SkopeConfig) Validate() error {
 		case SkopeVisibilityPublic, SkopeVisibilityPrivate, SkopeVisibilityTeam:
 			// Valid
 		default:
-			return NewPromptValidationError("invalid visibility value", s.Visibility)
+			return NewPromptValidationError(ErrMsgInvalidVisibility, s.Visibility)
 		}
 	}
 
 	// Validate version number if provided
 	if s.VersionNumber < 0 {
-		return NewPromptValidationError("version_number cannot be negative", "")
+		return NewPromptValidationError(ErrMsgVersionNumberNegative, "")
 	}
 
 	return nil

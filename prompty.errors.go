@@ -142,12 +142,44 @@ const (
 	ErrMsgEnumEmptyValues            = "enum constraint requires at least one value"
 	ErrMsgGuidedDecodingConflict     = "only one guided decoding constraint allowed"
 
+	// Core execution parameter validation messages
+	ErrMsgTemperatureOutOfRange      = "temperature must be between 0.0 and 2.0"
+	ErrMsgTopPOutOfRange             = "top_p must be between 0.0 and 1.0"
+	ErrMsgMaxTokensInvalid           = "max_tokens must be positive"
+	ErrMsgTopKInvalid                = "top_k must be non-negative"
+	ErrMsgThinkingBudgetInvalid      = "thinking.budget_tokens must be positive"
+
 	// Inference parameter validation messages (v2.3)
 	ErrMsgMinPOutOfRange              = "min_p must be between 0.0 and 1.0"
 	ErrMsgRepetitionPenaltyOutOfRange = "repetition_penalty must be greater than 0.0"
 	ErrMsgLogprobsOutOfRange          = "logprobs must be between 0 and 20"
 	ErrMsgStopTokenIDNegative         = "stop_token_ids values must be non-negative"
 	ErrMsgLogitBiasValueOutOfRange    = "logit_bias values must be between -100.0 and 100.0"
+
+	// v2.5 Media generation validation messages
+	ErrMsgInvalidModality              = "invalid modality value"
+	ErrMsgImageWidthOutOfRange         = "image width must be between 1 and 8192"
+	ErrMsgImageHeightOutOfRange        = "image height must be between 1 and 8192"
+	ErrMsgImageNumImagesOutOfRange     = "num_images must be between 1 and 10"
+	ErrMsgImageGuidanceScaleOutOfRange = "guidance_scale must be between 0.0 and 30.0"
+	ErrMsgImageStepsOutOfRange         = "steps must be between 1 and 200"
+	ErrMsgImageStrengthOutOfRange      = "strength must be between 0.0 and 1.0"
+	ErrMsgImageInvalidQuality          = "invalid image quality value"
+	ErrMsgImageInvalidStyle            = "invalid image style value"
+	ErrMsgAudioSpeedOutOfRange         = "audio speed must be between 0.25 and 4.0"
+	ErrMsgAudioInvalidFormat           = "invalid audio output format"
+	ErrMsgAudioDurationOutOfRange      = "audio duration must be between 0.0 and 600.0"
+	ErrMsgEmbeddingDimensionsOutOfRange = "embedding dimensions must be between 1 and 65536"
+	ErrMsgEmbeddingInvalidFormat       = "invalid embedding format"
+	ErrMsgStreamInvalidMethod          = "invalid streaming method"
+	ErrMsgAsyncPollIntervalInvalid     = "async poll interval must be positive"
+	ErrMsgAsyncPollTimeoutInvalid      = "async poll timeout must be positive"
+	ErrMsgAsyncPollTimeoutTooSmall     = "async poll timeout must be greater than or equal to poll interval"
+
+	// Skope validation messages
+	ErrMsgInvalidSkopeSlug      = "invalid skope slug format"
+	ErrMsgInvalidVisibility     = "invalid visibility value"
+	ErrMsgVersionNumberNegative = "version_number cannot be negative"
 
 	// v2.0 Prompt validation messages
 	ErrMsgPromptNameRequired        = "prompt name is required"

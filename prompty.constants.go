@@ -640,3 +640,101 @@ const (
 	ErrMsgCatalogFuncCallingSkills = "function_calling not supported for skills catalog"
 	ErrMsgCatalogUnknownFormat     = "unknown catalog format"
 )
+
+// v2.5 Modality constants — execution intent signal
+const (
+	ModalityText               = "text"
+	ModalityImage              = "image"
+	ModalityAudioSpeech        = "audio_speech"
+	ModalityAudioTranscription = "audio_transcription"
+	ModalityMusic              = "music"
+	ModalitySoundEffects       = "sound_effects"
+	ModalityEmbedding          = "embedding"
+)
+
+// v2.5 Streaming method constants
+const (
+	StreamMethodSSE       = "sse"
+	StreamMethodWebSocket = "websocket"
+)
+
+// v2.5 Image quality constants
+const (
+	ImageQualityStandard = "standard"
+	ImageQualityHD       = "hd"
+	ImageQualityLow      = "low"
+	ImageQualityMedium   = "medium"
+	ImageQualityHigh     = "high"
+)
+
+// v2.5 Image style constants
+const (
+	ImageStyleNatural = "natural"
+	ImageStyleVivid   = "vivid"
+)
+
+// v2.5 Audio format constants
+const (
+	AudioFormatMP3  = "mp3"
+	AudioFormatOpus = "opus"
+	AudioFormatAAC  = "aac"
+	AudioFormatFLAC = "flac"
+	AudioFormatWAV  = "wav"
+	AudioFormatPCM  = "pcm"
+)
+
+// v2.5 Embedding format constants
+const (
+	EmbeddingFormatFloat  = "float"
+	EmbeddingFormatBase64 = "base64"
+)
+
+// v2.5 Media parameter map keys (for serialization)
+const (
+	ParamKeyModality       = "modality"
+	ParamKeyImage          = "image"
+	ParamKeyAudio          = "audio"
+	ParamKeyEmbedding      = "embedding"
+	ParamKeyStreaming       = "streaming"
+	ParamKeyAsync          = "async"
+	ParamKeyStream         = "stream"
+	ParamKeyImageSize      = "size"
+	ParamKeyImageQuality   = "quality"
+	ParamKeyImageStyle     = "style"
+	ParamKeyImageN         = "n"
+	ParamKeyVoice          = "voice"
+	ParamKeySpeed          = "speed"
+	ParamKeyDimensions     = "dimensions"
+	ParamKeyEncodingFormat = "encoding_format"
+	ParamKeyAspectRatio    = "aspect_ratio"
+	ParamKeyNegativePrompt = "negative_prompt"
+	ParamKeyNumImages      = "num_images"
+	ParamKeyGuidanceScale  = "guidance_scale"
+	ParamKeySteps          = "steps"
+	ParamKeyStrength       = "strength"
+	ParamKeyVoiceID        = "voice_id"
+	ParamKeyOutputFormat   = "output_format"
+	ParamKeyDuration       = "duration"
+	ParamKeyLanguage       = "language"
+	ParamKeyPollInterval   = "poll_interval_seconds"
+	ParamKeyPollTimeout    = "poll_timeout_seconds"
+	ParamKeyStreamMethod       = "method"
+	ParamKeyWidth              = "width"
+	ParamKeyHeight             = "height"
+	ParamKeyEnabled            = "enabled"
+	ParamKeyResponseFormat     = "response_format"
+	ParamKeyGeminiNumImages    = "numberOfImages"
+)
+
+// v2.5 Media validation limits
+const (
+	ImageMaxWidth        = 8192
+	ImageMaxHeight       = 8192
+	ImageMaxNumImages    = 10
+	ImageMaxGuidanceScale = 30.0
+	ImageMaxSteps        = 200
+	AudioMinSpeed        = 0.25
+	AudioMaxSpeed        = 4.0
+	AudioMaxDuration     = 600.0
+	EmbeddingMaxDimensions = 65536
+)

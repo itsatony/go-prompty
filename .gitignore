@@ -15,6 +15,7 @@
 /catalog_generation
 /document_resolver
 /prompt_import_export
+/media_generation
 
 # Test binary, built with `go test -c`
 *.test
