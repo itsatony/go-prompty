@@ -25,6 +25,8 @@ type FunctionDef struct {
 }
 
 // StreamingConfig configures streaming behavior.
+// StreamingConfig is safe for concurrent reads. Callers must not modify the config after
+// passing it to an ExecutionConfig; use Clone() to create an independent copy if mutation is needed.
 type StreamingConfig struct {
 	// Enabled indicates whether streaming is enabled
 	Enabled bool `yaml:"enabled" json:"enabled"`

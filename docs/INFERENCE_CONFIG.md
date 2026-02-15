@@ -766,7 +766,12 @@ v2.5 extends `ExecutionConfig` with nested structs for multimodal AI generation:
 | `audio` | `duration` | `*float64` | 0-600 | Max duration in seconds |
 | `audio` | `language` | `string` | — | Language code |
 | `embedding` | `dimensions` | `*int` | 1-65536 | Embedding dimensions |
-| `embedding` | `format` | `string` | float/base64 | Output format |
+| `embedding` | `format` | `string` | float/base64 | Wire encoding format (OpenAI) |
+| `embedding` | `input_type` | `string` | search_query/search_document/classification/clustering/semantic_similarity | Input classification (Gemini, Cohere) |
+| `embedding` | `output_dtype` | `string` | float32/int8/uint8/binary/ubinary | Quantization data type (Mistral, Cohere) |
+| `embedding` | `truncation` | `string` | none/start/end | Truncation strategy (Cohere) |
+| `embedding` | `normalize` | `*bool` | true/false | L2-normalize embeddings (vLLM) |
+| `embedding` | `pooling_type` | `string` | mean/cls/last | Pooling strategy (vLLM) |
 | `streaming` | `enabled` | `bool` | — | Enable streaming |
 | `streaming` | `method` | `string` | sse/websocket | Transport method |
 | `async` | `enabled` | `bool` | — | Enable async execution |

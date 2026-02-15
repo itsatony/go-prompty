@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-02-15
+
+### Added
+
+#### Expanded EmbeddingConfig
+- **`InputType`** field: Classifies input for retrieval optimization — `search_query`, `search_document`, `classification`, `clustering`, `semantic_similarity`
+- **`OutputDtype`** field: Quantization data type — `float32`, `int8`, `uint8`, `binary`, `ubinary`
+- **`Truncation`** field: Input truncation strategy — `none`, `start`, `end`
+- **`Normalize`** field: L2-normalization toggle for vLLM
+- **`PoolingType`** field: Pooling strategy — `mean`, `cls`, `last` (vLLM)
+
+#### New Providers: Mistral & Cohere
+- **`ProviderMistral`** and **`ProviderCohere`** constants
+- **`ToMistral()`**: OpenAI-compatible serialization with Mistral-specific embedding keys (`output_dimension`, `output_dtype`)
+- **`ToCohere()`**: Cohere-native serialization with `p`/`k` (top_p/top_k), `embedding_types` ([]string), `truncate` (UPPER_CASE)
+- **`GetEffectiveProvider()`**: Model name detection for Mistral (mistral-/codestral-/pixtral-/ministral-/open-mistral-/open-mixtral-) and Cohere (command-/embed-/rerank-/c4ai-)
+- **`ProviderFormat()`**: Mistral returns OpenAI-compatible response_format; Cohere returns nil (no response_format support)
+
+#### Enhanced Provider Embedding Serialization
+- **ToGemini**: `output_dimensionality` (dimensions), `task_type` (input_type mapped to UPPER_CASE Gemini format)
+- **ToVLLM**: `normalize`, `pooling_type`
+- Gemini task type mappings: `search_query` → `RETRIEVAL_QUERY`, `search_document` → `RETRIEVAL_DOCUMENT`, etc.
+
+#### Constants & Validation
+- ~30 new constants for embedding input types, output dtypes, truncation strategies, pooling types, Gemini task types, and param keys
+- 4 new error message constants for embedding validation
+- Model detection helpers: `isMistralModel()`, `isCohereModel()`
+
+#### Exported Helpers
+- **`GeminiTaskType()`**: Converts embedding input type to Gemini UPPER_CASE task_type with error handling
+- **`CohereUpperCase()`**: Converts truncation strategy to Cohere UPPER_CASE format with error handling
+
+#### Zero Magic Strings in Provider Serialization
+- All `To*()` methods (`ToOpenAI`, `ToAnthropic`, `ToGemini`, `ToVLLM`, `ToMistral`, `ToCohere`) use named constants exclusively
+- 25+ new param key constants: `ParamKeyModel`, `ParamKeyTopK`, `ParamKeyStopSequences`, `ParamKeyAnthropicThinking`, `ParamKeyAnthropicOutputFormat`, `ParamKeyGenerationConfig`, `ParamKeyGeminiMaxTokens`, `ParamKeyGeminiTopP`, `ParamKeyGeminiTopK`, `ParamKeyGeminiStopSeqs`, `ParamKeyCohereTopP`, `ParamKeyCohereTopK`, `ParamKeyCohereStopSequences`, `CohereTruncateNone`, `CohereTruncateStart`, `CohereTruncateEnd`, etc.
+
+### Changed
+- `EmbeddingConfig.Validate()` validates 4 new enum fields
+- `EmbeddingConfig.Clone()` deep-copies all new fields including `Normalize *bool`
+- `EmbeddingConfig.ToMap()` emits all new param keys
+- Thread safety godoc added to all media config types (`ImageConfig`, `AudioConfig`, `EmbeddingConfig`, `AsyncConfig`, `StreamingConfig`)
+- Enhanced godoc on all provider `To*()` methods documenting embedding parameter support
+- Model detection helpers fully documented with recognized prefixes
+
 ## [2.6.0] - 2026-02-15
 
 ### Added

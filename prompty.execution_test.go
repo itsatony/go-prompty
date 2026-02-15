@@ -343,7 +343,7 @@ func TestExecutionConfig_ToOpenAI(t *testing.T) {
 
 	result := config.ToOpenAI()
 
-	assert.Equal(t, "gpt-4", result["model"])
+	assert.Equal(t, "gpt-4", result[ParamKeyModel])
 	assert.Equal(t, 0.7, result[ParamKeyTemperature])
 	assert.Equal(t, 1000, result[ParamKeyMaxTokens])
 	assert.NotNil(t, result[ParamKeyResponseFormat])
@@ -377,12 +377,12 @@ func TestExecutionConfig_ToAnthropic(t *testing.T) {
 
 	result := config.ToAnthropic()
 
-	assert.Equal(t, "claude-3-opus", result["model"])
+	assert.Equal(t, "claude-3-opus", result[ParamKeyModel])
 	assert.Equal(t, 0.7, result[ParamKeyTemperature])
-	assert.Equal(t, 1000, result["max_tokens"])
-	assert.Equal(t, 40, result["top_k"])
-	assert.NotNil(t, result["thinking"])
-	assert.NotNil(t, result["output_format"])
+	assert.Equal(t, 1000, result[ParamKeyMaxTokens])
+	assert.Equal(t, 40, result[ParamKeyTopK])
+	assert.NotNil(t, result[ParamKeyAnthropicThinking])
+	assert.NotNil(t, result[ParamKeyAnthropicOutputFormat])
 }
 
 func TestExecutionConfig_ToGemini(t *testing.T) {
@@ -403,12 +403,12 @@ func TestExecutionConfig_ToGemini(t *testing.T) {
 
 	result := config.ToGemini()
 
-	assert.Equal(t, "gemini-pro", result["model"])
+	assert.Equal(t, "gemini-pro", result[ParamKeyModel])
 
-	genConfig := result["generationConfig"].(map[string]any)
+	genConfig := result[ParamKeyGenerationConfig].(map[string]any)
 	assert.Equal(t, 0.7, genConfig[ParamKeyTemperature])
-	assert.Equal(t, 1000, genConfig["maxOutputTokens"])
-	assert.Equal(t, 40, genConfig["topK"])
+	assert.Equal(t, 1000, genConfig[ParamKeyGeminiMaxTokens])
+	assert.Equal(t, 40, genConfig[ParamKeyGeminiTopK])
 }
 
 func TestExecutionConfig_ToVLLM(t *testing.T) {
@@ -427,9 +427,9 @@ func TestExecutionConfig_ToVLLM(t *testing.T) {
 
 	result := config.ToVLLM()
 
-	assert.Equal(t, "llama-2-7b", result["model"])
+	assert.Equal(t, "llama-2-7b", result[ParamKeyModel])
 	assert.Equal(t, 0.7, result[ParamKeyTemperature])
-	assert.Equal(t, 1000, result["max_tokens"])
+	assert.Equal(t, 1000, result[ParamKeyMaxTokens])
 	assert.Equal(t, "xgrammar", result[GuidedKeyDecodingBackend])
 }
 
@@ -1216,7 +1216,7 @@ func TestExecutionConfig_ToGemini_NoExtendedParams(t *testing.T) {
 	result := config.ToGemini()
 
 	// None of the extended params should appear in Gemini output
-	genConfig, ok := result["generationConfig"]
+	genConfig, ok := result[ParamKeyGenerationConfig]
 	if ok {
 		gc := genConfig.(map[string]any)
 		_, hasSeed := gc[ParamKeySeed]
@@ -1569,7 +1569,7 @@ func TestExecutionConfig_ToOpenAI_ImageParams(t *testing.T) {
 
 	result := config.ToOpenAI()
 
-	assert.Equal(t, "dall-e-3", result["model"])
+	assert.Equal(t, "dall-e-3", result[ParamKeyModel])
 	assert.Equal(t, "1024x1024", result[ParamKeyImageSize])
 	assert.Equal(t, ImageQualityHD, result[ParamKeyImageQuality])
 	assert.Equal(t, ImageStyleVivid, result[ParamKeyImageStyle])
@@ -1590,7 +1590,7 @@ func TestExecutionConfig_ToOpenAI_AudioTTSParams(t *testing.T) {
 
 	result := config.ToOpenAI()
 
-	assert.Equal(t, "tts-1-hd", result["model"])
+	assert.Equal(t, "tts-1-hd", result[ParamKeyModel])
 	assert.Equal(t, "alloy", result[ParamKeyVoice])
 	assert.Equal(t, 1.5, result[ParamKeySpeed])
 	assert.Equal(t, AudioFormatMP3, result[ParamKeyResponseFormat])
@@ -1633,7 +1633,7 @@ func TestExecutionConfig_ToOpenAI_EmbeddingParams(t *testing.T) {
 
 	result := config.ToOpenAI()
 
-	assert.Equal(t, "text-embedding-3-small", result["model"])
+	assert.Equal(t, "text-embedding-3-small", result[ParamKeyModel])
 	assert.Equal(t, 1536, result[ParamKeyDimensions])
 	assert.Equal(t, EmbeddingFormatFloat, result[ParamKeyEncodingFormat])
 }
@@ -1704,7 +1704,7 @@ func TestExecutionConfig_ToGemini_ImageParams(t *testing.T) {
 
 	result := config.ToGemini()
 
-	genConfig, ok := result["generationConfig"].(map[string]any)
+	genConfig, ok := result[ParamKeyGenerationConfig].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "16:9", genConfig[ParamKeyAspectRatio])
 	assert.Equal(t, 4, genConfig[ParamKeyGeminiNumImages])
@@ -1883,5 +1883,545 @@ async:
 // parseYAMLConfig is a test helper to unmarshal YAML into ExecutionConfig.
 func parseYAMLConfig(yamlStr string, config *ExecutionConfig) error {
 	return yaml.Unmarshal([]byte(yamlStr), config)
+}
+
+// --- v2.7 Mistral/Cohere Provider Tests ---
+
+func TestExecutionConfig_GetEffectiveProvider_Mistral(t *testing.T) {
+	tests := []struct {
+		name  string
+		model string
+	}{
+		{"mistral-large", "mistral-large-latest"},
+		{"mistral-small", "mistral-small-2402"},
+		{"codestral", "codestral-latest"},
+		{"pixtral", "pixtral-large-latest"},
+		{"ministral", "ministral-8b-latest"},
+		{"open-mistral", "open-mistral-nemo"},
+		{"open-mixtral", "open-mixtral-8x22b"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &ExecutionConfig{Model: tt.model}
+			assert.Equal(t, ProviderMistral, config.GetEffectiveProvider())
+		})
+	}
+}
+
+func TestExecutionConfig_GetEffectiveProvider_Cohere(t *testing.T) {
+	tests := []struct {
+		name  string
+		model string
+	}{
+		{"command-r", "command-r-plus"},
+		{"command-light", "command-light"},
+		{"embed", "embed-v4.0"},
+		{"embed-english", "embed-english-v3.0"},
+		{"rerank", "rerank-v3.5"},
+		{"c4ai", "c4ai-aya-expanse-32b"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &ExecutionConfig{Model: tt.model}
+			assert.Equal(t, ProviderCohere, config.GetEffectiveProvider())
+		})
+	}
+}
+
+// --- v2.7 Mistral/Cohere provider serialization tests ---
+// Cross-reference: EmbeddingConfig validation/clone/tomap tests are in prompty.types.media_test.go
+// Cross-reference: Model detection helpers tested in prompty.types.media_test.go (TestIsMistralModel, TestIsCohereModel)
+// Cross-reference: GeminiTaskType and CohereUpperCase mapping tests in prompty.types.media_test.go
+
+func TestExecutionConfig_ToMistral(t *testing.T) {
+	floatPtr := func(v float64) *float64 { return &v }
+	intPtr := func(v int) *int { return &v }
+
+	t.Run("standard params", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model:       "mistral-large-latest",
+			Temperature: floatPtr(0.7),
+			MaxTokens:   intPtr(1000),
+			TopP:        floatPtr(0.9),
+			Seed:        intPtr(42),
+			StopSequences: []string{"END"},
+		}
+
+		result := config.ToMistral()
+		assert.Equal(t, "mistral-large-latest", result[ParamKeyModel])
+		assert.Equal(t, 0.7, result[ParamKeyTemperature])
+		assert.Equal(t, 1000, result[ParamKeyMaxTokens])
+		assert.Equal(t, 0.9, result[ParamKeyTopP])
+		assert.Equal(t, 42, result[ParamKeySeed])
+		assert.Equal(t, []string{"END"}, result[ParamKeyStop])
+	})
+
+	t.Run("embedding params", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model: "mistral-embed",
+			Embedding: &EmbeddingConfig{
+				Dimensions:  intPtr(1024),
+				Format:      EmbeddingFormatFloat,
+				OutputDtype: EmbeddingDtypeInt8,
+			},
+		}
+
+		result := config.ToMistral()
+		assert.Equal(t, "mistral-embed", result[ParamKeyModel])
+		assert.Equal(t, 1024, result[ParamKeyOutputDimension])
+		assert.Equal(t, EmbeddingFormatFloat, result[ParamKeyEncodingFormat])
+		assert.Equal(t, EmbeddingDtypeInt8, result[ParamKeyOutputDtype])
+	})
+
+	t.Run("nil config", func(t *testing.T) {
+		var config *ExecutionConfig
+		assert.Nil(t, config.ToMistral())
+	})
+
+	t.Run("response format", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model: "mistral-large-latest",
+			ResponseFormat: &ResponseFormat{
+				Type: ResponseFormatJSONObject,
+			},
+		}
+
+		result := config.ToMistral()
+		rf := result[ParamKeyResponseFormat].(map[string]any)
+		assert.Equal(t, ResponseFormatJSONObject, rf[SchemaKeyType])
+	})
+
+	t.Run("streaming", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model:     "mistral-large-latest",
+			Streaming: &StreamingConfig{Enabled: true},
+		}
+
+		result := config.ToMistral()
+		assert.Equal(t, true, result[ParamKeyStream])
+	})
+
+	t.Run("provider options", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model:           "mistral-large-latest",
+			ProviderOptions: map[string]any{"safe_prompt": true},
+		}
+
+		result := config.ToMistral()
+		assert.Equal(t, true, result["safe_prompt"])
+	})
+}
+
+func TestExecutionConfig_ToCohere(t *testing.T) {
+	floatPtr := func(v float64) *float64 { return &v }
+	intPtr := func(v int) *int { return &v }
+
+	t.Run("standard params", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model:         "command-r-plus",
+			Temperature:   floatPtr(0.5),
+			MaxTokens:     intPtr(2000),
+			TopP:          floatPtr(0.8),
+			TopK:          intPtr(50),
+			Seed:          intPtr(42),
+			StopSequences: []string{"--"},
+		}
+
+		result := config.ToCohere()
+		assert.Equal(t, "command-r-plus", result[ParamKeyModel])
+		assert.Equal(t, 0.5, result[ParamKeyTemperature])
+		assert.Equal(t, 2000, result[ParamKeyMaxTokens])
+		assert.Equal(t, 0.8, result[ParamKeyCohereTopP])
+		assert.Equal(t, 50, result[ParamKeyCohereTopK])
+		assert.Equal(t, 42, result[ParamKeySeed])
+		assert.Equal(t, []string{"--"}, result[ParamKeyStopSequences])
+	})
+
+	t.Run("embedding params", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model: "embed-v4.0",
+			Embedding: &EmbeddingConfig{
+				Dimensions:  intPtr(1024),
+				InputType:   EmbeddingInputTypeSearchDocument,
+				OutputDtype: EmbeddingDtypeInt8,
+				Truncation:  EmbeddingTruncationEnd,
+			},
+		}
+
+		result := config.ToCohere()
+		assert.Equal(t, "embed-v4.0", result[ParamKeyModel])
+		assert.Equal(t, 1024, result[ParamKeyOutputDimension])
+		assert.Equal(t, EmbeddingInputTypeSearchDocument, result[ParamKeyInputType])
+		assert.Equal(t, []string{EmbeddingDtypeInt8}, result[ParamKeyEmbeddingTypes])
+		assert.Equal(t, CohereTruncateEnd, result[ParamKeyTruncate])
+	})
+
+	t.Run("truncation none", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model: "embed-v4.0",
+			Embedding: &EmbeddingConfig{
+				Truncation: EmbeddingTruncationNone,
+			},
+		}
+
+		result := config.ToCohere()
+		assert.Equal(t, CohereTruncateNone, result[ParamKeyTruncate])
+	})
+
+	t.Run("truncation start", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model: "embed-v4.0",
+			Embedding: &EmbeddingConfig{
+				Truncation: EmbeddingTruncationStart,
+			},
+		}
+
+		result := config.ToCohere()
+		assert.Equal(t, CohereTruncateStart, result[ParamKeyTruncate])
+	})
+
+	t.Run("nil config", func(t *testing.T) {
+		var config *ExecutionConfig
+		assert.Nil(t, config.ToCohere())
+	})
+
+	t.Run("streaming", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model:     "command-r-plus",
+			Streaming: &StreamingConfig{Enabled: true},
+		}
+
+		result := config.ToCohere()
+		assert.Equal(t, true, result[ParamKeyStream])
+	})
+
+	t.Run("provider options", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model:           "command-r-plus",
+			ProviderOptions: map[string]any{"connectors": []string{"web-search"}},
+		}
+
+		result := config.ToCohere()
+		assert.Equal(t, []string{"web-search"}, result["connectors"])
+	})
+}
+
+func TestExecutionConfig_ToGemini_EmbeddingParams(t *testing.T) {
+	intPtr := func(v int) *int { return &v }
+
+	t.Run("dimensions as output_dimensionality", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model: "gemini-embedding-001",
+			Embedding: &EmbeddingConfig{
+				Dimensions: intPtr(768),
+			},
+		}
+
+		result := config.ToGemini()
+		genConfig := result[ParamKeyGenerationConfig].(map[string]any)
+		assert.Equal(t, 768, genConfig[ParamKeyOutputDimensionality])
+	})
+
+	t.Run("input type as task_type", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model: "gemini-embedding-001",
+			Embedding: &EmbeddingConfig{
+				InputType: EmbeddingInputTypeSearchQuery,
+			},
+		}
+
+		result := config.ToGemini()
+		genConfig := result[ParamKeyGenerationConfig].(map[string]any)
+		assert.Equal(t, GeminiTaskRetrievalQuery, genConfig[ParamKeyTaskType])
+	})
+
+	t.Run("all task type mappings", func(t *testing.T) {
+		mappings := map[string]string{
+			EmbeddingInputTypeSearchQuery:        GeminiTaskRetrievalQuery,
+			EmbeddingInputTypeSearchDocument:     GeminiTaskRetrievalDocument,
+			EmbeddingInputTypeSemanticSimilarity: GeminiTaskSemanticSimilarity,
+			EmbeddingInputTypeClassification:     GeminiTaskClassification,
+			EmbeddingInputTypeClustering:         GeminiTaskClustering,
+		}
+
+		for inputType, expectedTaskType := range mappings {
+			config := &ExecutionConfig{
+				Model: "gemini-embedding-001",
+				Embedding: &EmbeddingConfig{
+					InputType: inputType,
+				},
+			}
+
+			result := config.ToGemini()
+			genConfig := result[ParamKeyGenerationConfig].(map[string]any)
+			assert.Equal(t, expectedTaskType, genConfig[ParamKeyTaskType], "mapping for %s", inputType)
+		}
+	})
+
+	t.Run("combined dimensions and task_type", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model: "gemini-embedding-001",
+			Embedding: &EmbeddingConfig{
+				Dimensions: intPtr(256),
+				InputType:  EmbeddingInputTypeClustering,
+			},
+		}
+
+		result := config.ToGemini()
+		genConfig := result[ParamKeyGenerationConfig].(map[string]any)
+		assert.Equal(t, 256, genConfig[ParamKeyOutputDimensionality])
+		assert.Equal(t, GeminiTaskClustering, genConfig[ParamKeyTaskType])
+	})
+}
+
+func TestExecutionConfig_ToVLLM_EmbeddingParams(t *testing.T) {
+	boolPtr := func(v bool) *bool { return &v }
+
+	t.Run("normalize", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model: "qwen3-embedding-0.6B",
+			Embedding: &EmbeddingConfig{
+				Normalize: boolPtr(true),
+			},
+		}
+
+		result := config.ToVLLM()
+		assert.Equal(t, true, result[ParamKeyNormalize])
+	})
+
+	t.Run("normalize false", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model: "qwen3-embedding-0.6B",
+			Embedding: &EmbeddingConfig{
+				Normalize: boolPtr(false),
+			},
+		}
+
+		result := config.ToVLLM()
+		assert.Equal(t, false, result[ParamKeyNormalize])
+	})
+
+	t.Run("pooling type", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model: "qwen3-embedding-0.6B",
+			Embedding: &EmbeddingConfig{
+				PoolingType: EmbeddingPoolingMean,
+			},
+		}
+
+		result := config.ToVLLM()
+		assert.Equal(t, EmbeddingPoolingMean, result[ParamKeyPoolingType])
+	})
+
+	t.Run("combined normalize and pooling", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model: "qwen3-embedding-0.6B",
+			Embedding: &EmbeddingConfig{
+				Normalize:   boolPtr(true),
+				PoolingType: EmbeddingPoolingCLS,
+			},
+		}
+
+		result := config.ToVLLM()
+		assert.Equal(t, true, result[ParamKeyNormalize])
+		assert.Equal(t, EmbeddingPoolingCLS, result[ParamKeyPoolingType])
+	})
+
+	t.Run("no embedding params without config", func(t *testing.T) {
+		config := &ExecutionConfig{
+			Model: "qwen3-embedding-0.6B",
+		}
+
+		result := config.ToVLLM()
+		_, hasNormalize := result[ParamKeyNormalize]
+		_, hasPooling := result[ParamKeyPoolingType]
+		assert.False(t, hasNormalize)
+		assert.False(t, hasPooling)
+	})
+}
+
+func TestExecutionConfig_ProviderFormat_MistralCohere(t *testing.T) {
+	t.Run("mistral returns openai format", func(t *testing.T) {
+		config := &ExecutionConfig{
+			ResponseFormat: &ResponseFormat{
+				Type: ResponseFormatJSONObject,
+			},
+		}
+
+		result, err := config.ProviderFormat(ProviderMistral)
+		require.NoError(t, err)
+		assert.Equal(t, ResponseFormatJSONObject, result[SchemaKeyType])
+	})
+
+	t.Run("mistral nil response format", func(t *testing.T) {
+		config := &ExecutionConfig{}
+
+		result, err := config.ProviderFormat(ProviderMistral)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("cohere returns nil", func(t *testing.T) {
+		config := &ExecutionConfig{
+			ResponseFormat: &ResponseFormat{
+				Type: ResponseFormatJSONObject,
+			},
+		}
+
+		result, err := config.ProviderFormat(ProviderCohere)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+}
+
+// --- v2.7 E2E YAML Roundtrip Tests ---
+
+func TestE2E_MistralEmbedding_YAMLRoundtrip(t *testing.T) {
+	yamlStr := `
+modality: embedding
+provider: mistral
+model: mistral-embed
+embedding:
+  dimensions: 1024
+  format: float
+  output_dtype: int8
+`
+	var config ExecutionConfig
+	err := parseYAMLConfig(yamlStr, &config)
+	require.NoError(t, err)
+
+	assert.Equal(t, ModalityEmbedding, config.Modality)
+	assert.Equal(t, ProviderMistral, config.Provider)
+	assert.Equal(t, "mistral-embed", config.Model)
+	require.NotNil(t, config.Embedding)
+	assert.Equal(t, 1024, *config.Embedding.Dimensions)
+	assert.Equal(t, EmbeddingFormatFloat, config.Embedding.Format)
+	assert.Equal(t, EmbeddingDtypeInt8, config.Embedding.OutputDtype)
+
+	assert.NoError(t, config.Validate())
+
+	mistral := config.ToMistral()
+	assert.Equal(t, 1024, mistral[ParamKeyOutputDimension])
+	assert.Equal(t, EmbeddingFormatFloat, mistral[ParamKeyEncodingFormat])
+	assert.Equal(t, EmbeddingDtypeInt8, mistral[ParamKeyOutputDtype])
+}
+
+func TestE2E_CohereEmbedding_YAMLRoundtrip(t *testing.T) {
+	yamlStr := `
+modality: embedding
+provider: cohere
+model: embed-v4.0
+embedding:
+  dimensions: 1024
+  input_type: search_document
+  output_dtype: int8
+  truncation: end
+`
+	var config ExecutionConfig
+	err := parseYAMLConfig(yamlStr, &config)
+	require.NoError(t, err)
+
+	assert.Equal(t, ModalityEmbedding, config.Modality)
+	assert.Equal(t, ProviderCohere, config.Provider)
+	assert.Equal(t, "embed-v4.0", config.Model)
+	require.NotNil(t, config.Embedding)
+	assert.Equal(t, 1024, *config.Embedding.Dimensions)
+	assert.Equal(t, EmbeddingInputTypeSearchDocument, config.Embedding.InputType)
+	assert.Equal(t, EmbeddingDtypeInt8, config.Embedding.OutputDtype)
+	assert.Equal(t, EmbeddingTruncationEnd, config.Embedding.Truncation)
+
+	assert.NoError(t, config.Validate())
+
+	cohere := config.ToCohere()
+	assert.Equal(t, 1024, cohere[ParamKeyOutputDimension])
+	assert.Equal(t, EmbeddingInputTypeSearchDocument, cohere[ParamKeyInputType])
+	assert.Equal(t, []string{EmbeddingDtypeInt8}, cohere[ParamKeyEmbeddingTypes])
+	assert.Equal(t, CohereTruncateEnd, cohere[ParamKeyTruncate])
+}
+
+func TestE2E_GeminiEmbedding_YAMLRoundtrip(t *testing.T) {
+	yamlStr := `
+modality: embedding
+provider: gemini
+model: gemini-embedding-001
+embedding:
+  dimensions: 768
+  input_type: search_query
+`
+	var config ExecutionConfig
+	err := parseYAMLConfig(yamlStr, &config)
+	require.NoError(t, err)
+
+	assert.Equal(t, ModalityEmbedding, config.Modality)
+	assert.Equal(t, ProviderGemini, config.Provider)
+	require.NotNil(t, config.Embedding)
+	assert.Equal(t, 768, *config.Embedding.Dimensions)
+	assert.Equal(t, EmbeddingInputTypeSearchQuery, config.Embedding.InputType)
+
+	assert.NoError(t, config.Validate())
+
+	gemini := config.ToGemini()
+	genConfig := gemini[ParamKeyGenerationConfig].(map[string]any)
+	assert.Equal(t, 768, genConfig[ParamKeyOutputDimensionality])
+	assert.Equal(t, GeminiTaskRetrievalQuery, genConfig[ParamKeyTaskType])
+}
+
+func TestE2E_VLLMEmbedding_YAMLRoundtrip(t *testing.T) {
+	yamlStr := `
+modality: embedding
+provider: vllm
+model: qwen3-embedding-0.6B
+embedding:
+  normalize: true
+  pooling_type: mean
+`
+	var config ExecutionConfig
+	err := parseYAMLConfig(yamlStr, &config)
+	require.NoError(t, err)
+
+	assert.Equal(t, ModalityEmbedding, config.Modality)
+	assert.Equal(t, ProviderVLLM, config.Provider)
+	require.NotNil(t, config.Embedding)
+	require.NotNil(t, config.Embedding.Normalize)
+	assert.True(t, *config.Embedding.Normalize)
+	assert.Equal(t, EmbeddingPoolingMean, config.Embedding.PoolingType)
+
+	assert.NoError(t, config.Validate())
+
+	vllm := config.ToVLLM()
+	assert.Equal(t, true, vllm[ParamKeyNormalize])
+	assert.Equal(t, EmbeddingPoolingMean, vllm[ParamKeyPoolingType])
+}
+
+func TestE2E_FullEmbeddingConfig_YAMLRoundtrip(t *testing.T) {
+	yamlStr := `
+modality: embedding
+provider: cohere
+model: embed-v4.0
+embedding:
+  dimensions: 1024
+  format: float
+  input_type: search_document
+  output_dtype: int8
+  truncation: end
+  normalize: true
+  pooling_type: mean
+`
+	var config ExecutionConfig
+	err := parseYAMLConfig(yamlStr, &config)
+	require.NoError(t, err)
+
+	require.NotNil(t, config.Embedding)
+	assert.Equal(t, 1024, *config.Embedding.Dimensions)
+	assert.Equal(t, EmbeddingFormatFloat, config.Embedding.Format)
+	assert.Equal(t, EmbeddingInputTypeSearchDocument, config.Embedding.InputType)
+	assert.Equal(t, EmbeddingDtypeInt8, config.Embedding.OutputDtype)
+	assert.Equal(t, EmbeddingTruncationEnd, config.Embedding.Truncation)
+	assert.True(t, *config.Embedding.Normalize)
+	assert.Equal(t, EmbeddingPoolingMean, config.Embedding.PoolingType)
+
+	assert.NoError(t, config.Validate())
 }
 

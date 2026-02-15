@@ -3,6 +3,8 @@ package prompty
 import "fmt"
 
 // ImageConfig configures image generation parameters.
+// ImageConfig is safe for concurrent reads. Callers must not modify the config after passing
+// it to an ExecutionConfig; use Clone() to create an independent copy if mutation is needed.
 type ImageConfig struct {
 	// Width of the generated image in pixels (1-8192)
 	Width *int `yaml:"width,omitempty" json:"width,omitempty"`
@@ -184,6 +186,8 @@ func (c *ImageConfig) EffectiveSize() string {
 }
 
 // AudioConfig configures audio generation (TTS/transcription) parameters.
+// AudioConfig is safe for concurrent reads. Callers must not modify the config after passing
+// it to an ExecutionConfig; use Clone() to create an independent copy if mutation is needed.
 type AudioConfig struct {
 	// Voice is the voice name (e.g., "alloy", "echo", "nova")
 	Voice string `yaml:"voice,omitempty" json:"voice,omitempty"`
@@ -280,11 +284,25 @@ func (c *AudioConfig) ToMap() map[string]any {
 }
 
 // EmbeddingConfig configures embedding generation parameters.
+// EmbeddingConfig is safe for concurrent reads. The Normalize *bool pointer must not be
+// modified after the config is shared; use Clone() to create an independent copy if mutation
+// is needed.
 type EmbeddingConfig struct {
 	// Dimensions is the number of embedding dimensions (1-65536)
 	Dimensions *int `yaml:"dimensions,omitempty" json:"dimensions,omitempty"`
-	// Format is the embedding output format: "float" or "base64"
+	// Format is the embedding wire encoding format: "float" or "base64" (OpenAI encoding_format)
 	Format string `yaml:"format,omitempty" json:"format,omitempty"`
+	// InputType classifies the input for retrieval/search optimization:
+	// "search_query", "search_document", "classification", "clustering", "semantic_similarity"
+	InputType string `yaml:"input_type,omitempty" json:"input_type,omitempty"`
+	// OutputDtype is the quantization data type: "float32", "int8", "uint8", "binary", "ubinary"
+	OutputDtype string `yaml:"output_dtype,omitempty" json:"output_dtype,omitempty"`
+	// Truncation controls how inputs exceeding the model's max length are handled: "none", "start", "end"
+	Truncation string `yaml:"truncation,omitempty" json:"truncation,omitempty"`
+	// Normalize controls whether embeddings are L2-normalized (vLLM)
+	Normalize *bool `yaml:"normalize,omitempty" json:"normalize,omitempty"`
+	// PoolingType selects the pooling strategy: "mean", "cls", "last" (vLLM)
+	PoolingType string `yaml:"pooling_type,omitempty" json:"pooling_type,omitempty"`
 }
 
 // Validate checks the embedding config for consistency.
@@ -303,6 +321,22 @@ func (c *EmbeddingConfig) Validate() error {
 		return NewPromptValidationError(ErrMsgEmbeddingInvalidFormat, "")
 	}
 
+	if c.InputType != "" && !isValidEmbeddingInputType(c.InputType) {
+		return NewPromptValidationError(ErrMsgEmbeddingInvalidInputType, "")
+	}
+
+	if c.OutputDtype != "" && !isValidEmbeddingOutputDtype(c.OutputDtype) {
+		return NewPromptValidationError(ErrMsgEmbeddingInvalidOutputDtype, "")
+	}
+
+	if c.Truncation != "" && !isValidEmbeddingTruncation(c.Truncation) {
+		return NewPromptValidationError(ErrMsgEmbeddingInvalidTruncation, "")
+	}
+
+	if c.PoolingType != "" && !isValidEmbeddingPoolingType(c.PoolingType) {
+		return NewPromptValidationError(ErrMsgEmbeddingInvalidPoolingType, "")
+	}
+
 	return nil
 }
 
@@ -313,12 +347,21 @@ func (c *EmbeddingConfig) Clone() *EmbeddingConfig {
 	}
 
 	clone := &EmbeddingConfig{
-		Format: c.Format,
+		Format:      c.Format,
+		InputType:   c.InputType,
+		OutputDtype: c.OutputDtype,
+		Truncation:  c.Truncation,
+		PoolingType: c.PoolingType,
 	}
 
 	if c.Dimensions != nil {
 		v := *c.Dimensions
 		clone.Dimensions = &v
+	}
+
+	if c.Normalize != nil {
+		v := *c.Normalize
+		clone.Normalize = &v
 	}
 
 	return clone
@@ -338,11 +381,28 @@ func (c *EmbeddingConfig) ToMap() map[string]any {
 	if c.Format != "" {
 		result[ParamKeyEncodingFormat] = c.Format
 	}
+	if c.InputType != "" {
+		result[ParamKeyInputType] = c.InputType
+	}
+	if c.OutputDtype != "" {
+		result[ParamKeyOutputDtype] = c.OutputDtype
+	}
+	if c.Truncation != "" {
+		result[ParamKeyTruncation] = c.Truncation
+	}
+	if c.Normalize != nil {
+		result[ParamKeyNormalize] = *c.Normalize
+	}
+	if c.PoolingType != "" {
+		result[ParamKeyPoolingType] = c.PoolingType
+	}
 
 	return result
 }
 
 // AsyncConfig configures asynchronous execution behavior.
+// AsyncConfig is safe for concurrent reads. Callers must not modify the config after passing
+// it to an ExecutionConfig; use Clone() to create an independent copy if mutation is needed.
 type AsyncConfig struct {
 	// Enabled indicates whether async execution is enabled
 	Enabled bool `yaml:"enabled" json:"enabled"`
@@ -481,5 +541,103 @@ func isValidStreamMethod(m string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// isValidEmbeddingInputType checks if the given string is a valid embedding input type.
+// Valid values are defined by the EmbeddingInputType* constants.
+// Used by EmbeddingConfig.Validate(). See also GeminiTaskType() for Gemini mapping.
+func isValidEmbeddingInputType(t string) bool {
+	switch t {
+	case EmbeddingInputTypeSearchQuery, EmbeddingInputTypeSearchDocument,
+		EmbeddingInputTypeClassification, EmbeddingInputTypeClustering,
+		EmbeddingInputTypeSemanticSimilarity:
+		return true
+	default:
+		return false
+	}
+}
+
+// isValidEmbeddingOutputDtype checks if the given string is a valid embedding output dtype.
+// Valid values are defined by the EmbeddingDtype* constants. Note: OutputDtype (quantization)
+// is distinct from Format (wire encoding). Used by EmbeddingConfig.Validate().
+func isValidEmbeddingOutputDtype(d string) bool {
+	switch d {
+	case EmbeddingDtypeFloat32, EmbeddingDtypeInt8, EmbeddingDtypeUint8,
+		EmbeddingDtypeBinary, EmbeddingDtypeUbinary:
+		return true
+	default:
+		return false
+	}
+}
+
+// isValidEmbeddingTruncation checks if the given string is a valid embedding truncation strategy.
+// Valid values are defined by the EmbeddingTruncation* constants. Used by EmbeddingConfig.Validate().
+// See also CohereUpperCase() for Cohere UPPER_CASE mapping.
+func isValidEmbeddingTruncation(t string) bool {
+	switch t {
+	case EmbeddingTruncationNone, EmbeddingTruncationStart, EmbeddingTruncationEnd:
+		return true
+	default:
+		return false
+	}
+}
+
+// isValidEmbeddingPoolingType checks if the given string is a valid embedding pooling type.
+// Valid values are defined by the EmbeddingPooling* constants. Used by EmbeddingConfig.Validate().
+func isValidEmbeddingPoolingType(p string) bool {
+	switch p {
+	case EmbeddingPoolingMean, EmbeddingPoolingCLS, EmbeddingPoolingLast:
+		return true
+	default:
+		return false
+	}
+}
+
+// GeminiTaskType converts an embedding input type to Gemini's UPPER_CASE task_type format.
+// All valid embedding input types (as defined by EmbeddingInputType* constants) have a
+// corresponding Gemini mapping. Returns an error for empty or unrecognized input types.
+//
+// Mapping:
+//   - "search_query"        → "RETRIEVAL_QUERY"
+//   - "search_document"     → "RETRIEVAL_DOCUMENT"
+//   - "semantic_similarity" → "SEMANTIC_SIMILARITY"
+//   - "classification"      → "CLASSIFICATION"
+//   - "clustering"          → "CLUSTERING"
+func GeminiTaskType(inputType string) (string, error) {
+	switch inputType {
+	case EmbeddingInputTypeSearchQuery:
+		return GeminiTaskRetrievalQuery, nil
+	case EmbeddingInputTypeSearchDocument:
+		return GeminiTaskRetrievalDocument, nil
+	case EmbeddingInputTypeSemanticSimilarity:
+		return GeminiTaskSemanticSimilarity, nil
+	case EmbeddingInputTypeClassification:
+		return GeminiTaskClassification, nil
+	case EmbeddingInputTypeClustering:
+		return GeminiTaskClustering, nil
+	default:
+		return "", NewPromptValidationError(ErrMsgEmbeddingInvalidInputType, inputType)
+	}
+}
+
+// CohereUpperCase converts an embedding truncation strategy to Cohere's UPPER_CASE format.
+// All valid truncation strategies (as defined by EmbeddingTruncation* constants) have a
+// corresponding Cohere mapping. Returns an error for empty or unrecognized strategies.
+//
+// Mapping:
+//   - "none"  → "NONE"
+//   - "start" → "START"
+//   - "end"   → "END"
+func CohereUpperCase(truncation string) (string, error) {
+	switch truncation {
+	case EmbeddingTruncationNone:
+		return CohereTruncateNone, nil
+	case EmbeddingTruncationStart:
+		return CohereTruncateStart, nil
+	case EmbeddingTruncationEnd:
+		return CohereTruncateEnd, nil
+	default:
+		return "", NewPromptValidationError(ErrMsgEmbeddingInvalidTruncation, truncation)
 	}
 }

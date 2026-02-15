@@ -321,6 +321,30 @@ func TestEmbeddingConfig_Validate(t *testing.T) {
 		{name: "valid format float", config: &EmbeddingConfig{Format: EmbeddingFormatFloat}, wantErr: false},
 		{name: "valid format base64", config: &EmbeddingConfig{Format: EmbeddingFormatBase64}, wantErr: false},
 		{name: "invalid format", config: &EmbeddingConfig{Format: "binary"}, wantErr: true, errMsg: ErrMsgEmbeddingInvalidFormat},
+		// v2.7 input type validation
+		{name: "valid input_type search_query", config: &EmbeddingConfig{InputType: EmbeddingInputTypeSearchQuery}, wantErr: false},
+		{name: "valid input_type search_document", config: &EmbeddingConfig{InputType: EmbeddingInputTypeSearchDocument}, wantErr: false},
+		{name: "valid input_type classification", config: &EmbeddingConfig{InputType: EmbeddingInputTypeClassification}, wantErr: false},
+		{name: "valid input_type clustering", config: &EmbeddingConfig{InputType: EmbeddingInputTypeClustering}, wantErr: false},
+		{name: "valid input_type semantic_similarity", config: &EmbeddingConfig{InputType: EmbeddingInputTypeSemanticSimilarity}, wantErr: false},
+		{name: "invalid input_type", config: &EmbeddingConfig{InputType: "summarization"}, wantErr: true, errMsg: ErrMsgEmbeddingInvalidInputType},
+		// v2.7 output dtype validation
+		{name: "valid output_dtype float32", config: &EmbeddingConfig{OutputDtype: EmbeddingDtypeFloat32}, wantErr: false},
+		{name: "valid output_dtype int8", config: &EmbeddingConfig{OutputDtype: EmbeddingDtypeInt8}, wantErr: false},
+		{name: "valid output_dtype uint8", config: &EmbeddingConfig{OutputDtype: EmbeddingDtypeUint8}, wantErr: false},
+		{name: "valid output_dtype binary", config: &EmbeddingConfig{OutputDtype: EmbeddingDtypeBinary}, wantErr: false},
+		{name: "valid output_dtype ubinary", config: &EmbeddingConfig{OutputDtype: EmbeddingDtypeUbinary}, wantErr: false},
+		{name: "invalid output_dtype", config: &EmbeddingConfig{OutputDtype: "float16"}, wantErr: true, errMsg: ErrMsgEmbeddingInvalidOutputDtype},
+		// v2.7 truncation validation
+		{name: "valid truncation none", config: &EmbeddingConfig{Truncation: EmbeddingTruncationNone}, wantErr: false},
+		{name: "valid truncation start", config: &EmbeddingConfig{Truncation: EmbeddingTruncationStart}, wantErr: false},
+		{name: "valid truncation end", config: &EmbeddingConfig{Truncation: EmbeddingTruncationEnd}, wantErr: false},
+		{name: "invalid truncation", config: &EmbeddingConfig{Truncation: "middle"}, wantErr: true, errMsg: ErrMsgEmbeddingInvalidTruncation},
+		// v2.7 pooling type validation
+		{name: "valid pooling mean", config: &EmbeddingConfig{PoolingType: EmbeddingPoolingMean}, wantErr: false},
+		{name: "valid pooling cls", config: &EmbeddingConfig{PoolingType: EmbeddingPoolingCLS}, wantErr: false},
+		{name: "valid pooling last", config: &EmbeddingConfig{PoolingType: EmbeddingPoolingLast}, wantErr: false},
+		{name: "invalid pooling", config: &EmbeddingConfig{PoolingType: "max"}, wantErr: true, errMsg: ErrMsgEmbeddingInvalidPoolingType},
 	}
 
 	for _, tt := range tests {
@@ -340,6 +364,7 @@ func TestEmbeddingConfig_Validate(t *testing.T) {
 
 func TestEmbeddingConfig_Clone(t *testing.T) {
 	intPtr := func(v int) *int { return &v }
+	boolPtr := func(v bool) *bool { return &v }
 
 	t.Run("nil clone", func(t *testing.T) {
 		var c *EmbeddingConfig
@@ -362,19 +387,47 @@ func TestEmbeddingConfig_Clone(t *testing.T) {
 		*clone.Dimensions = 3072
 		assert.NotEqual(t, *original.Dimensions, *clone.Dimensions)
 	})
+
+	t.Run("deep copy all v2.7 fields", func(t *testing.T) {
+		original := &EmbeddingConfig{
+			Dimensions:  intPtr(1024),
+			Format:      EmbeddingFormatBase64,
+			InputType:   EmbeddingInputTypeSearchDocument,
+			OutputDtype: EmbeddingDtypeInt8,
+			Truncation:  EmbeddingTruncationEnd,
+			Normalize:   boolPtr(true),
+			PoolingType: EmbeddingPoolingMean,
+		}
+
+		clone := original.Clone()
+		require.NotNil(t, clone)
+
+		assert.Equal(t, *original.Dimensions, *clone.Dimensions)
+		assert.Equal(t, original.Format, clone.Format)
+		assert.Equal(t, original.InputType, clone.InputType)
+		assert.Equal(t, original.OutputDtype, clone.OutputDtype)
+		assert.Equal(t, original.Truncation, clone.Truncation)
+		assert.Equal(t, *original.Normalize, *clone.Normalize)
+		assert.Equal(t, original.PoolingType, clone.PoolingType)
+
+		// Verify Normalize pointer independence
+		*clone.Normalize = false
+		assert.NotEqual(t, *original.Normalize, *clone.Normalize)
+	})
 }
 
 // --- EmbeddingConfig.ToMap ---
 
 func TestEmbeddingConfig_ToMap(t *testing.T) {
 	intPtr := func(v int) *int { return &v }
+	boolPtr := func(v bool) *bool { return &v }
 
 	t.Run("nil", func(t *testing.T) {
 		var c *EmbeddingConfig
 		assert.Nil(t, c.ToMap())
 	})
 
-	t.Run("all fields", func(t *testing.T) {
+	t.Run("original fields", func(t *testing.T) {
 		c := &EmbeddingConfig{
 			Dimensions: intPtr(1536),
 			Format:     EmbeddingFormatFloat,
@@ -383,6 +436,27 @@ func TestEmbeddingConfig_ToMap(t *testing.T) {
 		m := c.ToMap()
 		assert.Equal(t, 1536, m[ParamKeyDimensions])
 		assert.Equal(t, EmbeddingFormatFloat, m[ParamKeyEncodingFormat])
+	})
+
+	t.Run("all v2.7 fields", func(t *testing.T) {
+		c := &EmbeddingConfig{
+			Dimensions:  intPtr(1024),
+			Format:      EmbeddingFormatBase64,
+			InputType:   EmbeddingInputTypeSearchDocument,
+			OutputDtype: EmbeddingDtypeInt8,
+			Truncation:  EmbeddingTruncationEnd,
+			Normalize:   boolPtr(true),
+			PoolingType: EmbeddingPoolingMean,
+		}
+
+		m := c.ToMap()
+		assert.Equal(t, 1024, m[ParamKeyDimensions])
+		assert.Equal(t, EmbeddingFormatBase64, m[ParamKeyEncodingFormat])
+		assert.Equal(t, EmbeddingInputTypeSearchDocument, m[ParamKeyInputType])
+		assert.Equal(t, EmbeddingDtypeInt8, m[ParamKeyOutputDtype])
+		assert.Equal(t, EmbeddingTruncationEnd, m[ParamKeyTruncation])
+		assert.Equal(t, true, m[ParamKeyNormalize])
+		assert.Equal(t, EmbeddingPoolingMean, m[ParamKeyPoolingType])
 	})
 }
 
@@ -616,4 +690,180 @@ func TestIsValidStreamMethod(t *testing.T) {
 	assert.True(t, isValidStreamMethod(StreamMethodWebSocket))
 	assert.False(t, isValidStreamMethod("grpc"))
 	assert.False(t, isValidStreamMethod(""))
+}
+
+// --- v2.7 Embedding validator tests ---
+
+func TestIsValidEmbeddingInputType(t *testing.T) {
+	assert.True(t, isValidEmbeddingInputType(EmbeddingInputTypeSearchQuery))
+	assert.True(t, isValidEmbeddingInputType(EmbeddingInputTypeSearchDocument))
+	assert.True(t, isValidEmbeddingInputType(EmbeddingInputTypeClassification))
+	assert.True(t, isValidEmbeddingInputType(EmbeddingInputTypeClustering))
+	assert.True(t, isValidEmbeddingInputType(EmbeddingInputTypeSemanticSimilarity))
+	assert.False(t, isValidEmbeddingInputType("summarization"))
+	assert.False(t, isValidEmbeddingInputType(""))
+}
+
+func TestIsValidEmbeddingOutputDtype(t *testing.T) {
+	assert.True(t, isValidEmbeddingOutputDtype(EmbeddingDtypeFloat32))
+	assert.True(t, isValidEmbeddingOutputDtype(EmbeddingDtypeInt8))
+	assert.True(t, isValidEmbeddingOutputDtype(EmbeddingDtypeUint8))
+	assert.True(t, isValidEmbeddingOutputDtype(EmbeddingDtypeBinary))
+	assert.True(t, isValidEmbeddingOutputDtype(EmbeddingDtypeUbinary))
+	assert.False(t, isValidEmbeddingOutputDtype("float16"))
+	assert.False(t, isValidEmbeddingOutputDtype(""))
+}
+
+func TestIsValidEmbeddingTruncation(t *testing.T) {
+	assert.True(t, isValidEmbeddingTruncation(EmbeddingTruncationNone))
+	assert.True(t, isValidEmbeddingTruncation(EmbeddingTruncationStart))
+	assert.True(t, isValidEmbeddingTruncation(EmbeddingTruncationEnd))
+	assert.False(t, isValidEmbeddingTruncation("middle"))
+	assert.False(t, isValidEmbeddingTruncation(""))
+}
+
+func TestIsValidEmbeddingPoolingType(t *testing.T) {
+	assert.True(t, isValidEmbeddingPoolingType(EmbeddingPoolingMean))
+	assert.True(t, isValidEmbeddingPoolingType(EmbeddingPoolingCLS))
+	assert.True(t, isValidEmbeddingPoolingType(EmbeddingPoolingLast))
+	assert.False(t, isValidEmbeddingPoolingType("max"))
+	assert.False(t, isValidEmbeddingPoolingType(""))
+}
+
+func TestGeminiTaskType(t *testing.T) {
+	t.Run("valid mappings", func(t *testing.T) {
+		result, err := GeminiTaskType(EmbeddingInputTypeSearchQuery)
+		assert.NoError(t, err)
+		assert.Equal(t, GeminiTaskRetrievalQuery, result)
+
+		result, err = GeminiTaskType(EmbeddingInputTypeSearchDocument)
+		assert.NoError(t, err)
+		assert.Equal(t, GeminiTaskRetrievalDocument, result)
+
+		result, err = GeminiTaskType(EmbeddingInputTypeSemanticSimilarity)
+		assert.NoError(t, err)
+		assert.Equal(t, GeminiTaskSemanticSimilarity, result)
+
+		result, err = GeminiTaskType(EmbeddingInputTypeClassification)
+		assert.NoError(t, err)
+		assert.Equal(t, GeminiTaskClassification, result)
+
+		result, err = GeminiTaskType(EmbeddingInputTypeClustering)
+		assert.NoError(t, err)
+		assert.Equal(t, GeminiTaskClustering, result)
+	})
+
+	t.Run("unknown returns error", func(t *testing.T) {
+		result, err := GeminiTaskType("unknown")
+		assert.Error(t, err)
+		assert.Equal(t, "", result)
+		assert.Contains(t, err.Error(), ErrMsgEmbeddingInvalidInputType)
+	})
+
+	t.Run("empty returns error", func(t *testing.T) {
+		result, err := GeminiTaskType("")
+		assert.Error(t, err)
+		assert.Equal(t, "", result)
+	})
+}
+
+func TestCohereUpperCase(t *testing.T) {
+	t.Run("valid mappings", func(t *testing.T) {
+		result, err := CohereUpperCase(EmbeddingTruncationNone)
+		assert.NoError(t, err)
+		assert.Equal(t, CohereTruncateNone, result)
+
+		result, err = CohereUpperCase(EmbeddingTruncationStart)
+		assert.NoError(t, err)
+		assert.Equal(t, CohereTruncateStart, result)
+
+		result, err = CohereUpperCase(EmbeddingTruncationEnd)
+		assert.NoError(t, err)
+		assert.Equal(t, CohereTruncateEnd, result)
+	})
+
+	t.Run("unknown returns error", func(t *testing.T) {
+		result, err := CohereUpperCase("unknown")
+		assert.Error(t, err)
+		assert.Equal(t, "", result)
+		assert.Contains(t, err.Error(), ErrMsgEmbeddingInvalidTruncation)
+	})
+
+	t.Run("empty returns error", func(t *testing.T) {
+		result, err := CohereUpperCase("")
+		assert.Error(t, err)
+		assert.Equal(t, "", result)
+	})
+}
+
+// --- Model detection helper tests ---
+// Cross-reference: Provider serialization tests for these models are in prompty.execution_test.go
+// (TestExecutionConfig_GetEffectiveProvider_Mistral, TestExecutionConfig_GetEffectiveProvider_Cohere)
+
+func TestIsMistralModel(t *testing.T) {
+	tests := []struct {
+		name  string
+		model string
+		want  bool
+	}{
+		// Valid Mistral models
+		{"mistral prefix", "mistral-large-latest", true},
+		{"mistral small", "mistral-small-2402", true},
+		{"codestral prefix", "codestral-latest", true},
+		{"pixtral prefix", "pixtral-large-latest", true},
+		{"ministral prefix", "ministral-8b-latest", true},
+		{"open-mistral prefix", "open-mistral-nemo", true},
+		{"open-mixtral prefix", "open-mixtral-8x22b", true},
+		// Edge cases — not Mistral
+		{"empty string", "", false},
+		{"just prefix no dash content", "mistral-", true},
+		{"partial match mid-string", "my-mistral-model", false},
+		{"case sensitive upper", "Mistral-large", false},
+		{"case sensitive mixed", "MISTRAL-large", false},
+		{"similar but wrong prefix", "mis", false},
+		{"other providers", "gpt-4", false},
+		{"other providers anthropic", "claude-sonnet-4-5", false},
+		{"other providers gemini", "gemini-pro", false},
+		{"other providers cohere", "command-r-plus", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isMistralModel(tt.model))
+		})
+	}
+}
+
+func TestIsCohereModel(t *testing.T) {
+	tests := []struct {
+		name  string
+		model string
+		want  bool
+	}{
+		// Valid Cohere models
+		{"command prefix", "command-r-plus", true},
+		{"command light", "command-light", true},
+		{"embed prefix", "embed-v4.0", true},
+		{"embed english", "embed-english-v3.0", true},
+		{"rerank prefix", "rerank-v3.5", true},
+		{"c4ai prefix", "c4ai-aya-expanse-32b", true},
+		// Edge cases — not Cohere
+		{"empty string", "", false},
+		{"just prefix no dash content", "command-", true},
+		{"partial match mid-string", "my-command-model", false},
+		{"case sensitive upper", "Command-r-plus", false},
+		{"case sensitive mixed", "EMBED-v4.0", false},
+		{"similar but wrong prefix", "com", false},
+		{"other providers openai", "gpt-4", false},
+		{"other providers mistral", "mistral-large", false},
+		{"other providers gemini", "gemini-pro", false},
+		// Note: "embed-" matches Cohere, not OpenAI's "text-embedding-*" (different prefix)
+		{"openai embedding not cohere", "text-embedding-3-small", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isCohereModel(tt.model))
+		})
+	}
 }

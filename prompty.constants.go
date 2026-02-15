@@ -335,6 +335,30 @@ const (
 	ParamKeyTopLogprobs        = "top_logprobs"
 	ParamKeyStopTokenIDs       = "stop_token_ids"
 	ParamKeyLogitBias          = "logit_bias"
+	ParamKeyModel              = "model"
+	ParamKeyTopK               = "top_k"
+	ParamKeyStopSequences      = "stop_sequences"
+)
+
+// Anthropic-specific parameter keys
+const (
+	ParamKeyAnthropicThinking     = "thinking"
+	ParamKeyAnthropicOutputFormat = "output_format"
+	ParamKeyThinkingType          = "type"
+	ParamKeyThinkingTypeEnabled   = "enabled"
+	ParamKeyBudgetTokens          = "budget_tokens"
+)
+
+// Gemini-specific parameter keys
+const (
+	ParamKeyGenerationConfig   = "generationConfig"
+	ParamKeyGeminiMaxTokens    = "maxOutputTokens"
+	ParamKeyGeminiTopP         = "topP"
+	ParamKeyGeminiTopK         = "topK"
+	ParamKeyGeminiStopSeqs     = "stopSequences"
+	ParamKeyGeminiResponseMime = "responseMimeType"
+	ParamKeyGeminiResponseSchema = "responseSchema"
+	GeminiResponseMimeJSON     = "application/json"
 )
 
 // Error format strings for type validation
@@ -351,6 +375,8 @@ const (
 	ProviderVertex    = "vertex"
 	ProviderVLLM      = "vllm"
 	ProviderAzure     = "azure"
+	ProviderMistral   = "mistral"
+	ProviderCohere    = "cohere"
 )
 
 // Response format types for structured outputs
@@ -683,10 +709,51 @@ const (
 	AudioFormatPCM  = "pcm"
 )
 
-// v2.5 Embedding format constants
+// v2.5 Embedding format constants (wire encoding)
 const (
 	EmbeddingFormatFloat  = "float"
 	EmbeddingFormatBase64 = "base64"
+)
+
+// v2.7 Embedding input type constants
+const (
+	EmbeddingInputTypeSearchQuery       = "search_query"
+	EmbeddingInputTypeSearchDocument    = "search_document"
+	EmbeddingInputTypeClassification    = "classification"
+	EmbeddingInputTypeClustering        = "clustering"
+	EmbeddingInputTypeSemanticSimilarity = "semantic_similarity"
+)
+
+// v2.7 Embedding output dtype constants (quantization data type)
+const (
+	EmbeddingDtypeFloat32 = "float32"
+	EmbeddingDtypeInt8    = "int8"
+	EmbeddingDtypeUint8   = "uint8"
+	EmbeddingDtypeBinary  = "binary"
+	EmbeddingDtypeUbinary = "ubinary"
+)
+
+// v2.7 Embedding truncation strategy constants
+const (
+	EmbeddingTruncationNone  = "none"
+	EmbeddingTruncationStart = "start"
+	EmbeddingTruncationEnd   = "end"
+)
+
+// v2.7 Embedding pooling type constants (vLLM)
+const (
+	EmbeddingPoolingMean = "mean"
+	EmbeddingPoolingCLS  = "cls"
+	EmbeddingPoolingLast = "last"
+)
+
+// v2.7 Gemini task type mappings (UPPER_CASE values for Gemini API)
+const (
+	GeminiTaskRetrievalQuery      = "RETRIEVAL_QUERY"
+	GeminiTaskRetrievalDocument   = "RETRIEVAL_DOCUMENT"
+	GeminiTaskSemanticSimilarity  = "SEMANTIC_SIMILARITY"
+	GeminiTaskClassification      = "CLASSIFICATION"
+	GeminiTaskClustering          = "CLUSTERING"
 )
 
 // v2.5 Media parameter map keys (for serialization)
@@ -724,6 +791,32 @@ const (
 	ParamKeyEnabled            = "enabled"
 	ParamKeyResponseFormat     = "response_format"
 	ParamKeyGeminiNumImages    = "numberOfImages"
+
+	// v2.7 Embedding parameter keys
+	ParamKeyInputType            = "input_type"
+	ParamKeyOutputDtype          = "output_dtype"
+	ParamKeyTruncation           = "truncation"
+	ParamKeyNormalize            = "normalize"
+	ParamKeyPoolingType          = "pooling_type"
+
+	// v2.7 Provider-specific embedding parameter keys
+	ParamKeyOutputDimension      = "output_dimension"
+	ParamKeyOutputDimensionality = "output_dimensionality"
+	ParamKeyTaskType             = "task_type"
+	ParamKeyEmbeddingTypes       = "embedding_types"
+	ParamKeyTruncate             = "truncate"
+
+	// v2.7 Cohere-specific parameter keys
+	ParamKeyCohereTopP           = "p"
+	ParamKeyCohereTopK           = "k"
+	ParamKeyCohereStopSequences  = "stop_sequences"
+)
+
+// v2.7 Cohere truncation UPPER_CASE constants
+const (
+	CohereTruncateNone  = "NONE"
+	CohereTruncateStart = "START"
+	CohereTruncateEnd   = "END"
 )
 
 // v2.5 Media validation limits

@@ -531,7 +531,7 @@ The `GetEffectiveProvider()` method on `ExecutionConfig` auto-detects the provid
 1. Explicit `provider` field
 2. Presence of `thinking` config or claude model name → Anthropic
 3. Presence of `guided_decoding`, `min_p`, `repetition_penalty`, or `stop_token_ids` → vLLM
-4. Model name prefix (gpt-, claude-, gemini-)
+4. Model name prefix (gpt- → OpenAI, claude- → Anthropic, gemini- → Gemini, mistral-/codestral-/pixtral-/ministral- → Mistral, command-/embed-/rerank-/c4ai- → Cohere)
 
 ### Provider Serialization
 
@@ -555,7 +555,7 @@ ExecutionConfig supports multimodal AI generation via nested config structs:
 | `Modality` | `text`, `image`, `audio_speech`, `audio_transcription`, `music`, `sound_effects`, `embedding` | All (execution intent signal) |
 | `Image` | `width`, `height`, `size`, `quality`, `style`, `aspect_ratio`, `negative_prompt`, `num_images`, `guidance_scale`, `steps`, `strength` | OpenAI (size/quality/style/n), Gemini (aspectRatio/numberOfImages) |
 | `Audio` | `voice`, `voice_id`, `speed`, `output_format`, `duration`, `language` | OpenAI (voice/speed/response_format) |
-| `Embedding` | `dimensions`, `format` | OpenAI (dimensions/encoding_format) |
+| `Embedding` | `dimensions`, `format`, `input_type`, `output_dtype`, `truncation`, `normalize`, `pooling_type` | OpenAI, Gemini, Mistral, Cohere, vLLM (see serialization rules) |
 | `Streaming` | `enabled`, `method` (`sse`/`websocket`) | All (stream: true) |
 | `Async` | `enabled`, `poll_interval_seconds`, `poll_timeout_seconds` | Application-level |
 
@@ -590,12 +590,30 @@ execution:
 ---
 ```
 
+**YAML Example (Cohere Embedding):**
+```yaml
+---
+name: semantic-search
+execution:
+  modality: embedding
+  provider: cohere
+  model: embed-v4.0
+  embedding:
+    dimensions: 1024
+    input_type: search_document
+    output_dtype: int8
+    truncation: end
+---
+```
+
 **Provider serialization rules for media params:**
 - **ToOpenAI**: image (size/quality/style/n), audio (voice/speed/response_format), embedding (dimensions/encoding_format), streaming (stream:true)
 - **ToAnthropic**: streaming only (stream:true). No media generation params
-- **ToGemini**: image (aspectRatio/numberOfImages in generationConfig), streaming (stream:true)
-- **ToVLLM**: streaming only (stream:true). No media params (text inference only)
-- **GetEffectiveProvider**: Media params do NOT hint provider (they span multiple providers)
+- **ToGemini**: image (aspectRatio/numberOfImages), embedding (output_dimensionality/task_type), streaming (stream:true)
+- **ToVLLM**: embedding (normalize/pooling_type), streaming (stream:true)
+- **ToMistral**: embedding (output_dimension/encoding_format/output_dtype), streaming (stream:true). OpenAI-compatible structure
+- **ToCohere**: embedding (output_dimension/input_type/embedding_types/truncate), streaming (stream:true). Cohere-specific keys (p/k/stop_sequences)
+- **GetEffectiveProvider**: Media params do NOT hint provider (they span multiple providers). Model name detection includes Mistral (mistral-/codestral-/pixtral-/ministral-) and Cohere (command-/embed-/rerank-/c4ai-)
 
 ## Deployment-Aware Versioning
 

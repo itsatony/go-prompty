@@ -613,6 +613,12 @@ func (e *ExecutionConfig) GetEffectiveProvider() string {
 		if isGeminiModel(e.Model) {
 			return ProviderGemini
 		}
+		if isMistralModel(e.Model) {
+			return ProviderMistral
+		}
+		if isCohereModel(e.Model) {
+			return ProviderCohere
+		}
 	}
 
 	return ""
@@ -690,7 +696,7 @@ func (e *ExecutionConfig) ToOpenAI() map[string]any {
 	result := make(map[string]any)
 
 	if e.Model != "" {
-		result["model"] = e.Model
+		result[ParamKeyModel] = e.Model
 	}
 	if e.Temperature != nil {
 		result[ParamKeyTemperature] = *e.Temperature
@@ -798,22 +804,22 @@ func (e *ExecutionConfig) ToAnthropic() map[string]any {
 	result := make(map[string]any)
 
 	if e.Model != "" {
-		result["model"] = e.Model
+		result[ParamKeyModel] = e.Model
 	}
 	if e.Temperature != nil {
 		result[ParamKeyTemperature] = *e.Temperature
 	}
 	if e.MaxTokens != nil {
-		result["max_tokens"] = *e.MaxTokens
+		result[ParamKeyMaxTokens] = *e.MaxTokens
 	}
 	if e.TopP != nil {
 		result[ParamKeyTopP] = *e.TopP
 	}
 	if e.TopK != nil {
-		result["top_k"] = *e.TopK
+		result[ParamKeyTopK] = *e.TopK
 	}
 	if len(e.StopSequences) > 0 {
-		result["stop_sequences"] = e.StopSequences
+		result[ParamKeyStopSequences] = e.StopSequences
 	}
 	if e.Seed != nil {
 		result[ParamKeySeed] = *e.Seed
@@ -822,17 +828,17 @@ func (e *ExecutionConfig) ToAnthropic() map[string]any {
 	// Handle extended thinking
 	if e.Thinking != nil && e.Thinking.Enabled {
 		thinking := map[string]any{
-			"type": "enabled",
+			ParamKeyThinkingType: ParamKeyThinkingTypeEnabled,
 		}
 		if e.Thinking.BudgetTokens != nil {
-			thinking["budget_tokens"] = *e.Thinking.BudgetTokens
+			thinking[ParamKeyBudgetTokens] = *e.Thinking.BudgetTokens
 		}
-		result["thinking"] = thinking
+		result[ParamKeyAnthropicThinking] = thinking
 	}
 
 	// Handle response format for Anthropic
 	if e.ResponseFormat != nil {
-		result["output_format"] = e.ResponseFormat.ToAnthropic()
+		result[ParamKeyAnthropicOutputFormat] = e.ResponseFormat.ToAnthropic()
 	}
 
 	// v2.5: streaming only — no media generation params for Anthropic
@@ -849,6 +855,9 @@ func (e *ExecutionConfig) ToAnthropic() map[string]any {
 }
 
 // ToGemini converts the execution config to Gemini/Vertex AI API format.
+// Supports embedding parameters: output_dimensionality (from Dimensions) and task_type
+// (from InputType via GeminiTaskType mapping). Also supports image params (aspectRatio,
+// numberOfImages) and streaming.
 func (e *ExecutionConfig) ToGemini() map[string]any {
 	if e == nil {
 		return nil
@@ -857,7 +866,7 @@ func (e *ExecutionConfig) ToGemini() map[string]any {
 	result := make(map[string]any)
 
 	if e.Model != "" {
-		result["model"] = e.Model
+		result[ParamKeyModel] = e.Model
 	}
 
 	// Gemini uses generationConfig for parameters
@@ -866,21 +875,21 @@ func (e *ExecutionConfig) ToGemini() map[string]any {
 		genConfig[ParamKeyTemperature] = *e.Temperature
 	}
 	if e.MaxTokens != nil {
-		genConfig["maxOutputTokens"] = *e.MaxTokens
+		genConfig[ParamKeyGeminiMaxTokens] = *e.MaxTokens
 	}
 	if e.TopP != nil {
-		genConfig["topP"] = *e.TopP
+		genConfig[ParamKeyGeminiTopP] = *e.TopP
 	}
 	if e.TopK != nil {
-		genConfig["topK"] = *e.TopK
+		genConfig[ParamKeyGeminiTopK] = *e.TopK
 	}
 	if len(e.StopSequences) > 0 {
-		genConfig["stopSequences"] = e.StopSequences
+		genConfig[ParamKeyGeminiStopSeqs] = e.StopSequences
 	}
 
 	if e.ResponseFormat != nil {
-		genConfig["responseMimeType"] = "application/json"
-		genConfig["responseSchema"] = e.ResponseFormat.ToGemini()
+		genConfig[ParamKeyGeminiResponseMime] = GeminiResponseMimeJSON
+		genConfig[ParamKeyGeminiResponseSchema] = e.ResponseFormat.ToGemini()
 	}
 
 	// v2.5 Gemini image params in generationConfig
@@ -893,8 +902,20 @@ func (e *ExecutionConfig) ToGemini() map[string]any {
 		}
 	}
 
+	// v2.7 Gemini embedding params in generationConfig
+	if e.Embedding != nil {
+		if e.Embedding.Dimensions != nil {
+			genConfig[ParamKeyOutputDimensionality] = *e.Embedding.Dimensions
+		}
+		if e.Embedding.InputType != "" {
+			if taskType, err := GeminiTaskType(e.Embedding.InputType); err == nil {
+				genConfig[ParamKeyTaskType] = taskType
+			}
+		}
+	}
+
 	if len(genConfig) > 0 {
-		result["generationConfig"] = genConfig
+		result[ParamKeyGenerationConfig] = genConfig
 	}
 
 	// v2.5: streaming
@@ -911,6 +932,8 @@ func (e *ExecutionConfig) ToGemini() map[string]any {
 }
 
 // ToVLLM converts the execution config to vLLM API format.
+// Supports embedding parameters: normalize and pooling_type. Also supports guided decoding,
+// extended inference params (min_p, repetition_penalty, logprobs, etc.), and streaming.
 func (e *ExecutionConfig) ToVLLM() map[string]any {
 	if e == nil {
 		return nil
@@ -919,19 +942,19 @@ func (e *ExecutionConfig) ToVLLM() map[string]any {
 	result := make(map[string]any)
 
 	if e.Model != "" {
-		result["model"] = e.Model
+		result[ParamKeyModel] = e.Model
 	}
 	if e.Temperature != nil {
 		result[ParamKeyTemperature] = *e.Temperature
 	}
 	if e.MaxTokens != nil {
-		result["max_tokens"] = *e.MaxTokens
+		result[ParamKeyMaxTokens] = *e.MaxTokens
 	}
 	if e.TopP != nil {
 		result[ParamKeyTopP] = *e.TopP
 	}
 	if e.TopK != nil {
-		result["top_k"] = *e.TopK
+		result[ParamKeyTopK] = *e.TopK
 	}
 	if len(e.StopSequences) > 0 {
 		result[ParamKeyStop] = e.StopSequences
@@ -963,7 +986,140 @@ func (e *ExecutionConfig) ToVLLM() map[string]any {
 		}
 	}
 
+	// v2.7 vLLM embedding params
+	if e.Embedding != nil {
+		if e.Embedding.Normalize != nil {
+			result[ParamKeyNormalize] = *e.Embedding.Normalize
+		}
+		if e.Embedding.PoolingType != "" {
+			result[ParamKeyPoolingType] = e.Embedding.PoolingType
+		}
+	}
+
 	// v2.5: streaming only — no media params for vLLM (text inference only)
+	if e.Streaming != nil && e.Streaming.Enabled {
+		result[ParamKeyStream] = true
+	}
+
+	// Merge provider options
+	for k, v := range e.ProviderOptions {
+		result[k] = v
+	}
+
+	return result
+}
+
+// ToMistral converts the execution config to Mistral AI API format.
+// Mistral uses an OpenAI-compatible structure with provider-specific embedding params:
+// output_dimension (from Dimensions), encoding_format (from Format), and output_dtype.
+// Supports response_format and streaming.
+func (e *ExecutionConfig) ToMistral() map[string]any {
+	if e == nil {
+		return nil
+	}
+
+	result := make(map[string]any)
+
+	if e.Model != "" {
+		result[ParamKeyModel] = e.Model
+	}
+	if e.Temperature != nil {
+		result[ParamKeyTemperature] = *e.Temperature
+	}
+	if e.MaxTokens != nil {
+		result[ParamKeyMaxTokens] = *e.MaxTokens
+	}
+	if e.TopP != nil {
+		result[ParamKeyTopP] = *e.TopP
+	}
+	if len(e.StopSequences) > 0 {
+		result[ParamKeyStop] = e.StopSequences
+	}
+	if e.Seed != nil {
+		result[ParamKeySeed] = *e.Seed
+	}
+
+	if e.ResponseFormat != nil {
+		result[ParamKeyResponseFormat] = e.ResponseFormat.ToOpenAI()
+	}
+
+	// Mistral embedding params
+	if e.Embedding != nil {
+		if e.Embedding.Dimensions != nil {
+			result[ParamKeyOutputDimension] = *e.Embedding.Dimensions
+		}
+		if e.Embedding.Format != "" {
+			result[ParamKeyEncodingFormat] = e.Embedding.Format
+		}
+		if e.Embedding.OutputDtype != "" {
+			result[ParamKeyOutputDtype] = e.Embedding.OutputDtype
+		}
+	}
+
+	if e.Streaming != nil && e.Streaming.Enabled {
+		result[ParamKeyStream] = true
+	}
+
+	// Merge provider options
+	for k, v := range e.ProviderOptions {
+		result[k] = v
+	}
+
+	return result
+}
+
+// ToCohere converts the execution config to Cohere API format.
+// Cohere uses different parameter names than OpenAI: "p" for top_p, "k" for top_k,
+// "stop_sequences" for stop. Embedding params: output_dimension, input_type,
+// embedding_types (OutputDtype as []string), and truncate (truncation in UPPER_CASE via
+// CohereUpperCase). Supports streaming.
+func (e *ExecutionConfig) ToCohere() map[string]any {
+	if e == nil {
+		return nil
+	}
+
+	result := make(map[string]any)
+
+	if e.Model != "" {
+		result[ParamKeyModel] = e.Model
+	}
+	if e.Temperature != nil {
+		result[ParamKeyTemperature] = *e.Temperature
+	}
+	if e.MaxTokens != nil {
+		result[ParamKeyMaxTokens] = *e.MaxTokens
+	}
+	if e.TopP != nil {
+		result[ParamKeyCohereTopP] = *e.TopP
+	}
+	if e.TopK != nil {
+		result[ParamKeyCohereTopK] = *e.TopK
+	}
+	if len(e.StopSequences) > 0 {
+		result[ParamKeyStopSequences] = e.StopSequences
+	}
+	if e.Seed != nil {
+		result[ParamKeySeed] = *e.Seed
+	}
+
+	// Cohere embedding params
+	if e.Embedding != nil {
+		if e.Embedding.Dimensions != nil {
+			result[ParamKeyOutputDimension] = *e.Embedding.Dimensions
+		}
+		if e.Embedding.InputType != "" {
+			result[ParamKeyInputType] = e.Embedding.InputType
+		}
+		if e.Embedding.OutputDtype != "" {
+			result[ParamKeyEmbeddingTypes] = []string{e.Embedding.OutputDtype}
+		}
+		if e.Embedding.Truncation != "" {
+			if upper, err := CohereUpperCase(e.Embedding.Truncation); err == nil {
+				result[ParamKeyTruncate] = upper
+			}
+		}
+	}
+
 	if e.Streaming != nil && e.Streaming.Enabled {
 		result[ParamKeyStream] = true
 	}
@@ -1005,6 +1161,17 @@ func (e *ExecutionConfig) ProviderFormat(provider string) (map[string]any, error
 		if e.GuidedDecoding != nil {
 			return e.GuidedDecoding.ToVLLM(), nil
 		}
+		return nil, nil
+
+	case ProviderMistral:
+		// Mistral uses OpenAI-compatible response_format
+		if e.ResponseFormat != nil {
+			return e.ResponseFormat.ToOpenAI(), nil
+		}
+		return nil, nil
+
+	case ProviderCohere:
+		// Cohere does not use response_format
 		return nil, nil
 
 	default:

@@ -348,3 +348,29 @@ func isGeminiModel(name string) bool {
 	return false
 }
 
+// isMistralModel checks if the model name suggests Mistral AI.
+// Recognized prefixes: mistral-, codestral-, pixtral-, ministral-, open-mistral-, open-mixtral-.
+// Used by GetEffectiveProvider() for automatic provider detection.
+func isMistralModel(name string) bool {
+	prefixes := []string{"mistral-", "codestral-", "pixtral-", "ministral-", "open-mistral-", "open-mixtral-"}
+	for _, prefix := range prefixes {
+		if len(name) >= len(prefix) && name[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
+}
+
+// isCohereModel checks if the model name suggests Cohere.
+// Recognized prefixes: command-, embed-, rerank-, c4ai-.
+// Used by GetEffectiveProvider() for automatic provider detection.
+func isCohereModel(name string) bool {
+	prefixes := []string{"command-", "embed-", "rerank-", "c4ai-"}
+	for _, prefix := range prefixes {
+		if len(name) >= len(prefix) && name[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
+}
+

@@ -691,7 +691,7 @@ Parameters are set directly in the `execution:` block:
 
 | Parameter | Type | Range | Providers | Description |
 |-----------|------|-------|-----------|-------------|
-| `provider` | string | — | all | Provider: openai, anthropic, google, vllm, azure |
+| `provider` | string | — | all | Provider: openai, anthropic, google, vllm, azure, mistral, cohere |
 | `model` | string | — | all | Model name (e.g., gpt-4, claude-3-sonnet) |
 | `temperature` | float | [0.0, 2.0] | all | Sampling temperature |
 | `max_tokens` | int | > 0 | all | Maximum tokens to generate |
@@ -1602,11 +1602,11 @@ func (p *Prompt) ExportToSkillMD(body string) (string, error)
 </details>
 
 <details>
-<summary><strong>ExecutionConfig (v2.3)</strong></summary>
+<summary><strong>ExecutionConfig (v2.7)</strong></summary>
 
 ```go
 type ExecutionConfig struct {
-    Provider          string              // openai, anthropic, google, vllm, azure
+    Provider          string              // openai, anthropic, google, vllm, azure, mistral, cohere
     Model             string              // Model name
     Temperature       *float64            // 0.0-2.0
     MaxTokens         *int                // Max output tokens
@@ -1622,6 +1622,7 @@ type ExecutionConfig struct {
     Thinking          *ThinkingConfig     // Claude extended thinking
     ResponseFormat    *ResponseFormat     // Structured output
     GuidedDecoding    *GuidedDecoding     // vLLM guided decoding
+    Embedding         *EmbeddingConfig    // v2.7: Extended embedding params
     ProviderOptions   map[string]any      // Provider-specific options
 }
 
@@ -1641,6 +1642,8 @@ func (c *ExecutionConfig) ToOpenAI() map[string]any
 func (c *ExecutionConfig) ToAnthropic() map[string]any
 func (c *ExecutionConfig) ToGemini() map[string]any
 func (c *ExecutionConfig) ToVLLM() map[string]any
+func (c *ExecutionConfig) ToMistral() map[string]any                     // v2.7
+func (c *ExecutionConfig) ToCohere() map[string]any                      // v2.7
 func (c *ExecutionConfig) ProviderFormat(provider string) (map[string]any, error)
 func (c *ExecutionConfig) GetEffectiveProvider() string
 ```
