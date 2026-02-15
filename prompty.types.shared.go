@@ -373,4 +373,3 @@ func isCohereModel(name string) bool {
 	}
 	return false
 }
-

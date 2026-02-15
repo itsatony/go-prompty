@@ -144,23 +144,23 @@ const (
 
 // Built-in tag names (mirror public constants for internal use)
 const (
-	TagNameVar         = "prompty.var"
-	TagNameRaw         = "prompty.raw"
-	TagNameInclude     = "prompty.include"
-	TagNameIf          = "prompty.if"
-	TagNameElseIf      = "prompty.elseif"
-	TagNameElse        = "prompty.else"
-	TagNameComment     = "prompty.comment"     // Phase 3
-	TagNameFor         = "prompty.for"         // Phase 4
-	TagNameSwitch      = "prompty.switch"      // Phase 5
-	TagNameCase        = "prompty.case"        // Phase 5
-	TagNameCaseDefault = "prompty.casedefault" // Phase 5
-	TagNameEnv         = "prompty.env"         // Environment variable resolver
-	TagNameConfig      = "prompty.config"      // Legacy inference configuration block (JSON)
-	TagNameExtends     = "prompty.extends"     // Template inheritance - extends parent
-	TagNameBlock       = "prompty.block"       // Template inheritance - overridable block
-	TagNameParent      = "prompty.parent"      // Template inheritance - call parent block content
-	TagNameRef           = "prompty.ref"             // v2.0: Prompt reference resolver
+	TagNameVar           = "prompty.var"
+	TagNameRaw           = "prompty.raw"
+	TagNameInclude       = "prompty.include"
+	TagNameIf            = "prompty.if"
+	TagNameElseIf        = "prompty.elseif"
+	TagNameElse          = "prompty.else"
+	TagNameComment       = "prompty.comment"        // Phase 3
+	TagNameFor           = "prompty.for"            // Phase 4
+	TagNameSwitch        = "prompty.switch"         // Phase 5
+	TagNameCase          = "prompty.case"           // Phase 5
+	TagNameCaseDefault   = "prompty.casedefault"    // Phase 5
+	TagNameEnv           = "prompty.env"            // Environment variable resolver
+	TagNameConfig        = "prompty.config"         // Legacy inference configuration block (JSON)
+	TagNameExtends       = "prompty.extends"        // Template inheritance - extends parent
+	TagNameBlock         = "prompty.block"          // Template inheritance - overridable block
+	TagNameParent        = "prompty.parent"         // Template inheritance - call parent block content
+	TagNameRef           = "prompty.ref"            // v2.0: Prompt reference resolver
 	TagNameSkillsCatalog = "prompty.skills_catalog" // v2.1: Skills catalog generator
 	TagNameToolsCatalog  = "prompty.tools_catalog"  // v2.1: Tools catalog generator
 	// TagNameMessage is defined separately in the message tag constants section

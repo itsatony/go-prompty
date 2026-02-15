@@ -730,12 +730,6 @@ execution:
     enabled: true
     budget_tokens: 5000
 
-skope:
-  visibility: public
-  project_id: proj_helpdesk
-  regions: [us-east-1, eu-west-1]
-  projects: [support, helpdesk]
-
 inputs:
   query:
     type: string
@@ -746,7 +740,7 @@ You are a helpful support agent.
 {~/prompty.message~}
 ```
 
-**v2.1 Detection**: Templates with `execution`, `skope`, `type`, or `name` config are v2.1 Prompts.
+**v2.1 Detection**: Templates with `execution`, `type`, or `name` config are v2.1 Prompts.
 
 ```go
 tmpl, _ := engine.Parse(source)
@@ -776,7 +770,7 @@ if tmpl.HasPrompt() {
 **Key v2.1 Types**:
 - `Prompt`: Full prompt config with document type (prompt/skill/agent), skills, tools, constraints, messages
 - `ExecutionConfig`: LLM parameters with provider-specific conversion and `Merge()` for 3-layer precedence
-- `SkopeConfig`: Platform integration (visibility, projects, project_id, regions, versioning)
+- `Extensions map[string]any`: Captures non-standard YAML fields (round-trip preserving via `yaml:",inline"`)
 - `SkillRef`, `ToolsConfig`, `ConstraintsConfig`: Agent-specific configuration
 - `CompiledPrompt`: Result of `CompileAgent()` — messages, execution config, tools, constraints
 - `DocumentResolver`: Interface for resolving prompts/skills/agents by slug
@@ -1571,7 +1565,7 @@ type Prompt struct {
     Outputs       map[string]*OutputDef // Optional: output schema
     Sample        map[string]any        // Optional: sample data
     Execution     *ExecutionConfig      // LLM execution config
-    Skope         *SkopeConfig          // Platform config
+    Extensions    map[string]any        // Non-standard YAML fields (round-trip preserving)
     Skills        []SkillRef            // v2.1: Agent skill references
     Tools         *ToolsConfig          // v2.1: Tool definitions
     Context       map[string]any        // v2.1: Agent context data

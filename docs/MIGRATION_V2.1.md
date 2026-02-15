@@ -231,7 +231,7 @@ compiled, _ := agent.CompileAgent(ctx, input, &prompty.CompileOptions{
 // Export a prompt to markdown
 bytes, _ := prompt.ExportFull()
 
-// Export as Agent Skills compatible (no execution/skope)
+// Export as Agent Skills compatible (no execution/extensions)
 bytes, _ := prompt.ExportAgentSkill()
 
 // Export as zip with resources

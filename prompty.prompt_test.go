@@ -120,9 +120,6 @@ func TestPrompt_Validate(t *testing.T) {
 					Provider: ProviderOpenAI,
 					Model:    "gpt-4",
 				},
-				Skope: &SkopeConfig{
-					Visibility: SkopeVisibilityPublic,
-				},
 			},
 			wantErr: false,
 		},
@@ -223,8 +220,6 @@ execution:
   provider: openai
   model: gpt-4
   temperature: 0.7
-skope:
-  visibility: public
 inputs:
   query:
     type: string
@@ -246,9 +241,6 @@ sample:
 				Execution: &ExecutionConfig{
 					Provider: ProviderOpenAI,
 					Model:    "gpt-4",
-				},
-				Skope: &SkopeConfig{
-					Visibility: "public",
 				},
 				Inputs: map[string]*InputDef{
 					"query": {Type: "string", Required: true},
@@ -304,9 +296,6 @@ func TestPrompt_Clone(t *testing.T) {
 			Provider: ProviderOpenAI,
 			Model:    "gpt-4",
 		},
-		Skope: &SkopeConfig{
-			Visibility: SkopeVisibilityPublic,
-		},
 		Inputs: map[string]*InputDef{
 			"query": {Type: "string", Required: true},
 		},
@@ -346,9 +335,6 @@ func TestPrompt_Getters(t *testing.T) {
 		Execution: &ExecutionConfig{
 			Provider: ProviderOpenAI,
 		},
-		Skope: &SkopeConfig{
-			Slug: "test-slug",
-		},
 		Sample: map[string]any{
 			"query": "test",
 		},
@@ -361,9 +347,8 @@ func TestPrompt_Getters(t *testing.T) {
 	assert.Equal(t, "calculator", prompt.GetAllowedTools())
 	assert.NotNil(t, prompt.GetMetadata())
 	assert.NotNil(t, prompt.GetExecution())
-	assert.NotNil(t, prompt.GetSkope())
 	assert.NotNil(t, prompt.GetSampleData())
-	assert.Equal(t, "test-slug", prompt.GetSlug())
+	assert.Equal(t, "test-prompt", prompt.GetSlug())
 
 	// Test nil prompt
 	var nilPrompt *Prompt
@@ -371,7 +356,6 @@ func TestPrompt_Getters(t *testing.T) {
 	assert.Empty(t, nilPrompt.GetDescription())
 	assert.Nil(t, nilPrompt.GetMetadata())
 	assert.Nil(t, nilPrompt.GetExecution())
-	assert.Nil(t, nilPrompt.GetSkope())
 }
 
 func TestPrompt_Has(t *testing.T) {
@@ -379,7 +363,6 @@ func TestPrompt_Has(t *testing.T) {
 		Name:        "test",
 		Description: "test",
 		Execution:   &ExecutionConfig{},
-		Skope:       &SkopeConfig{},
 		Inputs:      map[string]*InputDef{"query": {}},
 		Outputs:     map[string]*OutputDef{"result": {}},
 		Sample:      map[string]any{"key": "value"},
@@ -387,7 +370,6 @@ func TestPrompt_Has(t *testing.T) {
 	}
 
 	assert.True(t, prompt.HasExecution())
-	assert.True(t, prompt.HasSkope())
 	assert.True(t, prompt.HasInputs())
 	assert.True(t, prompt.HasOutputs())
 	assert.True(t, prompt.HasSample())
@@ -395,7 +377,6 @@ func TestPrompt_Has(t *testing.T) {
 
 	emptyPrompt := &Prompt{}
 	assert.False(t, emptyPrompt.HasExecution())
-	assert.False(t, emptyPrompt.HasSkope())
 	assert.False(t, emptyPrompt.HasInputs())
 	assert.False(t, emptyPrompt.HasOutputs())
 	assert.False(t, emptyPrompt.HasSample())
@@ -542,11 +523,56 @@ func TestPrompt_IsAgentSkillsCompatible(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "has skope",
+			name: "has extensions",
 			prompt: &Prompt{
 				Name:        "test",
 				Description: "test",
-				Skope:       &SkopeConfig{},
+				Extensions:  map[string]any{"custom": "value"},
+			},
+			want: false,
+		},
+		{
+			name: "has type",
+			prompt: &Prompt{
+				Name:        "test",
+				Description: "test",
+				Type:        DocumentTypeAgent,
+			},
+			want: false,
+		},
+		{
+			name: "has skills",
+			prompt: &Prompt{
+				Name:        "test",
+				Description: "test",
+				Skills:      []SkillRef{{Slug: "search"}},
+			},
+			want: false,
+		},
+		{
+			name: "has tools",
+			prompt: &Prompt{
+				Name:        "test",
+				Description: "test",
+				Tools:       &ToolsConfig{},
+			},
+			want: false,
+		},
+		{
+			name: "has constraints",
+			prompt: &Prompt{
+				Name:        "test",
+				Description: "test",
+				Constraints: &ConstraintsConfig{Behavioral: []string{"always cite sources"}},
+			},
+			want: false,
+		},
+		{
+			name: "has messages",
+			prompt: &Prompt{
+				Name:        "test",
+				Description: "test",
+				Messages:    []MessageTemplate{{Role: RoleSystem, Content: "hello"}},
 			},
 			want: false,
 		},
@@ -565,7 +591,7 @@ func TestPrompt_StripExtensions(t *testing.T) {
 		Description: "test",
 		License:     "MIT",
 		Execution:   &ExecutionConfig{Provider: ProviderOpenAI},
-		Skope:       &SkopeConfig{Visibility: "public"},
+		Extensions:  map[string]any{"custom": "value"},
 	}
 
 	stripped := original.StripExtensions()
@@ -574,7 +600,7 @@ func TestPrompt_StripExtensions(t *testing.T) {
 	assert.Equal(t, original.Description, stripped.Description)
 	assert.Equal(t, original.License, stripped.License)
 	assert.Nil(t, stripped.Execution)
-	assert.Nil(t, stripped.Skope)
+	assert.Nil(t, stripped.Extensions)
 }
 
 // ==================== API-03: ValidateAsAgent ====================

@@ -79,8 +79,10 @@ func TestPrompt_Serialize_Full(t *testing.T) {
 		Execution: &ExecutionConfig{
 			Provider: ProviderAnthropic,
 		},
-		Skope: &SkopeConfig{
-			Visibility: SkopeVisibilityPublic,
+		Extensions: map[string]any{
+			"custom_platform": map[string]any{
+				"visibility": "public",
+			},
 		},
 		Body: "template body",
 	}
@@ -99,6 +101,36 @@ func TestPrompt_Serialize_Nil(t *testing.T) {
 	data, err := p.Serialize(nil)
 	require.NoError(t, err)
 	assert.Nil(t, data)
+}
+
+func TestPrompt_Serialize_ExtensionKeyConflict(t *testing.T) {
+	// Extension keys that match known Prompt fields should be skipped
+	// during serialization to prevent overwriting struct field values.
+	p := &Prompt{
+		Name:        "original-name",
+		Description: "original-description",
+		Extensions: map[string]any{
+			"name":        "override-name",
+			"description": "override-description",
+			"inputs":      "override-inputs",
+			"custom_key":  "custom-value",
+		},
+		Body: "body",
+	}
+
+	data, err := p.Serialize(nil)
+	require.NoError(t, err)
+
+	content := string(data)
+	// Struct field values must win over conflicting extension keys
+	assert.Contains(t, content, "original-name")
+	assert.NotContains(t, content, "override-name")
+	assert.Contains(t, content, "original-description")
+	assert.NotContains(t, content, "override-description")
+	assert.NotContains(t, content, "override-inputs")
+	// Non-conflicting extension keys should still appear
+	assert.Contains(t, content, "custom_key")
+	assert.Contains(t, content, "custom-value")
 }
 
 func TestPrompt_Serialize_RoundTrip(t *testing.T) {

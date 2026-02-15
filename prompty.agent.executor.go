@@ -7,8 +7,8 @@ import (
 
 // Agent executor error message constants
 const (
-	ErrMsgAgentExecNilPrompt  = "prompt cannot be nil"
-	ErrMsgAgentExecReadFile   = "failed to read agent file"
+	ErrMsgAgentExecNilPrompt   = "prompt cannot be nil"
+	ErrMsgAgentExecReadFile    = "failed to read agent file"
 	ErrMsgAgentExecParseFailed = "failed to parse agent source"
 )
 

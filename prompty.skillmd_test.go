@@ -49,9 +49,6 @@ func TestExportToSkillMD(t *testing.T) {
 					Provider: ProviderOpenAI,
 					Model:    "gpt-4",
 				},
-				Skope: &SkopeConfig{
-					Visibility: SkopeVisibilityPublic,
-				},
 				Inputs: map[string]*InputDef{
 					"query": {Type: "string", Required: true},
 				},
@@ -77,12 +74,9 @@ func TestExportToSkillMD(t *testing.T) {
 				assert.Contains(t, result, s)
 			}
 
-			// Execution and Skope should NOT be in output
+			// Execution should NOT be in output
 			if tt.prompt != nil && tt.prompt.Execution != nil {
 				assert.NotContains(t, result, "execution:")
-			}
-			if tt.prompt != nil && tt.prompt.Skope != nil {
-				assert.NotContains(t, result, "skope:")
 			}
 		})
 	}
@@ -218,7 +212,7 @@ func TestSkillMD_RoundTrip(t *testing.T) {
 
 	// Extensions should not be present after round-trip
 	assert.Nil(t, imported.Prompt.Execution)
-	assert.Nil(t, imported.Prompt.Skope)
+	assert.Nil(t, imported.Prompt.Extensions)
 }
 
 func TestSkillMD_ToSource(t *testing.T) {
@@ -309,29 +303,6 @@ func TestSkillMD_MergeExecution(t *testing.T) {
 	assert.Nil(t, skillMD.Prompt.Execution)
 }
 
-func TestSkillMD_MergeSkope(t *testing.T) {
-	skillMD := &SkillMD{
-		Prompt: &Prompt{
-			Name:        "test",
-			Description: "test",
-		},
-		Body: "body",
-	}
-
-	skope := &SkopeConfig{
-		Visibility: SkopeVisibilityPublic,
-	}
-
-	result := skillMD.MergeSkope(skope)
-
-	assert.Equal(t, "test", result.Name)
-	assert.NotNil(t, result.Skope)
-	assert.Equal(t, SkopeVisibilityPublic, result.Skope.Visibility)
-
-	// Original should not be modified
-	assert.Nil(t, skillMD.Prompt.Skope)
-}
-
 func TestSkillMD_NilHandling(t *testing.T) {
 	var nilSkillMD *SkillMD
 
@@ -352,7 +323,4 @@ func TestSkillMD_NilHandling(t *testing.T) {
 
 	exec := nilSkillMD.MergeExecution(&ExecutionConfig{Provider: ProviderOpenAI})
 	assert.NotNil(t, exec.Execution)
-
-	skope := nilSkillMD.MergeSkope(&SkopeConfig{Visibility: "public"})
-	assert.NotNil(t, skope.Skope)
 }

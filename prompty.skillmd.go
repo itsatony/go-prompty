@@ -29,7 +29,7 @@ type SkillMD struct {
 }
 
 // ExportToSkillMD exports the prompt as a SKILL.md formatted string.
-// This strips the execution and skope config sections, keeping only
+// This strips the execution and extension config sections, keeping only
 // Agent Skills standard fields.
 func (p *Prompt) ExportToSkillMD(body string) (string, error) {
 	if p == nil {
@@ -187,29 +187,17 @@ func (s *SkillMD) MergeExecution(exec *ExecutionConfig) *Prompt {
 	return p
 }
 
-// MergeSkope merges skope config into the prompt.
-// Returns a new Prompt with skope config added (does not modify original).
-func (s *SkillMD) MergeSkope(skope *SkopeConfig) *Prompt {
-	if s == nil || s.Prompt == nil {
-		return &Prompt{Skope: skope}
-	}
-
-	p := s.Prompt.Clone()
-	p.Skope = skope
-	return p
-}
-
 // IsAgentSkillsCompatible returns true if the prompt contains only
-// Agent Skills standard fields (no execution, skope, or agent-specific config).
+// Agent Skills standard fields (no execution, extensions, or agent-specific config).
 func (p *Prompt) IsAgentSkillsCompatible() bool {
 	if p == nil {
 		return true
 	}
-	return p.Execution == nil && p.Skope == nil && p.Type == "" &&
+	return p.Execution == nil && len(p.Extensions) == 0 && p.Type == "" &&
 		len(p.Skills) == 0 && p.Tools == nil && p.Constraints == nil && len(p.Messages) == 0
 }
 
-// StripExtensions returns a copy of the prompt with execution, skope, and agent-specific fields removed.
+// StripExtensions returns a copy of the prompt with execution, extensions, and agent-specific fields removed.
 func (p *Prompt) StripExtensions() *Prompt {
 	if p == nil {
 		return nil
@@ -225,7 +213,7 @@ func (p *Prompt) StripExtensions() *Prompt {
 		Inputs:        p.Inputs,
 		Outputs:       p.Outputs,
 		Sample:        p.Sample,
-		// Execution, Skope, Type, Skills, Tools, Context, Constraints, Messages, Body
+		// Execution, Extensions, Type, Skills, Tools, Context, Constraints, Messages, Body
 		// are intentionally not copied
 	}
 }

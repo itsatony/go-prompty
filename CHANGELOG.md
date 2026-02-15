@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-02-15
+
+### Breaking Changes
+- **Removed `SkopeConfig`** type and all related code (`prompty.skope.go`, `prompty.skope_test.go`)
+- **Removed `Skope *SkopeConfig`** field from `Prompt` struct
+- **Removed** `GetSkope()`, `HasSkope()` methods from `Prompt`
+- **Removed** `MergeSkope()` method from `SkillMD`
+- **Removed** `SkopeVisibilityPublic`, `SkopeVisibilityPrivate`, `SkopeVisibilityShared`, `SkopeVisibilityTeam` constants
+- **Removed** `ErrMsgInvalidSkopeSlug`, `ErrMsgInvalidVisibility`, `ErrMsgVersionNumberNegative`, `ErrMsgInvalidRegion` error constants
+- **Replaced** `IncludeSkope` with `IncludeExtensions` in `SerializeOptions`
+- **Changed** `GetSlug()` to return `p.Name` directly (no more Skope.Slug fallback)
+
+### Added
+- **`Extensions map[string]any`** field on `Prompt` with `yaml:",inline"` tag — automatically captures non-standard YAML frontmatter fields
+- **`GetExtension(key)`**, **`HasExtension(key)`**, **`SetExtension(key, value)`**, **`RemoveExtension(key)`** methods on `Prompt`
+- **`GetExtensions()`** returns the full extensions map
+- **`GetExtensionAs[T](prompt, key)`** — generic typed getter using JSON round-trip conversion
+- **`GetStandardFields()`** — returns only Agent Skills genspec standard fields
+- **`GetPromptyFields()`** — returns only go-prompty extension fields
+- **`ErrMsgExtensionNotFound`**, **`ErrMsgExtensionCastFailed`** error constants
+- **Prompt field name constants** (`PromptFieldName`, `PromptFieldDescription`, `PromptFieldExecution`, etc.) for serialization key references
+- **Extension key conflict guard** in `buildSerializeMap` — extensions with keys matching known Prompt fields are skipped to prevent overwriting
+- **Thread safety documentation** on `Prompt` struct (safe for concurrent reads; mutations require external synchronization)
+
+### Migration Path
+Custom YAML fields (including former `skope:` blocks) are now automatically captured in `Extensions`:
+```go
+// Before: prompt.Skope.Visibility
+// After:  prompt.GetExtension("skope") → map[string]any{"visibility": "public"}
+//         GetExtensionAs[SkopeConfig](prompt, "skope") → typed access
+```
+
 ## [2.7.0] - 2026-02-15
 
 ### Added

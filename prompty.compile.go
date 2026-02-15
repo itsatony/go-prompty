@@ -14,7 +14,7 @@ const (
 	ErrMsgCompileSkillFailed    = "failed to compile skill for activation"
 	ErrMsgCompileNoEngine       = "engine required for compilation"
 	ErrMsgActivateSkillNotFound = "skill not found in agent for activation"
-	ErrMsgAgentDryRunNilPrompt = "prompt is nil"
+	ErrMsgAgentDryRunNilPrompt  = "prompt is nil"
 )
 
 // AgentDryRunCategory categorizes the type of issue found during an agent dry run.
@@ -548,8 +548,8 @@ func (cp *CompiledPrompt) ToOpenAIMessages() []map[string]any {
 	result := make([]map[string]any, 0, len(cp.Messages))
 	for _, msg := range cp.Messages {
 		result = append(result, map[string]any{
-			AttrRole:    msg.Role,
-			"content":   msg.Content,
+			AttrRole:  msg.Role,
+			"content": msg.Content,
 		})
 	}
 	return result

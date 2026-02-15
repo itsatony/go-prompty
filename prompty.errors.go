@@ -180,12 +180,6 @@ const (
 	ErrMsgAsyncPollTimeoutInvalid       = "async poll timeout must be positive"
 	ErrMsgAsyncPollTimeoutTooSmall      = "async poll timeout must be greater than or equal to poll interval"
 
-	// Skope validation messages
-	ErrMsgInvalidSkopeSlug      = "invalid skope slug format"
-	ErrMsgInvalidVisibility     = "invalid visibility value"
-	ErrMsgVersionNumberNegative = "version_number cannot be negative"
-	ErrMsgInvalidRegion         = "region values must be non-empty strings"
-
 	// v2.0 Prompt validation messages
 	ErrMsgPromptNameRequired        = "prompt name is required"
 	ErrMsgPromptNameTooLong         = "prompt name exceeds maximum length"

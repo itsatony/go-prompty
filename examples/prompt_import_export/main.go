@@ -108,7 +108,7 @@ Code:
 		log.Fatal(err)
 	}
 
-	fmt.Println("   Output (no execution/skope/agent fields):")
+	fmt.Println("   Output (no execution/agent fields):")
 	printIndented(string(agentSkillBytes), 3)
 	fmt.Println()
 
@@ -222,7 +222,7 @@ Summarize the following text into 3-5 bullet points:
 	// Serialize with only execution config (useful for API config extraction)
 	execOnlyBytes, err := prompt.Serialize(&prompty.SerializeOptions{
 		IncludeExecution:   true,
-		IncludeSkope:       false,
+		IncludeExtensions:  false,
 		IncludeAgentFields: false,
 		IncludeContext:     false,
 	})

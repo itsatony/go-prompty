@@ -546,7 +546,7 @@ go-prompty v2.1 uses the `Prompt` type compatible with the [Agent Skills](https:
 
 ### v2.1 Format
 
-The key difference from v1 is namespaced configuration with `execution` and `skope` sections:
+The key difference from v1 is namespaced configuration with an `execution` section:
 
 ```yaml
 ---
@@ -573,12 +573,6 @@ execution:
           answer: {type: string}
         required: [answer]
 
-skope:
-  visibility: public
-  project_id: proj_helpdesk
-  regions: [us-east-1, eu-west-1]
-  projects: [support, helpdesk]
-
 inputs:
   query:
     type: string
@@ -595,7 +589,6 @@ You are a helpful support agent.
 In v2.1, ALL frontmatter is parsed as `Prompt`. Templates are detected as v2.1 if they have:
 - A `type` field (prompt, skill, agent), OR
 - An `execution` config block, OR
-- A `skope` config block, OR
 - A `name` field
 
 The v1 `InferenceConfig` fallback has been completely removed.
@@ -630,10 +623,10 @@ if tmpl.HasPrompt() {
         }
     }
 
-    // Skope platform config
-    if prompt.Skope != nil {
-        fmt.Println("Visibility:", prompt.Skope.Visibility)
-        fmt.Println("Projects:", prompt.Skope.Projects)
+    // Extensions (custom non-standard fields)
+    if prompt.HasExtension("platform") {
+        val, _ := prompt.GetExtension("platform")
+        fmt.Println("Platform config:", val)
     }
 
     // Validate inputs
@@ -683,7 +676,7 @@ Export prompts in Agent Skills SKILL.md format:
 ```go
 prompt := tmpl.Prompt()
 
-// Export to SKILL.md (strips execution/skope for portability)
+// Export to SKILL.md (strips execution/extensions for portability)
 skillMD, _ := prompt.ExportToSkillMD(tmpl.TemplateBody())
 
 // Import from SKILL.md
@@ -737,7 +730,7 @@ Key differences:
 1. `description` is recommended for v2.1
 2. `type` field specifies document type: `prompt`, `skill` (default), or `agent`
 3. Model config moved to `execution` namespace with flat parameters
-4. Optional `skope` config for platform integration
+4. Non-standard YAML fields captured in `Extensions` (round-trip preserving)
 5. Agent type supports `skills`, `tools`, `constraints`, and `messages`
 
 ## v2.5 Media Generation Parameters

@@ -24,7 +24,7 @@
 
 ### 1.3 Non-Goals (v2.1)
 
-- Runtime execution (handled by skope/aigentchat)
+- Runtime execution (handled by application layer)
 - Multi-agent orchestration (handled by aigentflow)
 - MCP server implementation
 - Conversation state management
@@ -346,26 +346,6 @@ messages:
   - role: user
     content: "{{.input.message}}"
 
-# ============================================================
-# SKOPE MANAGEMENT
-# ============================================================
-
-skope:
-  slug: vigilant-steel-guardian
-  forked_from: null
-  created_at: "2025-02-01T10:30:00Z"
-  created_by: usr_abc123
-  updated_at: "2025-02-04T14:22:00Z"
-  updated_by: usr_abc123
-  version_number: 3
-  visibility: private
-  projects:
-    - prj_security
-    - prj_agents
-  references:
-    - brave-red-falcon
-    - swift-blue-horizon
-
 ---
 
 # Security Auditor
@@ -463,10 +443,6 @@ execution:
   model: claude-sonnet-4-20250514
   temperature: 0.2
 
-skope:
-  slug: brave-red-falcon
-  visibility: shared
-
 ---
 
 # Security Code Review
@@ -512,10 +488,6 @@ description: Base security guidelines included in multiple agents/skills
 metadata:
   author: security-team
   version: "2.0"
-
-skope:
-  slug: firm-gold-standard
-  visibility: shared
 
 ---
 
@@ -575,8 +547,8 @@ type Prompt struct {
     Constraints *ConstraintsConfig `yaml:"constraints,omitempty"`
     Messages    []MessageTemplate `yaml:"messages,omitempty"`
 
-    // Skope management
-    Skope *SkopeConfig `yaml:"skope,omitempty"`
+    // Extensions captures non-standard YAML frontmatter fields
+    Extensions map[string]any `yaml:",inline" json:"extensions,omitempty"`
 
     // Body content (markdown after frontmatter)
     Body string `yaml:"-"`
@@ -813,24 +785,20 @@ type MessageTemplate struct {
 }
 ```
 
-### 4.4 Skope Config
+### 4.4 Extensions
+
+Non-standard YAML frontmatter fields are automatically captured in `Extensions map[string]any` via the `yaml:",inline"` tag. This enables applications to attach custom metadata without modifying the core Prompt type.
 
 ```go
-// prompty/skope.go
+// Access extensions
+val, ok := prompt.GetExtension("platform")
 
-// SkopeConfig contains skope-specific management fields
-type SkopeConfig struct {
-    Slug          string    `yaml:"slug,omitempty" validate:"omitempty,max=64,slugid"`
-    ForkedFrom    string    `yaml:"forked_from,omitempty"`
-    CreatedAt     time.Time `yaml:"created_at,omitempty"`
-    CreatedBy     string    `yaml:"created_by,omitempty"`
-    UpdatedAt     time.Time `yaml:"updated_at,omitempty"`
-    UpdatedBy     string    `yaml:"updated_by,omitempty"`
-    VersionNumber int       `yaml:"version_number,omitempty"`
-    Visibility    string    `yaml:"visibility,omitempty" validate:"omitempty,oneof=private shared public"`
-    Projects      []string  `yaml:"projects,omitempty"`
-    References    []string  `yaml:"references,omitempty"`
+// Typed access via JSON round-trip
+type PlatformConfig struct {
+    Visibility string   `json:"visibility"`
+    Projects   []string `json:"projects"`
 }
+cfg, err := prompty.GetExtensionAs[PlatformConfig](prompt, "platform")
 ```
 
 ---
@@ -940,17 +908,17 @@ import (
 
 // SerializeOptions controls serialization behavior
 type SerializeOptions struct {
-    IncludeExecution bool // Include execution block
-    IncludeSkope     bool // Include skope block
+    IncludeExecution   bool // Include execution block
+    IncludeExtensions  bool // Include extension fields
     IncludeAgentFields bool // Include skills, tools, etc.
-    Indent           int  // YAML indentation (default 2)
+    Indent             int  // YAML indentation (default 2)
 }
 
 // DefaultSerializeOptions returns standard options
 func DefaultSerializeOptions() SerializeOptions {
     return SerializeOptions{
         IncludeExecution:   true,
-        IncludeSkope:       true,
+        IncludeExtensions:  true,
         IncludeAgentFields: true,
         Indent:             2,
     }
@@ -960,7 +928,7 @@ func DefaultSerializeOptions() SerializeOptions {
 func AgentSkillsExportOptions() SerializeOptions {
     return SerializeOptions{
         IncludeExecution:   false,
-        IncludeSkope:       false,
+        IncludeExtensions:  false,
         IncludeAgentFields: false, // Agent-specific fields not in spec
         Indent:             2,
     }
@@ -1015,9 +983,11 @@ func (p *Prompt) Serialize(opts SerializeOptions) ([]byte, error) {
         }
     }
 
-    // Skope config
-    if opts.IncludeSkope && p.Skope != nil {
-        fm["skope"] = p.Skope
+    // Extensions (non-standard fields, written as top-level keys)
+    if opts.IncludeExtensions && len(p.Extensions) > 0 {
+        for k, v := range p.Extensions {
+            fm[k] = v
+        }
     }
 
     // Serialize YAML

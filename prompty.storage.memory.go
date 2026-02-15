@@ -148,18 +148,18 @@ func (s *MemoryStorage) Save(ctx context.Context, tmpl *StoredTemplate) error {
 
 	// Create new stored template with generated fields
 	stored := &StoredTemplate{
-		ID:              generateTemplateID(),
-		Name:            tmpl.Name,
-		Source:          tmpl.Source,
-		Version:         nextVersion,
-		Status:          status,
-		Metadata:        copyStringMap(tmpl.Metadata),
+		ID:           generateTemplateID(),
+		Name:         tmpl.Name,
+		Source:       tmpl.Source,
+		Version:      nextVersion,
+		Status:       status,
+		Metadata:     copyStringMap(tmpl.Metadata),
 		PromptConfig: tmpl.PromptConfig, // PromptConfig is immutable after parsing
 		CreatedAt:    now,
 		UpdatedAt:    now,
-		CreatedBy:       tmpl.CreatedBy,
-		TenantID:        tmpl.TenantID,
-		Tags:            copyStringSlice(tmpl.Tags),
+		CreatedBy:    tmpl.CreatedBy,
+		TenantID:     tmpl.TenantID,
+		Tags:         copyStringSlice(tmpl.Tags),
 	}
 
 	// Update input template with generated values
@@ -450,18 +450,18 @@ func copyStoredTemplate(tmpl *StoredTemplate) *StoredTemplate {
 		return nil
 	}
 	return &StoredTemplate{
-		ID:              tmpl.ID,
-		Name:            tmpl.Name,
-		Source:          tmpl.Source,
-		Version:         tmpl.Version,
-		Status:          tmpl.Status,
-		Metadata:        copyStringMap(tmpl.Metadata),
+		ID:           tmpl.ID,
+		Name:         tmpl.Name,
+		Source:       tmpl.Source,
+		Version:      tmpl.Version,
+		Status:       tmpl.Status,
+		Metadata:     copyStringMap(tmpl.Metadata),
 		PromptConfig: tmpl.PromptConfig, // PromptConfig is immutable after parsing
 		CreatedAt:    tmpl.CreatedAt,
 		UpdatedAt:    tmpl.UpdatedAt,
-		CreatedBy:       tmpl.CreatedBy,
-		TenantID:        tmpl.TenantID,
-		Tags:            copyStringSlice(tmpl.Tags),
+		CreatedBy:    tmpl.CreatedBy,
+		TenantID:     tmpl.TenantID,
+		Tags:         copyStringSlice(tmpl.Tags),
 	}
 }
 

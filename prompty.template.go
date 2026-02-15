@@ -35,7 +35,6 @@ func newTemplateWithConfig(source, templateBody string, ast *internal.RootNode, 
 	}
 }
 
-
 // Execute renders the template with the given data.
 // This is a convenience method that creates a Context from the data map.
 func (t *Template) Execute(ctx context.Context, data map[string]any) (string, error) {

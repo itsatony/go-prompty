@@ -1055,11 +1055,11 @@ func TestExecutionConfig_ToAnthropic_ExtendedParams(t *testing.T) {
 	logprobs := 5
 
 	config := &ExecutionConfig{
-		Model:    "claude-3-opus",
-		Seed:     &seed,
-		MinP:     &minP,
-		Logprobs: &logprobs,
-		LogitBias: map[string]float64{"100": 5.0},
+		Model:        "claude-3-opus",
+		Seed:         &seed,
+		MinP:         &minP,
+		Logprobs:     &logprobs,
+		LogitBias:    map[string]float64{"100": 5.0},
 		StopTokenIDs: []int{50256},
 	}
 
@@ -1941,11 +1941,11 @@ func TestExecutionConfig_ToMistral(t *testing.T) {
 
 	t.Run("standard params", func(t *testing.T) {
 		config := &ExecutionConfig{
-			Model:       "mistral-large-latest",
-			Temperature: floatPtr(0.7),
-			MaxTokens:   intPtr(1000),
-			TopP:        floatPtr(0.9),
-			Seed:        intPtr(42),
+			Model:         "mistral-large-latest",
+			Temperature:   floatPtr(0.7),
+			MaxTokens:     intPtr(1000),
+			TopP:          floatPtr(0.9),
+			Seed:          intPtr(42),
 			StopSequences: []string{"END"},
 		}
 
@@ -2424,4 +2424,3 @@ embedding:
 
 	assert.NoError(t, config.Validate())
 }
-

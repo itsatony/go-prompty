@@ -9,6 +9,10 @@ import (
 
 // Prompt represents a v2.0/v2.1 prompt configuration parsed from YAML frontmatter.
 // It follows the Agent Skills specification (agentskills.io) with namespaced extensions.
+//
+// Thread safety: Prompt instances are safe for concurrent read access once constructed.
+// Concurrent mutation (e.g., SetExtension, RemoveExtension) requires external synchronization.
+// Use Clone() to create independent copies when concurrent modification is needed.
 type Prompt struct {
 	// Agent Skills Standard fields (required)
 	Name        string `yaml:"name" json:"name"`               // max 64 chars, slug format
@@ -25,7 +29,13 @@ type Prompt struct {
 
 	// v2.0 Namespaced configuration
 	Execution *ExecutionConfig `yaml:"execution,omitempty" json:"execution,omitempty"`
-	Skope     *SkopeConfig     `yaml:"skope,omitempty" json:"skope,omitempty"`
+
+	// Extensions captures non-standard YAML frontmatter fields.
+	// Any top-level YAML key that doesn't match a known Prompt field
+	// is automatically captured here during parsing.
+	// YAML: fields appear at top level (round-trip preserving)
+	// JSON: fields appear under "extensions" key
+	Extensions map[string]any `yaml:",inline" json:"extensions,omitempty"`
 
 	// Schema definitions (preserved from v1)
 	Inputs  map[string]*InputDef  `yaml:"inputs,omitempty" json:"inputs,omitempty"`
@@ -127,26 +137,19 @@ func (p *Prompt) Validate() error {
 		}
 	}
 
-	// Validate skope config if present
-	if p.Skope != nil {
-		if err := p.Skope.Validate(); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
 // ValidateOptional performs validation only if the prompt has enough
 // fields to indicate it is a well-formed v2.1 document. Prompts with
-// Execution, Skope, Type, or a Name are validated; bare frontmatter
+// Execution, Type, or a Name are validated; bare frontmatter
 // with none of these fields is silently accepted.
 func (p *Prompt) ValidateOptional() error {
 	if p == nil {
 		return nil
 	}
 	// If the prompt has v2.1-specific fields, require full validation
-	if p.Execution != nil || p.Skope != nil || p.Type != "" || p.Name != "" {
+	if p.Execution != nil || p.Type != "" || p.Name != "" {
 		return p.Validate()
 	}
 	return nil
@@ -227,14 +230,6 @@ func (p *Prompt) GetExecution() *ExecutionConfig {
 	return p.Execution
 }
 
-// GetSkope returns the skope config or nil if not set.
-func (p *Prompt) GetSkope() *SkopeConfig {
-	if p == nil {
-		return nil
-	}
-	return p.Skope
-}
-
 // GetSampleData returns the sample data map or nil if not set.
 func (p *Prompt) GetSampleData() map[string]any {
 	if p == nil {
@@ -246,11 +241,6 @@ func (p *Prompt) GetSampleData() map[string]any {
 // HasExecution returns true if execution config is present.
 func (p *Prompt) HasExecution() bool {
 	return p != nil && p.Execution != nil
-}
-
-// HasSkope returns true if skope config is present.
-func (p *Prompt) HasSkope() bool {
-	return p != nil && p.Skope != nil
 }
 
 // HasInputs returns true if input definitions are present.
@@ -407,9 +397,9 @@ func (p *Prompt) Clone() *Prompt {
 		clone.Execution = p.Execution.Clone()
 	}
 
-	// Clone skope
-	if p.Skope != nil {
-		clone.Skope = p.Skope.Clone()
+	// Clone extensions
+	if p.Extensions != nil {
+		clone.Extensions = deepCopyMap(p.Extensions)
 	}
 
 	// Clone inputs
@@ -471,13 +461,10 @@ func (p *Prompt) Clone() *Prompt {
 	return clone
 }
 
-// GetSlug returns the slug from skope config, or derives from name.
+// GetSlug returns the prompt name as the slug identifier.
 func (p *Prompt) GetSlug() string {
 	if p == nil {
 		return ""
-	}
-	if p.Skope != nil && p.Skope.Slug != "" {
-		return p.Skope.Slug
 	}
 	return p.Name
 }

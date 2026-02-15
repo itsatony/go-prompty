@@ -998,18 +998,18 @@ func (s *PostgresStorage) getMigrations() []postgresMigration {
 // scanTemplate scans a single row into a StoredTemplate.
 func (s *PostgresStorage) scanTemplate(row *sql.Row) (*StoredTemplate, error) {
 	var (
-		id            string
-		name          string
-		source        string
-		version       int
-		status        sql.NullString
-		metadataJSON  []byte
+		id                  string
+		name                string
+		source              string
+		version             int
+		status              sql.NullString
+		metadataJSON        []byte
 		promptConfigJSONStr sql.NullString
-		createdAt     time.Time
-		updatedAt     time.Time
-		createdBy     sql.NullString
-		tenantID      sql.NullString
-		tagsJSON      []byte
+		createdAt           time.Time
+		updatedAt           time.Time
+		createdBy           sql.NullString
+		tenantID            sql.NullString
+		tagsJSON            []byte
 	)
 
 	err := row.Scan(&id, &name, &source, &version, &status, &metadataJSON, &promptConfigJSONStr,
@@ -1025,18 +1025,18 @@ func (s *PostgresStorage) scanTemplate(row *sql.Row) (*StoredTemplate, error) {
 // scanTemplateRow scans a rows result into a StoredTemplate.
 func (s *PostgresStorage) scanTemplateRow(rows *sql.Rows) (*StoredTemplate, error) {
 	var (
-		id            string
-		name          string
-		source        string
-		version       int
-		status        sql.NullString
-		metadataJSON  []byte
+		id                  string
+		name                string
+		source              string
+		version             int
+		status              sql.NullString
+		metadataJSON        []byte
 		promptConfigJSONStr sql.NullString
-		createdAt     time.Time
-		updatedAt     time.Time
-		createdBy     sql.NullString
-		tenantID      sql.NullString
-		tagsJSON      []byte
+		createdAt           time.Time
+		updatedAt           time.Time
+		createdBy           sql.NullString
+		tenantID            sql.NullString
+		tagsJSON            []byte
 	)
 
 	err := rows.Scan(&id, &name, &source, &version, &status, &metadataJSON, &promptConfigJSONStr,

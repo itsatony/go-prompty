@@ -53,7 +53,7 @@ github.com/itsatony/go-prompty/v2/
 ├── prompty.constants.go          # Public constants
 ├── prompty.prompt.go             # v2.1: Prompt type with validation
 ├── prompty.execution.go          # v2.1: ExecutionConfig with provider serialization
-├── prompty.skope.go              # v2.1: SkopeConfig (platform integration)
+├── prompty.extensions.go         # v2.8: Extensions helpers + GetExtensionAs[T]
 ├── prompty.types.agent.go        # v2.1: SkillRef, ToolsConfig, ConstraintsConfig
 ├── prompty.types.shared.go       # v2.1: ResponseFormat, GuidedDecoding, InputDef
 ├── prompty.types.tools.go        # v2.1: FunctionDef, ModelParameters
@@ -340,7 +340,7 @@ messages:
 **Key v2.1 Types:**
 - `Prompt`: Full prompt configuration with document type, skills, tools, context, constraints, messages
 - `ExecutionConfig`: LLM execution parameters with `Merge()` for 3-layer precedence. Extended in v2.3 with `MinP`, `RepetitionPenalty`, `Seed`, `Logprobs`, `StopTokenIDs`, `LogitBias`
-- `SkopeConfig`: Platform integration fields (slug, visibility, projects, project_id, regions, references)
+- `Extensions map[string]any`: Captures non-standard YAML frontmatter fields (round-trip preserving)
 - `SkillRef`: Skill reference with injection mode and execution overrides
 - `ToolsConfig`: Tool definitions with function defs and MCP servers
 - `CompiledPrompt`: Result of `CompileAgent()` — messages, execution config, tools, constraints

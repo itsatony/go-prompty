@@ -216,18 +216,18 @@ func (s *FilesystemStorage) Save(ctx context.Context, tmpl *StoredTemplate) erro
 
 	// Create stored template with generated fields
 	stored := &StoredTemplate{
-		ID:              generateTemplateID(),
-		Name:            tmpl.Name,
-		Source:          tmpl.Source,
-		Version:         nextVersion,
-		Status:          status,
-		Metadata:        copyStringMap(tmpl.Metadata),
+		ID:           generateTemplateID(),
+		Name:         tmpl.Name,
+		Source:       tmpl.Source,
+		Version:      nextVersion,
+		Status:       status,
+		Metadata:     copyStringMap(tmpl.Metadata),
 		PromptConfig: tmpl.PromptConfig, // PromptConfig is immutable after parsing
 		CreatedAt:    now,
 		UpdatedAt:    now,
-		CreatedBy:       tmpl.CreatedBy,
-		TenantID:        tmpl.TenantID,
-		Tags:            copyStringSlice(tmpl.Tags),
+		CreatedBy:    tmpl.CreatedBy,
+		TenantID:     tmpl.TenantID,
+		Tags:         copyStringSlice(tmpl.Tags),
 	}
 
 	// Write to file

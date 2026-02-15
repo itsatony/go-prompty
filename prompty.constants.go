@@ -322,22 +322,22 @@ const (
 
 // Model parameter map keys (for ToMap conversion)
 const (
-	ParamKeyTemperature        = "temperature"
-	ParamKeyMaxTokens          = "max_tokens"
-	ParamKeyTopP               = "top_p"
-	ParamKeyFrequencyPenalty   = "frequency_penalty"
-	ParamKeyPresencePenalty    = "presence_penalty"
-	ParamKeyStop               = "stop"
-	ParamKeySeed               = "seed"
-	ParamKeyMinP               = "min_p"
-	ParamKeyRepetitionPenalty  = "repetition_penalty"
-	ParamKeyLogprobs           = "logprobs"
-	ParamKeyTopLogprobs        = "top_logprobs"
-	ParamKeyStopTokenIDs       = "stop_token_ids"
-	ParamKeyLogitBias          = "logit_bias"
-	ParamKeyModel              = "model"
-	ParamKeyTopK               = "top_k"
-	ParamKeyStopSequences      = "stop_sequences"
+	ParamKeyTemperature       = "temperature"
+	ParamKeyMaxTokens         = "max_tokens"
+	ParamKeyTopP              = "top_p"
+	ParamKeyFrequencyPenalty  = "frequency_penalty"
+	ParamKeyPresencePenalty   = "presence_penalty"
+	ParamKeyStop              = "stop"
+	ParamKeySeed              = "seed"
+	ParamKeyMinP              = "min_p"
+	ParamKeyRepetitionPenalty = "repetition_penalty"
+	ParamKeyLogprobs          = "logprobs"
+	ParamKeyTopLogprobs       = "top_logprobs"
+	ParamKeyStopTokenIDs      = "stop_token_ids"
+	ParamKeyLogitBias         = "logit_bias"
+	ParamKeyModel             = "model"
+	ParamKeyTopK              = "top_k"
+	ParamKeyStopSequences     = "stop_sequences"
 )
 
 // Anthropic-specific parameter keys
@@ -351,14 +351,14 @@ const (
 
 // Gemini-specific parameter keys
 const (
-	ParamKeyGenerationConfig   = "generationConfig"
-	ParamKeyGeminiMaxTokens    = "maxOutputTokens"
-	ParamKeyGeminiTopP         = "topP"
-	ParamKeyGeminiTopK         = "topK"
-	ParamKeyGeminiStopSeqs     = "stopSequences"
-	ParamKeyGeminiResponseMime = "responseMimeType"
+	ParamKeyGenerationConfig     = "generationConfig"
+	ParamKeyGeminiMaxTokens      = "maxOutputTokens"
+	ParamKeyGeminiTopP           = "topP"
+	ParamKeyGeminiTopK           = "topK"
+	ParamKeyGeminiStopSeqs       = "stopSequences"
+	ParamKeyGeminiResponseMime   = "responseMimeType"
 	ParamKeyGeminiResponseSchema = "responseSchema"
-	GeminiResponseMimeJSON     = "application/json"
+	GeminiResponseMimeJSON       = "application/json"
 )
 
 // Error format strings for type validation
@@ -438,20 +438,37 @@ const (
 	PromptSlugPattern = `^[a-z][a-z0-9-]*$`
 )
 
+// Prompt field name constants for YAML/JSON serialization keys.
+// Used in buildSerializeMap, GetStandardFields, GetPromptyFields, and extension key filtering.
+const (
+	// Agent Skills genspec standard fields
+	PromptFieldName          = "name"
+	PromptFieldDescription   = "description"
+	PromptFieldLicense       = "license"
+	PromptFieldCompatibility = "compatibility"
+	PromptFieldAllowedTools  = "allowed_tools"
+	PromptFieldMetadata      = "metadata"
+	PromptFieldInputs        = "inputs"
+	PromptFieldOutputs       = "outputs"
+	PromptFieldSample        = "sample"
+
+	// go-prompty extension fields
+	PromptFieldType        = "type"
+	PromptFieldExecution   = "execution"
+	PromptFieldExtensions  = "extensions"
+	PromptFieldSkills      = "skills"
+	PromptFieldTools       = "tools"
+	PromptFieldContext     = "context"
+	PromptFieldConstraints = "constraints"
+	PromptFieldMessages    = "messages"
+)
+
 // v2.0 Reference resolution constants
 const (
 	// RefMaxDepth is the maximum depth for nested prompt references
 	RefMaxDepth = 10
 	// RefVersionLatest is the default version when not specified
 	RefVersionLatest = "latest"
-)
-
-// v2.0 Skope visibility values
-const (
-	SkopeVisibilityPublic  = "public"
-	SkopeVisibilityPrivate = "private"
-	SkopeVisibilityShared  = "shared" // v2.1: replaces "team" per spec
-	SkopeVisibilityTeam    = "team"   // Deprecated: use SkopeVisibilityShared
 )
 
 // DeploymentStatus represents the lifecycle status of a template version.
@@ -507,11 +524,11 @@ const (
 
 // PostgreSQL storage error messages
 const (
-	ErrMsgPostgresConnectionFailed  = "failed to connect to PostgreSQL"
-	ErrMsgPostgresQueryFailed       = "PostgreSQL query failed"
-	ErrMsgPostgresTransactionFailed = "PostgreSQL transaction failed"
-	ErrMsgPostgresScanFailed        = "failed to scan PostgreSQL result"
-	ErrMsgPostgresMarshalFailed     = "failed to marshal data for PostgreSQL"
+	ErrMsgPostgresConnectionFailed      = "failed to connect to PostgreSQL"
+	ErrMsgPostgresQueryFailed           = "PostgreSQL query failed"
+	ErrMsgPostgresTransactionFailed     = "PostgreSQL transaction failed"
+	ErrMsgPostgresScanFailed            = "failed to scan PostgreSQL result"
+	ErrMsgPostgresMarshalFailed         = "failed to marshal data for PostgreSQL"
 	ErrMsgPostgresUnmarshalFailed       = "failed to unmarshal PostgreSQL data"
 	ErrMsgPostgresUnmarshalMetadata     = "failed to unmarshal PostgreSQL metadata"
 	ErrMsgPostgresUnmarshalPromptConfig = "failed to unmarshal PostgreSQL prompt config"
@@ -636,7 +653,7 @@ const (
 const (
 	ContextKeyInput       = "input"
 	ContextKeyMeta        = "meta"
-	ContextKeyContext      = "context"
+	ContextKeyContext     = "context"
 	ContextKeyConstraints = "constraints"
 	ContextKeySkills      = "skills"
 	ContextKeyTools       = "tools"
@@ -717,10 +734,10 @@ const (
 
 // v2.7 Embedding input type constants
 const (
-	EmbeddingInputTypeSearchQuery       = "search_query"
-	EmbeddingInputTypeSearchDocument    = "search_document"
-	EmbeddingInputTypeClassification    = "classification"
-	EmbeddingInputTypeClustering        = "clustering"
+	EmbeddingInputTypeSearchQuery        = "search_query"
+	EmbeddingInputTypeSearchDocument     = "search_document"
+	EmbeddingInputTypeClassification     = "classification"
+	EmbeddingInputTypeClustering         = "clustering"
 	EmbeddingInputTypeSemanticSimilarity = "semantic_similarity"
 )
 
@@ -749,55 +766,55 @@ const (
 
 // v2.7 Gemini task type mappings (UPPER_CASE values for Gemini API)
 const (
-	GeminiTaskRetrievalQuery      = "RETRIEVAL_QUERY"
-	GeminiTaskRetrievalDocument   = "RETRIEVAL_DOCUMENT"
-	GeminiTaskSemanticSimilarity  = "SEMANTIC_SIMILARITY"
-	GeminiTaskClassification      = "CLASSIFICATION"
-	GeminiTaskClustering          = "CLUSTERING"
+	GeminiTaskRetrievalQuery     = "RETRIEVAL_QUERY"
+	GeminiTaskRetrievalDocument  = "RETRIEVAL_DOCUMENT"
+	GeminiTaskSemanticSimilarity = "SEMANTIC_SIMILARITY"
+	GeminiTaskClassification     = "CLASSIFICATION"
+	GeminiTaskClustering         = "CLUSTERING"
 )
 
 // v2.5 Media parameter map keys (for serialization)
 const (
-	ParamKeyModality       = "modality"
-	ParamKeyImage          = "image"
-	ParamKeyAudio          = "audio"
-	ParamKeyEmbedding      = "embedding"
+	ParamKeyModality        = "modality"
+	ParamKeyImage           = "image"
+	ParamKeyAudio           = "audio"
+	ParamKeyEmbedding       = "embedding"
 	ParamKeyStreaming       = "streaming"
-	ParamKeyAsync          = "async"
-	ParamKeyStream         = "stream"
-	ParamKeyImageSize      = "size"
-	ParamKeyImageQuality   = "quality"
-	ParamKeyImageStyle     = "style"
-	ParamKeyImageN         = "n"
-	ParamKeyVoice          = "voice"
-	ParamKeySpeed          = "speed"
-	ParamKeyDimensions     = "dimensions"
-	ParamKeyEncodingFormat = "encoding_format"
-	ParamKeyAspectRatio    = "aspect_ratio"
-	ParamKeyNegativePrompt = "negative_prompt"
-	ParamKeyNumImages      = "num_images"
-	ParamKeyGuidanceScale  = "guidance_scale"
-	ParamKeySteps          = "steps"
-	ParamKeyStrength       = "strength"
-	ParamKeyVoiceID        = "voice_id"
-	ParamKeyOutputFormat   = "output_format"
-	ParamKeyDuration       = "duration"
-	ParamKeyLanguage       = "language"
-	ParamKeyPollInterval   = "poll_interval_seconds"
-	ParamKeyPollTimeout    = "poll_timeout_seconds"
-	ParamKeyStreamMethod       = "method"
-	ParamKeyWidth              = "width"
-	ParamKeyHeight             = "height"
-	ParamKeyEnabled            = "enabled"
-	ParamKeyResponseFormat     = "response_format"
-	ParamKeyGeminiNumImages    = "numberOfImages"
+	ParamKeyAsync           = "async"
+	ParamKeyStream          = "stream"
+	ParamKeyImageSize       = "size"
+	ParamKeyImageQuality    = "quality"
+	ParamKeyImageStyle      = "style"
+	ParamKeyImageN          = "n"
+	ParamKeyVoice           = "voice"
+	ParamKeySpeed           = "speed"
+	ParamKeyDimensions      = "dimensions"
+	ParamKeyEncodingFormat  = "encoding_format"
+	ParamKeyAspectRatio     = "aspect_ratio"
+	ParamKeyNegativePrompt  = "negative_prompt"
+	ParamKeyNumImages       = "num_images"
+	ParamKeyGuidanceScale   = "guidance_scale"
+	ParamKeySteps           = "steps"
+	ParamKeyStrength        = "strength"
+	ParamKeyVoiceID         = "voice_id"
+	ParamKeyOutputFormat    = "output_format"
+	ParamKeyDuration        = "duration"
+	ParamKeyLanguage        = "language"
+	ParamKeyPollInterval    = "poll_interval_seconds"
+	ParamKeyPollTimeout     = "poll_timeout_seconds"
+	ParamKeyStreamMethod    = "method"
+	ParamKeyWidth           = "width"
+	ParamKeyHeight          = "height"
+	ParamKeyEnabled         = "enabled"
+	ParamKeyResponseFormat  = "response_format"
+	ParamKeyGeminiNumImages = "numberOfImages"
 
 	// v2.7 Embedding parameter keys
-	ParamKeyInputType            = "input_type"
-	ParamKeyOutputDtype          = "output_dtype"
-	ParamKeyTruncation           = "truncation"
-	ParamKeyNormalize            = "normalize"
-	ParamKeyPoolingType          = "pooling_type"
+	ParamKeyInputType   = "input_type"
+	ParamKeyOutputDtype = "output_dtype"
+	ParamKeyTruncation  = "truncation"
+	ParamKeyNormalize   = "normalize"
+	ParamKeyPoolingType = "pooling_type"
 
 	// v2.7 Provider-specific embedding parameter keys
 	ParamKeyOutputDimension      = "output_dimension"
@@ -807,9 +824,9 @@ const (
 	ParamKeyTruncate             = "truncate"
 
 	// v2.7 Cohere-specific parameter keys
-	ParamKeyCohereTopP           = "p"
-	ParamKeyCohereTopK           = "k"
-	ParamKeyCohereStopSequences  = "stop_sequences"
+	ParamKeyCohereTopP          = "p"
+	ParamKeyCohereTopK          = "k"
+	ParamKeyCohereStopSequences = "stop_sequences"
 )
 
 // v2.7 Cohere truncation UPPER_CASE constants
@@ -821,13 +838,13 @@ const (
 
 // v2.5 Media validation limits
 const (
-	ImageMaxWidth        = 8192
-	ImageMaxHeight       = 8192
-	ImageMaxNumImages    = 10
-	ImageMaxGuidanceScale = 30.0
-	ImageMaxSteps        = 200
-	AudioMinSpeed        = 0.25
-	AudioMaxSpeed        = 4.0
-	AudioMaxDuration     = 600.0
+	ImageMaxWidth          = 8192
+	ImageMaxHeight         = 8192
+	ImageMaxNumImages      = 10
+	ImageMaxGuidanceScale  = 30.0
+	ImageMaxSteps          = 200
+	AudioMinSpeed          = 0.25
+	AudioMaxSpeed          = 4.0
+	AudioMaxDuration       = 600.0
 	EmbeddingMaxDimensions = 65536
 )

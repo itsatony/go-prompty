@@ -54,16 +54,17 @@ Hello {~prompty.var name="user" /~}!`
 	assert.Equal(t, "Hello Alice!", result)
 }
 
-// TestE2E_V2PromptWithSkope tests v2.0 prompt parsing with skope config.
-func TestE2E_V2PromptWithSkope(t *testing.T) {
+// TestE2E_PromptWithExtensions tests that unknown YAML keys end up in Extensions.
+func TestE2E_PromptWithExtensions(t *testing.T) {
 	source := `---
 name: my-prompt
-description: A test prompt with skope
-skope:
+description: A test prompt with extensions
+custom_platform:
   visibility: public
   projects:
     - project1
     - project2
+vendor_field: some-value
 ---
 Content here`
 
@@ -78,10 +79,19 @@ Content here`
 
 	assert.Equal(t, "my-prompt", prompt.Name)
 
-	// Skope config should be present
-	require.NotNil(t, prompt.Skope)
-	assert.Equal(t, SkopeVisibilityPublic, prompt.Skope.Visibility)
-	assert.Equal(t, []string{"project1", "project2"}, prompt.Skope.Projects)
+	// Custom fields should be captured in Extensions
+	assert.True(t, prompt.HasExtension("custom_platform"))
+	assert.True(t, prompt.HasExtension("vendor_field"))
+
+	platform, ok := prompt.GetExtension("custom_platform")
+	require.True(t, ok)
+	platformMap, ok := platform.(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "public", platformMap["visibility"])
+
+	vendor, ok := prompt.GetExtension("vendor_field")
+	require.True(t, ok)
+	assert.Equal(t, "some-value", vendor)
 }
 
 // TestE2E_V2PromptWithFullConfig tests v2.0 prompt with all fields.
@@ -104,10 +114,6 @@ execution:
   thinking:
     enabled: true
     budget_tokens: 5000
-skope:
-  slug: full-config
-  visibility: team
-  version_number: 3
 inputs:
   query:
     type: string
@@ -149,12 +155,6 @@ Process: {~prompty.var name="query" /~}`
 	require.NotNil(t, prompt.Execution.Thinking)
 	assert.True(t, prompt.Execution.Thinking.Enabled)
 
-	// Skope
-	require.NotNil(t, prompt.Skope)
-	assert.Equal(t, "full-config", prompt.Skope.Slug)
-	assert.Equal(t, SkopeVisibilityTeam, prompt.Skope.Visibility)
-	assert.Equal(t, 3, prompt.Skope.VersionNumber)
-
 	// Inputs/Outputs
 	require.NotNil(t, prompt.Inputs)
 	assert.Contains(t, prompt.Inputs, "query")
@@ -167,8 +167,8 @@ Process: {~prompty.var name="query" /~}`
 	require.NotNil(t, prompt.Sample)
 	assert.Equal(t, "What is 2+2?", prompt.Sample["query"])
 
-	// Slug should come from skope config
-	assert.Equal(t, "full-config", prompt.GetSlug())
+	// Slug comes from Name
+	assert.Equal(t, "full-config-prompt", prompt.GetSlug())
 
 	// Execute with sample data
 	result, err := tmpl.Execute(context.Background(), prompt.Sample)
