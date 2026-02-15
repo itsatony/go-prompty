@@ -340,7 +340,7 @@ messages:
 **Key v2.1 Types:**
 - `Prompt`: Full prompt configuration with document type, skills, tools, context, constraints, messages
 - `ExecutionConfig`: LLM execution parameters with `Merge()` for 3-layer precedence. Extended in v2.3 with `MinP`, `RepetitionPenalty`, `Seed`, `Logprobs`, `StopTokenIDs`, `LogitBias`
-- `SkopeConfig`: Platform integration fields
+- `SkopeConfig`: Platform integration fields (slug, visibility, projects, project_id, regions, references)
 - `SkillRef`: Skill reference with injection mode and execution overrides
 - `ToolsConfig`: Tool definitions with function defs and MCP servers
 - `CompiledPrompt`: Result of `CompileAgent()` — messages, execution config, tools, constraints

@@ -31,6 +31,10 @@ type SkopeConfig struct {
 	// Organization
 	Projects []string `yaml:"projects,omitempty" json:"projects,omitempty"`
 
+	// Deployment target
+	ProjectID string   `yaml:"project_id,omitempty" json:"project_id,omitempty"`
+	Regions   []string `yaml:"regions,omitempty" json:"regions,omitempty"`
+
 	// Dependencies (slugs of referenced prompts)
 	References []string `yaml:"references,omitempty" json:"references,omitempty"`
 }
@@ -61,6 +65,13 @@ func (s *SkopeConfig) Validate() error {
 		return NewPromptValidationError(ErrMsgVersionNumberNegative, "")
 	}
 
+	// Validate regions — no empty strings allowed
+	for _, r := range s.Regions {
+		if r == "" {
+			return NewPromptValidationError(ErrMsgInvalidRegion, "")
+		}
+	}
+
 	return nil
 }
 
@@ -77,6 +88,7 @@ func (s *SkopeConfig) Clone() *SkopeConfig {
 		UpdatedBy:     s.UpdatedBy,
 		VersionNumber: s.VersionNumber,
 		Visibility:    s.Visibility,
+		ProjectID:     s.ProjectID,
 	}
 
 	if s.CreatedAt != nil {
@@ -91,6 +103,11 @@ func (s *SkopeConfig) Clone() *SkopeConfig {
 	if s.Projects != nil {
 		clone.Projects = make([]string, len(s.Projects))
 		copy(clone.Projects, s.Projects)
+	}
+
+	if s.Regions != nil {
+		clone.Regions = make([]string, len(s.Regions))
+		copy(clone.Regions, s.Regions)
 	}
 
 	if s.References != nil {
@@ -209,6 +226,45 @@ func (s *SkopeConfig) HasReferences() bool {
 // HasProjects returns true if this prompt has projects.
 func (s *SkopeConfig) HasProjects() bool {
 	return s != nil && len(s.Projects) > 0
+}
+
+// GetProjectID returns the project ID or empty string.
+func (s *SkopeConfig) GetProjectID() string {
+	if s == nil {
+		return ""
+	}
+	return s.ProjectID
+}
+
+// HasProjectID returns true if a project ID is set.
+func (s *SkopeConfig) HasProjectID() bool {
+	return s != nil && s.ProjectID != ""
+}
+
+// GetRegions returns the regions list or nil.
+func (s *SkopeConfig) GetRegions() []string {
+	if s == nil {
+		return nil
+	}
+	return s.Regions
+}
+
+// HasRegions returns true if this prompt has regions.
+func (s *SkopeConfig) HasRegions() bool {
+	return s != nil && len(s.Regions) > 0
+}
+
+// AddRegion adds a region if not already present. Empty strings are ignored.
+func (s *SkopeConfig) AddRegion(region string) {
+	if s == nil || region == "" {
+		return
+	}
+	for _, r := range s.Regions {
+		if r == region {
+			return
+		}
+	}
+	s.Regions = append(s.Regions, region)
 }
 
 // JSON returns the JSON representation of the skope config.

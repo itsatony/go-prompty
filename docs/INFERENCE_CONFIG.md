@@ -575,6 +575,8 @@ execution:
 
 skope:
   visibility: public
+  project_id: proj_helpdesk
+  regions: [us-east-1, eu-west-1]
   projects: [support, helpdesk]
 
 inputs:

@@ -732,6 +732,8 @@ execution:
 
 skope:
   visibility: public
+  project_id: proj_helpdesk
+  regions: [us-east-1, eu-west-1]
   projects: [support, helpdesk]
 
 inputs:
@@ -774,7 +776,7 @@ if tmpl.HasPrompt() {
 **Key v2.1 Types**:
 - `Prompt`: Full prompt config with document type (prompt/skill/agent), skills, tools, constraints, messages
 - `ExecutionConfig`: LLM parameters with provider-specific conversion and `Merge()` for 3-layer precedence
-- `SkopeConfig`: Platform integration (visibility, projects, versioning)
+- `SkopeConfig`: Platform integration (visibility, projects, project_id, regions, versioning)
 - `SkillRef`, `ToolsConfig`, `ConstraintsConfig`: Agent-specific configuration
 - `CompiledPrompt`: Result of `CompileAgent()` — messages, execution config, tools, constraints
 - `DocumentResolver`: Interface for resolving prompts/skills/agents by slug

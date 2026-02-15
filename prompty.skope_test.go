@@ -82,6 +82,35 @@ func TestSkopeConfig_Validate(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "valid project_id",
+			config: &SkopeConfig{
+				ProjectID: "proj_abc123",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid regions",
+			config: &SkopeConfig{
+				Regions: []string{"us-east-1", "eu-west-1"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid regions - empty string in slice",
+			config: &SkopeConfig{
+				Regions: []string{"us-east-1", ""},
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid project_id and regions together",
+			config: &SkopeConfig{
+				ProjectID: "my-gcp-project",
+				Regions:   []string{"us-central1", "europe-west1"},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -108,6 +137,8 @@ func TestSkopeConfig_Clone(t *testing.T) {
 		VersionNumber: 5,
 		Visibility:    SkopeVisibilityPublic,
 		Projects:      []string{"project1", "project2"},
+		ProjectID:     "proj_abc123",
+		Regions:       []string{"us-east-1", "eu-west-1"},
 		References:    []string{"ref1", "ref2"},
 	}
 
@@ -120,6 +151,8 @@ func TestSkopeConfig_Clone(t *testing.T) {
 	assert.Equal(t, original.VersionNumber, clone.VersionNumber)
 	assert.Equal(t, original.Visibility, clone.Visibility)
 	assert.Equal(t, original.Projects, clone.Projects)
+	assert.Equal(t, original.ProjectID, clone.ProjectID)
+	assert.Equal(t, original.Regions, clone.Regions)
 	assert.Equal(t, original.References, clone.References)
 
 	// Verify deep copy
@@ -128,6 +161,10 @@ func TestSkopeConfig_Clone(t *testing.T) {
 
 	clone.References[0] = "modified"
 	assert.NotEqual(t, original.References[0], clone.References[0])
+
+	// Verify deep copy of Regions
+	clone.Regions[0] = "modified"
+	assert.NotEqual(t, original.Regions[0], clone.Regions[0])
 }
 
 func TestSkopeConfig_Getters(t *testing.T) {
@@ -142,6 +179,8 @@ func TestSkopeConfig_Getters(t *testing.T) {
 		VersionNumber: 5,
 		Visibility:    SkopeVisibilityPublic,
 		Projects:      []string{"project1"},
+		ProjectID:     "proj_abc123",
+		Regions:       []string{"us-east-1"},
 		References:    []string{"ref1"},
 	}
 
@@ -154,6 +193,8 @@ func TestSkopeConfig_Getters(t *testing.T) {
 	assert.Equal(t, 5, config.GetVersionNumber())
 	assert.Equal(t, SkopeVisibilityPublic, config.GetVisibility())
 	assert.NotNil(t, config.GetProjects())
+	assert.Equal(t, "proj_abc123", config.GetProjectID())
+	assert.Equal(t, []string{"us-east-1"}, config.GetRegions())
 	assert.NotNil(t, config.GetReferences())
 
 	// Test nil config
@@ -163,6 +204,8 @@ func TestSkopeConfig_Getters(t *testing.T) {
 	assert.Nil(t, nilConfig.GetCreatedAt())
 	assert.Empty(t, nilConfig.GetCreatedBy())
 	assert.Equal(t, 0, nilConfig.GetVersionNumber())
+	assert.Empty(t, nilConfig.GetProjectID())
+	assert.Nil(t, nilConfig.GetRegions())
 }
 
 func TestSkopeConfig_VisibilityHelpers(t *testing.T) {
@@ -208,16 +251,22 @@ func TestSkopeConfig_HasHelpers(t *testing.T) {
 	config := &SkopeConfig{
 		ForkedFrom: "original",
 		Projects:   []string{"project1"},
+		ProjectID:  "proj_abc123",
+		Regions:    []string{"us-east-1"},
 		References: []string{"ref1"},
 	}
 
 	assert.True(t, config.HasForkedFrom())
 	assert.True(t, config.HasProjects())
+	assert.True(t, config.HasProjectID())
+	assert.True(t, config.HasRegions())
 	assert.True(t, config.HasReferences())
 
 	emptyConfig := &SkopeConfig{}
 	assert.False(t, emptyConfig.HasForkedFrom())
 	assert.False(t, emptyConfig.HasProjects())
+	assert.False(t, emptyConfig.HasProjectID())
+	assert.False(t, emptyConfig.HasRegions())
 	assert.False(t, emptyConfig.HasReferences())
 }
 
@@ -267,6 +316,68 @@ func TestSkopeConfig_AddProject(t *testing.T) {
 	// Adding empty should not add
 	config.AddProject("")
 	assert.Equal(t, []string{"project1", "project2"}, config.Projects)
+}
+
+func TestSkopeConfig_AddRegion(t *testing.T) {
+	config := &SkopeConfig{}
+
+	config.AddRegion("us-east-1")
+	assert.Equal(t, []string{"us-east-1"}, config.Regions)
+
+	config.AddRegion("eu-west-1")
+	assert.Equal(t, []string{"us-east-1", "eu-west-1"}, config.Regions)
+
+	// Adding duplicate should not add
+	config.AddRegion("us-east-1")
+	assert.Equal(t, []string{"us-east-1", "eu-west-1"}, config.Regions)
+
+	// Adding empty should not add
+	config.AddRegion("")
+	assert.Equal(t, []string{"us-east-1", "eu-west-1"}, config.Regions)
+}
+
+func TestSkopeConfig_ProjectIDAndRegions_E2E(t *testing.T) {
+	// Parse YAML with project_id and regions, validate, assert round-trip
+	source := `---
+name: my-agent
+description: Test agent with deployment metadata
+skope:
+  slug: my-agent
+  project_id: proj_abc123
+  regions:
+    - us-east-1
+    - eu-west-1
+    - ap-southeast-1
+  projects:
+    - analytics
+    - platform
+  visibility: private
+---
+Hello world`
+
+	prompt, err := Parse([]byte(source))
+	require.NoError(t, err)
+	require.NotNil(t, prompt.Skope)
+
+	assert.Equal(t, "proj_abc123", prompt.Skope.ProjectID)
+	assert.Equal(t, []string{"us-east-1", "eu-west-1", "ap-southeast-1"}, prompt.Skope.Regions)
+	assert.Equal(t, []string{"analytics", "platform"}, prompt.Skope.Projects)
+	assert.Equal(t, SkopeVisibilityPrivate, prompt.Skope.Visibility)
+
+	// Validate should pass
+	err = prompt.Skope.Validate()
+	assert.NoError(t, err)
+}
+
+func TestSkopeConfig_Validate_InvalidRegions(t *testing.T) {
+	config := &SkopeConfig{
+		Slug:    "test",
+		Regions: []string{"us-east-1", ""},
+	}
+
+	err := config.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), ErrMsgInvalidRegion)
 }
 
 func TestSkopeConfig_JSONAndYAML(t *testing.T) {
