@@ -140,32 +140,49 @@ func (p *ModelParameters) ToMap() map[string]any {
 	return result
 }
 
-// ToOpenAITool converts FunctionDef to OpenAI tool calling format.
-func (f *FunctionDef) ToOpenAITool() map[string]any {
+// ToGenericTool returns the tool definition in flat/generic format.
+// Returns: {"name": ..., "description": ..., "parameters": ..., "strict": true}
+//
+// This is the provider-agnostic format expected by most abstraction layers
+// (LiteLLM, OpenRouter, etc.) and non-OpenAI providers like Gemini.
+// For the OpenAI wire format with {type: "function", function: {...}} envelope,
+// use ToOpenAITool(). For the Anthropic format with input_schema, use ToAnthropicTool().
+func (f *FunctionDef) ToGenericTool() map[string]any {
 	if f == nil {
 		return nil
 	}
-
-	funcDef := map[string]any{
+	tool := map[string]any{
 		AttrName: f.Name,
 	}
 	if f.Description != "" {
-		funcDef[SchemaKeyDescription] = f.Description
+		tool[SchemaKeyDescription] = f.Description
 	}
 	if f.Parameters != nil {
 		params := copySchema(f.Parameters)
 		if f.Strict {
 			ensureAdditionalPropertiesFalse(params)
 		}
-		funcDef["parameters"] = params
+		tool[ToolKeyParameters] = params
 	}
 	if f.Strict {
-		funcDef[SchemaKeyStrict] = true
+		tool[SchemaKeyStrict] = true
 	}
+	return tool
+}
 
+// ToOpenAITool converts FunctionDef to OpenAI tool calling format.
+// Returns: {"type": "function", "function": {"name": ..., "description": ..., "parameters": ...}}
+//
+// NOTE: The tool name is nested under "function", not at the top level.
+// For a flat format {"name": ..., "description": ..., "parameters": ...},
+// use ToGenericTool().
+func (f *FunctionDef) ToOpenAITool() map[string]any {
+	if f == nil {
+		return nil
+	}
 	return map[string]any{
-		SchemaKeyType: "function",
-		"function":    funcDef,
+		SchemaKeyType:   ToolKeyFunction,
+		ToolKeyFunction: f.ToGenericTool(),
 	}
 }
 
@@ -184,7 +201,7 @@ func (f *FunctionDef) ToAnthropicTool() map[string]any {
 	if f.Parameters != nil {
 		params := copySchema(f.Parameters)
 		ensureAdditionalPropertiesFalse(params)
-		tool["input_schema"] = params
+		tool[ToolKeyInputSchema] = params
 	}
 
 	return tool

@@ -34,6 +34,8 @@ type ToolsConfig struct {
 	MCPServers []*MCPServer `yaml:"mcp_servers,omitempty" json:"mcp_servers,omitempty"`
 	// ToolChoice controls tool selection strategy: "auto", "none", "required"
 	ToolChoice string `yaml:"tool_choice,omitempty" json:"tool_choice,omitempty"`
+	// ParallelToolCalls enables parallel tool calling (OpenAI, Anthropic)
+	ParallelToolCalls *bool `yaml:"parallel_tool_calls,omitempty" json:"parallel_tool_calls,omitempty"`
 }
 
 // MCPServer configures a Model Context Protocol server.
@@ -246,6 +248,11 @@ func (tc *ToolsConfig) Clone() *ToolsConfig {
 		ToolChoice: tc.ToolChoice,
 	}
 
+	if tc.ParallelToolCalls != nil {
+		v := *tc.ParallelToolCalls
+		clone.ParallelToolCalls = &v
+	}
+
 	if tc.Functions != nil {
 		clone.Functions = make([]*FunctionDef, len(tc.Functions))
 		for i, f := range tc.Functions {
@@ -273,6 +280,19 @@ func (tc *ToolsConfig) Clone() *ToolsConfig {
 	}
 
 	return clone
+}
+
+// GetParallelToolCalls returns parallel_tool_calls and whether it was set.
+func (tc *ToolsConfig) GetParallelToolCalls() (bool, bool) {
+	if tc == nil || tc.ParallelToolCalls == nil {
+		return false, false
+	}
+	return *tc.ParallelToolCalls, true
+}
+
+// HasParallelToolCalls returns true if parallel_tool_calls is configured.
+func (tc *ToolsConfig) HasParallelToolCalls() bool {
+	return tc != nil && tc.ParallelToolCalls != nil
 }
 
 // --- ConstraintsConfig methods ---

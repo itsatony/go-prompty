@@ -338,6 +338,16 @@ const (
 	ParamKeyModel             = "model"
 	ParamKeyTopK              = "top_k"
 	ParamKeyStopSequences     = "stop_sequences"
+
+	// v2.9 LLM parameter alignment keys
+	ParamKeyN                   = "n"
+	ParamKeyMaxCompletionTokens = "max_completion_tokens"
+	ParamKeyReasoningEffort     = "reasoning_effort"
+	ParamKeyTopA                = "top_a"
+	ParamKeyUser                = "user"
+	ParamKeyServiceTier         = "service_tier"
+	ParamKeyStore               = "store"
+	ParamKeyParallelToolCalls   = "parallel_tool_calls"
 )
 
 // Anthropic-specific parameter keys
@@ -409,6 +419,13 @@ const (
 	SchemaKeyStrict               = "strict"
 	SchemaKeyFormat               = "format"
 	SchemaKeyJSONSchema           = "json_schema"
+)
+
+// Tool format keys
+const (
+	ToolKeyFunction   = "function"
+	ToolKeyParameters = "parameters"
+	ToolKeyInputSchema = "input_schema"
 )
 
 // vLLM guided decoding parameter keys
@@ -834,6 +851,25 @@ const (
 	CohereTruncateNone  = "NONE"
 	CohereTruncateStart = "START"
 	CohereTruncateEnd   = "END"
+)
+
+// v2.9 ReasoningEffort enum constants
+const (
+	ReasoningEffortLow    = "low"
+	ReasoningEffortMedium = "medium"
+	ReasoningEffortHigh   = "high"
+	ReasoningEffortMax    = "max"
+)
+
+// v2.9 ServiceTier enum constants
+const (
+	ServiceTierAuto    = "auto"
+	ServiceTierDefault = "default"
+)
+
+// v2.9 N (number of completions) max limit
+const (
+	NMax = 128
 )
 
 // v2.5 Media validation limits

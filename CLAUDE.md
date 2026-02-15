@@ -339,10 +339,10 @@ messages:
 
 **Key v2.1 Types:**
 - `Prompt`: Full prompt configuration with document type, skills, tools, context, constraints, messages
-- `ExecutionConfig`: LLM execution parameters with `Merge()` for 3-layer precedence. Extended in v2.3 with `MinP`, `RepetitionPenalty`, `Seed`, `Logprobs`, `StopTokenIDs`, `LogitBias`
+- `ExecutionConfig`: LLM execution parameters with `Merge()` for 3-layer precedence. Extended in v2.3 with `MinP`, `RepetitionPenalty`, `Seed`, `Logprobs`, `StopTokenIDs`, `LogitBias`. Extended in v2.9 with `FrequencyPenalty`, `PresencePenalty`, `N`, `MaxCompletionTokens`, `ReasoningEffort`, `TopA`, `User`, `ServiceTier`, `Store`
 - `Extensions map[string]any`: Captures non-standard YAML frontmatter fields (round-trip preserving)
 - `SkillRef`: Skill reference with injection mode and execution overrides
-- `ToolsConfig`: Tool definitions with function defs and MCP servers
+- `ToolsConfig`: Tool definitions with function defs and MCP servers. `FunctionDef` has `ToGenericTool()` (flat format), `ToOpenAITool()` (OpenAI envelope), `ToAnthropicTool()` (input_schema format)
 - `CompiledPrompt`: Result of `CompileAgent()` — messages, execution config, tools, constraints
 
 **Agent Compilation:**
@@ -524,6 +524,37 @@ execution:
 | `logprobs` | `*int` | [0, 20] | OpenAI (dual-field), vLLM |
 | `stop_token_ids` | `[]int` | each >= 0 | vLLM |
 | `logit_bias` | `map[string]float64` | values [-100, 100] | OpenAI, vLLM |
+
+**LLM Parameter Alignment (v2.9):**
+```yaml
+---
+name: openai-full
+execution:
+  provider: openai
+  model: gpt-4o
+  temperature: 0.7
+  frequency_penalty: 0.5
+  presence_penalty: 0.3
+  n: 1
+  max_completion_tokens: 4096
+  reasoning_effort: high
+  user: user-123
+  service_tier: auto
+  store: true
+---
+```
+
+| Parameter | Type | Range/Values | Providers |
+|-----------|------|-------------|-----------|
+| `frequency_penalty` | `*float64` | [-2.0, 2.0] | OpenAI, vLLM, Mistral |
+| `presence_penalty` | `*float64` | [-2.0, 2.0] | OpenAI, vLLM, Mistral |
+| `n` | `*int` | [1, 128] | OpenAI, vLLM |
+| `max_completion_tokens` | `*int` | > 0 | OpenAI |
+| `reasoning_effort` | `string` | `low`/`medium`/`high`/`max` | OpenAI, Anthropic |
+| `top_a` | `*float64` | [0.0, 1.0] | OpenRouter passthrough (ToMap only) |
+| `user` | `string` | any string | OpenAI, Anthropic |
+| `service_tier` | `string` | `auto`/`default` | OpenAI |
+| `store` | `*bool` | true/false | OpenAI |
 
 ### Provider Detection
 

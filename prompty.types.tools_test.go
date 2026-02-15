@@ -140,6 +140,115 @@ func TestFunctionDefToJSONFull(t *testing.T) {
 	assert.Equal(t, true, parsed["strict"])
 }
 
+// --- FunctionDef.ToGenericTool ---
+
+func TestFunctionDefToGenericTool(t *testing.T) {
+	f := &FunctionDef{
+		Name:        "get_weather",
+		Description: "Get weather for a location",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"location": map[string]any{"type": "string"},
+			},
+			"required": []string{"location"},
+		},
+	}
+
+	result := f.ToGenericTool()
+	assert.Equal(t, "get_weather", result[AttrName])
+	assert.Equal(t, "Get weather for a location", result[SchemaKeyDescription])
+	assert.NotNil(t, result[ToolKeyParameters])
+	assert.Nil(t, result[SchemaKeyStrict])
+	// Verify flat format — no "type"/"function" envelope
+	assert.Nil(t, result[SchemaKeyType])
+	assert.Nil(t, result[ToolKeyFunction])
+}
+
+func TestFunctionDefToGenericToolNil(t *testing.T) {
+	var f *FunctionDef
+	assert.Nil(t, f.ToGenericTool())
+}
+
+func TestFunctionDefToGenericToolStrict(t *testing.T) {
+	f := &FunctionDef{
+		Name:        "strict_func",
+		Description: "A strict function",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"x": map[string]any{"type": "string"},
+			},
+		},
+		Strict: true,
+	}
+
+	result := f.ToGenericTool()
+	assert.Equal(t, true, result[SchemaKeyStrict])
+	params := result[ToolKeyParameters].(map[string]any)
+	assert.Equal(t, false, params[SchemaKeyAdditionalProperties])
+}
+
+func TestFunctionDefToGenericToolMinimalFields(t *testing.T) {
+	f := &FunctionDef{
+		Name: "minimal_func",
+	}
+
+	result := f.ToGenericTool()
+	assert.Equal(t, "minimal_func", result[AttrName])
+	assert.Nil(t, result[SchemaKeyDescription])
+	assert.Nil(t, result[ToolKeyParameters])
+	assert.Nil(t, result[SchemaKeyStrict])
+}
+
+func TestFunctionDefToOpenAIToolWrapsGeneric(t *testing.T) {
+	f := &FunctionDef{
+		Name:        "test_func",
+		Description: "Test function",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"q": map[string]any{"type": "string"},
+			},
+		},
+	}
+
+	openAI := f.ToOpenAITool()
+	generic := f.ToGenericTool()
+
+	// OpenAI envelope
+	assert.Equal(t, ToolKeyFunction, openAI[SchemaKeyType])
+	inner := openAI[ToolKeyFunction].(map[string]any)
+
+	// Inner content matches generic output
+	assert.Equal(t, generic[AttrName], inner[AttrName])
+	assert.Equal(t, generic[SchemaKeyDescription], inner[SchemaKeyDescription])
+	assert.NotNil(t, inner[ToolKeyParameters])
+}
+
+func TestFunctionDefToGenericToolDeepCopy(t *testing.T) {
+	f := &FunctionDef{
+		Name: "deep_copy_func",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"a": map[string]any{"type": "string"},
+			},
+		},
+	}
+
+	result := f.ToGenericTool()
+	params := result[ToolKeyParameters].(map[string]any)
+	props := params["properties"].(map[string]any)
+
+	// Mutate the returned copy
+	props["b"] = map[string]any{"type": "number"}
+
+	// Original should be unaffected
+	origProps := f.Parameters["properties"].(map[string]any)
+	assert.Nil(t, origProps["b"])
+}
+
 // --- FunctionDef.ToOpenAITool ---
 
 func TestFunctionDefToOpenAIToolNil(t *testing.T) {
@@ -153,8 +262,8 @@ func TestFunctionDefToOpenAIToolMinimal(t *testing.T) {
 	}
 
 	result := f.ToOpenAITool()
-	assert.Equal(t, "function", result[SchemaKeyType])
-	funcDef := result["function"].(map[string]any)
+	assert.Equal(t, ToolKeyFunction, result[SchemaKeyType])
+	funcDef := result[ToolKeyFunction].(map[string]any)
 	assert.Equal(t, "test_func", funcDef[AttrName])
 }
 
@@ -172,9 +281,9 @@ func TestFunctionDefToOpenAIToolWithStrict(t *testing.T) {
 	}
 
 	result := f.ToOpenAITool()
-	funcDef := result["function"].(map[string]any)
+	funcDef := result[ToolKeyFunction].(map[string]any)
 	assert.Equal(t, true, funcDef[SchemaKeyStrict])
-	assert.NotNil(t, funcDef["parameters"])
+	assert.NotNil(t, funcDef[ToolKeyParameters])
 }
 
 func TestFunctionDefToOpenAIToolWithDescription(t *testing.T) {
@@ -184,7 +293,7 @@ func TestFunctionDefToOpenAIToolWithDescription(t *testing.T) {
 	}
 
 	result := f.ToOpenAITool()
-	funcDef := result["function"].(map[string]any)
+	funcDef := result[ToolKeyFunction].(map[string]any)
 	assert.Equal(t, "Does something useful", funcDef[SchemaKeyDescription])
 }
 
@@ -202,7 +311,7 @@ func TestFunctionDefToAnthropicToolMinimal(t *testing.T) {
 
 	result := f.ToAnthropicTool()
 	assert.Equal(t, "test_func", result[AttrName])
-	assert.Nil(t, result["input_schema"])
+	assert.Nil(t, result[ToolKeyInputSchema])
 }
 
 func TestFunctionDefToAnthropicToolFull(t *testing.T) {
@@ -220,7 +329,7 @@ func TestFunctionDefToAnthropicToolFull(t *testing.T) {
 	result := f.ToAnthropicTool()
 	assert.Equal(t, "search", result[AttrName])
 	assert.Equal(t, "Search for items", result[SchemaKeyDescription])
-	assert.NotNil(t, result["input_schema"])
+	assert.NotNil(t, result[ToolKeyInputSchema])
 }
 
 // --- ToolDefinition ---

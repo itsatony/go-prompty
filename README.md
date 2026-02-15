@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/itsatony/go-prompty)](https://goreportcard.com/report/github.com/itsatony/go-prompty)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Test Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen.svg)](https://github.com/itsatony/go-prompty)
-[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](https://github.com/itsatony/go-prompty/releases/tag/v2.2.0)
+[![Version](https://img.shields.io/badge/version-2.9.0-blue.svg)](https://github.com/itsatony/go-prompty/releases/tag/v2.9.0)
 
 ```yaml
 ---
@@ -1596,28 +1596,37 @@ func (p *Prompt) ExportToSkillMD(body string) (string, error)
 </details>
 
 <details>
-<summary><strong>ExecutionConfig (v2.7)</strong></summary>
+<summary><strong>ExecutionConfig (v2.9)</strong></summary>
 
 ```go
 type ExecutionConfig struct {
-    Provider          string              // openai, anthropic, google, vllm, azure, mistral, cohere
-    Model             string              // Model name
-    Temperature       *float64            // 0.0-2.0
-    MaxTokens         *int                // Max output tokens
-    TopP              *float64            // Nucleus sampling
-    TopK              *int                // Top-k sampling
-    StopSequences     []string            // Stop sequences
-    MinP              *float64            // v2.3: Min-p sampling [0.0, 1.0] (vLLM)
-    RepetitionPenalty *float64            // v2.3: Repetition penalty > 0.0 (vLLM)
-    Seed              *int                // v2.3: Deterministic seed (OpenAI, Anthropic, vLLM)
-    Logprobs          *int                // v2.3: Log probabilities [0, 20] (OpenAI, vLLM)
-    StopTokenIDs      []int               // v2.3: Stop token IDs (vLLM)
-    LogitBias         map[string]float64  // v2.3: Logit bias [-100, 100] (OpenAI, vLLM)
-    Thinking          *ThinkingConfig     // Claude extended thinking
-    ResponseFormat    *ResponseFormat     // Structured output
-    GuidedDecoding    *GuidedDecoding     // vLLM guided decoding
-    Embedding         *EmbeddingConfig    // v2.7: Extended embedding params
-    ProviderOptions   map[string]any      // Provider-specific options
+    Provider            string              // openai, anthropic, google, vllm, azure, mistral, cohere
+    Model               string              // Model name
+    Temperature         *float64            // 0.0-2.0
+    MaxTokens           *int                // Max output tokens
+    TopP                *float64            // Nucleus sampling
+    TopK                *int                // Top-k sampling
+    StopSequences       []string            // Stop sequences
+    MinP                *float64            // v2.3: Min-p sampling [0.0, 1.0] (vLLM)
+    RepetitionPenalty   *float64            // v2.3: Repetition penalty > 0.0 (vLLM)
+    Seed                *int                // v2.3: Deterministic seed (OpenAI, Anthropic, vLLM)
+    Logprobs            *int                // v2.3: Log probabilities [0, 20] (OpenAI, vLLM)
+    StopTokenIDs        []int               // v2.3: Stop token IDs (vLLM)
+    LogitBias           map[string]float64  // v2.3: Logit bias [-100, 100] (OpenAI, vLLM)
+    FrequencyPenalty    *float64            // v2.9: [-2.0, 2.0] (OpenAI, vLLM, Mistral)
+    PresencePenalty     *float64            // v2.9: [-2.0, 2.0] (OpenAI, vLLM, Mistral)
+    N                   *int                // v2.9: Completions [1, 128] (OpenAI, vLLM)
+    MaxCompletionTokens *int                // v2.9: Reasoning budget > 0 (OpenAI)
+    ReasoningEffort     string              // v2.9: low/medium/high/max (OpenAI, Anthropic)
+    TopA                *float64            // v2.9: [0.0, 1.0] (OpenRouter passthrough)
+    User                string              // v2.9: User identifier (OpenAI, Anthropic)
+    ServiceTier         string              // v2.9: auto/default (OpenAI)
+    Store               *bool               // v2.9: Store completion (OpenAI)
+    Thinking            *ThinkingConfig     // Claude extended thinking
+    ResponseFormat      *ResponseFormat     // Structured output
+    GuidedDecoding      *GuidedDecoding     // vLLM guided decoding
+    Embedding           *EmbeddingConfig    // v2.7: Extended embedding params
+    ProviderOptions     map[string]any      // Provider-specific options
 }
 
 func (c *ExecutionConfig) Validate() error
@@ -1631,6 +1640,15 @@ func (c *ExecutionConfig) GetSeed() (int, bool)                         // v2.3
 func (c *ExecutionConfig) GetLogprobs() (int, bool)                     // v2.3
 func (c *ExecutionConfig) GetStopTokenIDs() []int                       // v2.3
 func (c *ExecutionConfig) GetLogitBias() map[string]float64             // v2.3
+func (c *ExecutionConfig) GetFrequencyPenalty() (float64, bool)         // v2.9
+func (c *ExecutionConfig) GetPresencePenalty() (float64, bool)          // v2.9
+func (c *ExecutionConfig) GetN() (int, bool)                            // v2.9
+func (c *ExecutionConfig) GetMaxCompletionTokens() (int, bool)          // v2.9
+func (c *ExecutionConfig) GetReasoningEffort() (string, bool)           // v2.9
+func (c *ExecutionConfig) GetTopA() (float64, bool)                     // v2.9
+func (c *ExecutionConfig) GetUser() (string, bool)                      // v2.9
+func (c *ExecutionConfig) GetServiceTier() (string, bool)               // v2.9
+func (c *ExecutionConfig) GetStore() (bool, bool)                       // v2.9
 func (c *ExecutionConfig) HasThinking() bool
 func (c *ExecutionConfig) ToOpenAI() map[string]any
 func (c *ExecutionConfig) ToAnthropic() map[string]any

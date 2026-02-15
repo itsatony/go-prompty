@@ -29,6 +29,17 @@ type ExecutionConfig struct {
 	StopTokenIDs      []int              `yaml:"stop_token_ids,omitempty" json:"stop_token_ids,omitempty"`
 	LogitBias         map[string]float64 `yaml:"logit_bias,omitempty" json:"logit_bias,omitempty"`
 
+	// v2.9 LLM parameter alignment (LiteLLM/OpenRouter)
+	FrequencyPenalty    *float64 `yaml:"frequency_penalty,omitempty" json:"frequency_penalty,omitempty"`
+	PresencePenalty     *float64 `yaml:"presence_penalty,omitempty" json:"presence_penalty,omitempty"`
+	N                   *int     `yaml:"n,omitempty" json:"n,omitempty"`
+	MaxCompletionTokens *int     `yaml:"max_completion_tokens,omitempty" json:"max_completion_tokens,omitempty"`
+	ReasoningEffort     string   `yaml:"reasoning_effort,omitempty" json:"reasoning_effort,omitempty"`
+	TopA                *float64 `yaml:"top_a,omitempty" json:"top_a,omitempty"`
+	User                string   `yaml:"user,omitempty" json:"user,omitempty"`
+	ServiceTier         string   `yaml:"service_tier,omitempty" json:"service_tier,omitempty"`
+	Store               *bool    `yaml:"store,omitempty" json:"store,omitempty"`
+
 	// Extended thinking configuration (Anthropic)
 	Thinking *ThinkingConfig `yaml:"thinking,omitempty" json:"thinking,omitempty"`
 
@@ -121,6 +132,37 @@ func (e *ExecutionConfig) Validate() error {
 		if v < -100.0 || v > 100.0 {
 			return NewPromptValidationError(ErrMsgLogitBiasValueOutOfRange, "")
 		}
+	}
+
+	// Validate v2.9 fields
+	if e.FrequencyPenalty != nil {
+		if *e.FrequencyPenalty < -2.0 || *e.FrequencyPenalty > 2.0 {
+			return NewPromptValidationError(ErrMsgFrequencyPenaltyOutOfRange, "")
+		}
+	}
+	if e.PresencePenalty != nil {
+		if *e.PresencePenalty < -2.0 || *e.PresencePenalty > 2.0 {
+			return NewPromptValidationError(ErrMsgPresencePenaltyOutOfRange, "")
+		}
+	}
+	if e.N != nil {
+		if *e.N < 1 || *e.N > NMax {
+			return NewPromptValidationError(ErrMsgNOutOfRange, "")
+		}
+	}
+	if e.MaxCompletionTokens != nil && *e.MaxCompletionTokens <= 0 {
+		return NewPromptValidationError(ErrMsgMaxCompletionTokensInvalid, "")
+	}
+	if e.ReasoningEffort != "" && !isValidReasoningEffort(e.ReasoningEffort) {
+		return NewPromptValidationError(ErrMsgReasoningEffortInvalid, "")
+	}
+	if e.TopA != nil {
+		if *e.TopA < 0.0 || *e.TopA > 1.0 {
+			return NewPromptValidationError(ErrMsgTopAOutOfRange, "")
+		}
+	}
+	if e.ServiceTier != "" && !isValidServiceTier(e.ServiceTier) {
+		return NewPromptValidationError(ErrMsgServiceTierInvalid, "")
 	}
 
 	// Validate thinking config if set
@@ -222,6 +264,35 @@ func (e *ExecutionConfig) Clone() *ExecutionConfig {
 		for k, v := range e.LogitBias {
 			clone.LogitBias[k] = v
 		}
+	}
+
+	// v2.9 fields
+	if e.FrequencyPenalty != nil {
+		v := *e.FrequencyPenalty
+		clone.FrequencyPenalty = &v
+	}
+	if e.PresencePenalty != nil {
+		v := *e.PresencePenalty
+		clone.PresencePenalty = &v
+	}
+	if e.N != nil {
+		v := *e.N
+		clone.N = &v
+	}
+	if e.MaxCompletionTokens != nil {
+		v := *e.MaxCompletionTokens
+		clone.MaxCompletionTokens = &v
+	}
+	clone.ReasoningEffort = e.ReasoningEffort
+	if e.TopA != nil {
+		v := *e.TopA
+		clone.TopA = &v
+	}
+	clone.User = e.User
+	clone.ServiceTier = e.ServiceTier
+	if e.Store != nil {
+		v := *e.Store
+		clone.Store = &v
 	}
 
 	if e.Thinking != nil {
@@ -579,6 +650,123 @@ func (e *ExecutionConfig) HasAsync() bool {
 	return e != nil && e.Async != nil
 }
 
+// GetFrequencyPenalty returns frequency_penalty and whether it was set.
+func (e *ExecutionConfig) GetFrequencyPenalty() (float64, bool) {
+	if e == nil || e.FrequencyPenalty == nil {
+		return 0, false
+	}
+	return *e.FrequencyPenalty, true
+}
+
+// HasFrequencyPenalty returns true if frequency_penalty is configured.
+func (e *ExecutionConfig) HasFrequencyPenalty() bool {
+	return e != nil && e.FrequencyPenalty != nil
+}
+
+// GetPresencePenalty returns presence_penalty and whether it was set.
+func (e *ExecutionConfig) GetPresencePenalty() (float64, bool) {
+	if e == nil || e.PresencePenalty == nil {
+		return 0, false
+	}
+	return *e.PresencePenalty, true
+}
+
+// HasPresencePenalty returns true if presence_penalty is configured.
+func (e *ExecutionConfig) HasPresencePenalty() bool {
+	return e != nil && e.PresencePenalty != nil
+}
+
+// GetN returns n and whether it was set.
+func (e *ExecutionConfig) GetN() (int, bool) {
+	if e == nil || e.N == nil {
+		return 0, false
+	}
+	return *e.N, true
+}
+
+// HasN returns true if n is configured.
+func (e *ExecutionConfig) HasN() bool {
+	return e != nil && e.N != nil
+}
+
+// GetMaxCompletionTokens returns max_completion_tokens and whether it was set.
+func (e *ExecutionConfig) GetMaxCompletionTokens() (int, bool) {
+	if e == nil || e.MaxCompletionTokens == nil {
+		return 0, false
+	}
+	return *e.MaxCompletionTokens, true
+}
+
+// HasMaxCompletionTokens returns true if max_completion_tokens is configured.
+func (e *ExecutionConfig) HasMaxCompletionTokens() bool {
+	return e != nil && e.MaxCompletionTokens != nil
+}
+
+// GetReasoningEffort returns the reasoning_effort string or empty.
+func (e *ExecutionConfig) GetReasoningEffort() string {
+	if e == nil {
+		return ""
+	}
+	return e.ReasoningEffort
+}
+
+// HasReasoningEffort returns true if reasoning_effort is configured.
+func (e *ExecutionConfig) HasReasoningEffort() bool {
+	return e != nil && e.ReasoningEffort != ""
+}
+
+// GetTopA returns top_a and whether it was set.
+func (e *ExecutionConfig) GetTopA() (float64, bool) {
+	if e == nil || e.TopA == nil {
+		return 0, false
+	}
+	return *e.TopA, true
+}
+
+// HasTopA returns true if top_a is configured.
+func (e *ExecutionConfig) HasTopA() bool {
+	return e != nil && e.TopA != nil
+}
+
+// GetUser returns the user string or empty.
+func (e *ExecutionConfig) GetUser() string {
+	if e == nil {
+		return ""
+	}
+	return e.User
+}
+
+// HasUser returns true if user is configured.
+func (e *ExecutionConfig) HasUser() bool {
+	return e != nil && e.User != ""
+}
+
+// GetServiceTier returns the service_tier string or empty.
+func (e *ExecutionConfig) GetServiceTier() string {
+	if e == nil {
+		return ""
+	}
+	return e.ServiceTier
+}
+
+// HasServiceTier returns true if service_tier is configured.
+func (e *ExecutionConfig) HasServiceTier() bool {
+	return e != nil && e.ServiceTier != ""
+}
+
+// GetStore returns store and whether it was set.
+func (e *ExecutionConfig) GetStore() (bool, bool) {
+	if e == nil || e.Store == nil {
+		return false, false
+	}
+	return *e.Store, true
+}
+
+// HasStore returns true if store is configured.
+func (e *ExecutionConfig) HasStore() bool {
+	return e != nil && e.Store != nil
+}
+
 // GetEffectiveProvider detects the intended provider from configuration.
 // Returns the explicit provider if set, otherwise infers from config shape or model name.
 func (e *ExecutionConfig) GetEffectiveProvider() string {
@@ -664,6 +852,35 @@ func (e *ExecutionConfig) ToMap() map[string]any {
 		result[ParamKeyLogitBias] = e.LogitBias
 	}
 
+	// v2.9 fields
+	if e.FrequencyPenalty != nil {
+		result[ParamKeyFrequencyPenalty] = *e.FrequencyPenalty
+	}
+	if e.PresencePenalty != nil {
+		result[ParamKeyPresencePenalty] = *e.PresencePenalty
+	}
+	if e.N != nil {
+		result[ParamKeyN] = *e.N
+	}
+	if e.MaxCompletionTokens != nil {
+		result[ParamKeyMaxCompletionTokens] = *e.MaxCompletionTokens
+	}
+	if e.ReasoningEffort != "" {
+		result[ParamKeyReasoningEffort] = e.ReasoningEffort
+	}
+	if e.TopA != nil {
+		result[ParamKeyTopA] = *e.TopA
+	}
+	if e.User != "" {
+		result[ParamKeyUser] = e.User
+	}
+	if e.ServiceTier != "" {
+		result[ParamKeyServiceTier] = e.ServiceTier
+	}
+	if e.Store != nil {
+		result[ParamKeyStore] = *e.Store
+	}
+
 	// v2.5 media fields
 	if e.Modality != "" {
 		result[ParamKeyModality] = e.Modality
@@ -720,6 +937,32 @@ func (e *ExecutionConfig) ToOpenAI() map[string]any {
 	}
 	if len(e.LogitBias) > 0 {
 		result[ParamKeyLogitBias] = e.LogitBias
+	}
+
+	// v2.9 OpenAI params
+	if e.FrequencyPenalty != nil {
+		result[ParamKeyFrequencyPenalty] = *e.FrequencyPenalty
+	}
+	if e.PresencePenalty != nil {
+		result[ParamKeyPresencePenalty] = *e.PresencePenalty
+	}
+	if e.N != nil {
+		result[ParamKeyN] = *e.N
+	}
+	if e.MaxCompletionTokens != nil {
+		result[ParamKeyMaxCompletionTokens] = *e.MaxCompletionTokens
+	}
+	if e.ReasoningEffort != "" {
+		result[ParamKeyReasoningEffort] = e.ReasoningEffort
+	}
+	if e.User != "" {
+		result[ParamKeyUser] = e.User
+	}
+	if e.ServiceTier != "" {
+		result[ParamKeyServiceTier] = e.ServiceTier
+	}
+	if e.Store != nil {
+		result[ParamKeyStore] = *e.Store
 	}
 
 	if e.ResponseFormat != nil {
@@ -823,6 +1066,14 @@ func (e *ExecutionConfig) ToAnthropic() map[string]any {
 	}
 	if e.Seed != nil {
 		result[ParamKeySeed] = *e.Seed
+	}
+
+	// v2.9 Anthropic params
+	if e.ReasoningEffort != "" {
+		result[ParamKeyReasoningEffort] = e.ReasoningEffort
+	}
+	if e.User != "" {
+		result[ParamKeyUser] = e.User
 	}
 
 	// Handle extended thinking
@@ -978,6 +1229,17 @@ func (e *ExecutionConfig) ToVLLM() map[string]any {
 		result[ParamKeyLogitBias] = e.LogitBias
 	}
 
+	// v2.9 vLLM params
+	if e.FrequencyPenalty != nil {
+		result[ParamKeyFrequencyPenalty] = *e.FrequencyPenalty
+	}
+	if e.PresencePenalty != nil {
+		result[ParamKeyPresencePenalty] = *e.PresencePenalty
+	}
+	if e.N != nil {
+		result[ParamKeyN] = *e.N
+	}
+
 	// Add guided decoding parameters
 	if e.GuidedDecoding != nil {
 		gdParams := e.GuidedDecoding.ToVLLM()
@@ -1037,6 +1299,14 @@ func (e *ExecutionConfig) ToMistral() map[string]any {
 	}
 	if e.Seed != nil {
 		result[ParamKeySeed] = *e.Seed
+	}
+
+	// v2.9 Mistral params
+	if e.FrequencyPenalty != nil {
+		result[ParamKeyFrequencyPenalty] = *e.FrequencyPenalty
+	}
+	if e.PresencePenalty != nil {
+		result[ParamKeyPresencePenalty] = *e.PresencePenalty
 	}
 
 	if e.ResponseFormat != nil {
@@ -1243,6 +1513,23 @@ func (e *ExecutionConfig) Merge(other *ExecutionConfig) *ExecutionConfig {
 		}
 	}
 
+	// v2.9 fields
+	result.FrequencyPenalty = coalesceFloat64Ptr(other.FrequencyPenalty, result.FrequencyPenalty)
+	result.PresencePenalty = coalesceFloat64Ptr(other.PresencePenalty, result.PresencePenalty)
+	result.N = coalesceIntPtr(other.N, result.N)
+	result.MaxCompletionTokens = coalesceIntPtr(other.MaxCompletionTokens, result.MaxCompletionTokens)
+	if other.ReasoningEffort != "" {
+		result.ReasoningEffort = other.ReasoningEffort
+	}
+	result.TopA = coalesceFloat64Ptr(other.TopA, result.TopA)
+	if other.User != "" {
+		result.User = other.User
+	}
+	if other.ServiceTier != "" {
+		result.ServiceTier = other.ServiceTier
+	}
+	result.Store = coalesceBoolPtr(other.Store, result.Store)
+
 	if other.Thinking != nil {
 		result.Thinking = &ThinkingConfig{Enabled: other.Thinking.Enabled}
 		if other.Thinking.BudgetTokens != nil {
@@ -1307,6 +1594,35 @@ func coalesceIntPtr(a, b *int) *int {
 		return &v
 	}
 	return b
+}
+
+// coalesceBoolPtr returns the first non-nil pointer.
+func coalesceBoolPtr(a, b *bool) *bool {
+	if a != nil {
+		v := *a
+		return &v
+	}
+	return b
+}
+
+// isValidReasoningEffort checks if a reasoning effort string is valid.
+func isValidReasoningEffort(effort string) bool {
+	switch effort {
+	case ReasoningEffortLow, ReasoningEffortMedium, ReasoningEffortHigh, ReasoningEffortMax:
+		return true
+	default:
+		return false
+	}
+}
+
+// isValidServiceTier checks if a service tier string is valid.
+func isValidServiceTier(tier string) bool {
+	switch tier {
+	case ServiceTierAuto, ServiceTierDefault:
+		return true
+	default:
+		return false
+	}
 }
 
 // JSON returns the JSON representation of the execution config.

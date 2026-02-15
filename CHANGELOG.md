@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] - 2026-02-15
+
+### Added
+
+#### LLM Parameter Alignment (LiteLLM/OpenRouter)
+- **`FrequencyPenalty`** field on `ExecutionConfig`: Frequency penalty [-2.0, 2.0] — OpenAI, vLLM, Mistral
+- **`PresencePenalty`** field on `ExecutionConfig`: Presence penalty [-2.0, 2.0] — OpenAI, vLLM, Mistral
+- **`N`** field on `ExecutionConfig`: Number of completions [1, 128] — OpenAI, vLLM
+- **`MaxCompletionTokens`** field on `ExecutionConfig`: OpenAI o-series reasoning budget (> 0) — OpenAI
+- **`ReasoningEffort`** field on `ExecutionConfig`: Reasoning effort hint (`low`/`medium`/`high`/`max`) — OpenAI, Anthropic
+- **`TopA`** field on `ExecutionConfig`: Top-A sampling [0.0, 1.0] — OpenRouter passthrough (ToMap only)
+- **`User`** field on `ExecutionConfig`: User identifier string — OpenAI, Anthropic
+- **`ServiceTier`** field on `ExecutionConfig`: Service tier (`auto`/`default`) — OpenAI
+- **`Store`** field on `ExecutionConfig`: Store completion flag — OpenAI
+- **`ParallelToolCalls`** field on `ToolsConfig`: Parallel tool calling toggle — OpenAI, Anthropic
+
+#### Generic Tool Format
+- **`FunctionDef.ToGenericTool()`**: New method returning flat/generic tool format (`{"name": ..., "description": ..., "parameters": ...}`) — provider-agnostic format expected by LiteLLM, OpenRouter, Gemini, and most abstraction layers
+- **`ToOpenAITool()`** refactored to delegate to `ToGenericTool()` internally (DRY, zero behavior change)
+- Tool format constants: `ToolKeyFunction`, `ToolKeyParameters`, `ToolKeyInputSchema` — eliminates magic strings in tool serialization
+
+#### New Constants
+- Tool format key constants: `ToolKeyFunction`, `ToolKeyParameters`, `ToolKeyInputSchema`
+- Param key constants: `ParamKeyN`, `ParamKeyMaxCompletionTokens`, `ParamKeyReasoningEffort`, `ParamKeyTopA`, `ParamKeyUser`, `ParamKeyServiceTier`, `ParamKeyStore`, `ParamKeyParallelToolCalls`
+- Enum constants: `ReasoningEffortLow`/`Medium`/`High`/`Max`, `ServiceTierAuto`/`Default`
+- Limit constant: `NMax = 128`
+
+#### Error Constants
+- 7 new validation error messages: `ErrMsgFrequencyPenaltyOutOfRange`, `ErrMsgPresencePenaltyOutOfRange`, `ErrMsgNOutOfRange`, `ErrMsgMaxCompletionTokensInvalid`, `ErrMsgReasoningEffortInvalid`, `ErrMsgTopAOutOfRange`, `ErrMsgServiceTierInvalid`
+
+#### New Accessor Methods
+- 18 new getter/checker methods on `ExecutionConfig`: `GetFrequencyPenalty`/`HasFrequencyPenalty`, `GetPresencePenalty`/`HasPresencePenalty`, `GetN`/`HasN`, `GetMaxCompletionTokens`/`HasMaxCompletionTokens`, `GetReasoningEffort`/`HasReasoningEffort`, `GetTopA`/`HasTopA`, `GetUser`/`HasUser`, `GetServiceTier`/`HasServiceTier`, `GetStore`/`HasStore`
+- 2 new getter/checker methods on `ToolsConfig`: `GetParallelToolCalls`/`HasParallelToolCalls`
+
+#### Provider Serialization
+- **ToOpenAI**: frequency_penalty, presence_penalty, n, max_completion_tokens, reasoning_effort, user, service_tier, store
+- **ToAnthropic**: reasoning_effort, user
+- **ToVLLM**: frequency_penalty, presence_penalty, n
+- **ToMistral**: frequency_penalty, presence_penalty
+- **ToGemini**: (none of the v2.9 params)
+- **ToCohere**: (none of the v2.9 params)
+
+### Changed
+- `ExecutionConfig.Validate()` validates 7 new fields with range/enum checks
+- `ExecutionConfig.Clone()` deep-copies all 9 new fields (pointers dereferenced+reallocated)
+- `ExecutionConfig.Merge()` supports pointer coalescing and string override for all new fields
+- `ExecutionConfig.ToMap()` emits all 9 new fields including TopA (OpenRouter passthrough)
+- `ToolsConfig.Clone()` deep-copies `ParallelToolCalls *bool`
+- Helper functions added: `coalesceBoolPtr`, `isValidReasoningEffort`, `isValidServiceTier`
+
+### Technical Details
+- 27 new test functions covering validation, clone, merge, provider serialization, getters, YAML roundtrip
+- Test coverage: 82.3% root, 91.3% cmd, 91.1% internal
+- All tests pass with `-race` flag
+- No GetEffectiveProvider changes — v2.9 params are cross-provider, not reliable hints
+
 ## [2.8.0] - 2026-02-15
 
 ### Breaking Changes

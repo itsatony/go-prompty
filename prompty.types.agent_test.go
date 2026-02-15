@@ -502,3 +502,68 @@ func TestFunctionDef_ToOpenAITool_Nil(t *testing.T) {
 func TestFunctionDef_ToAnthropicTool_Nil(t *testing.T) {
 	assert.Nil(t, (*FunctionDef)(nil).ToAnthropicTool())
 }
+
+// --- v2.9 ParallelToolCalls tests ---
+
+func TestToolsConfig_ParallelToolCalls_Clone(t *testing.T) {
+	ptc := true
+	tc := &ToolsConfig{
+		ToolChoice:        "auto",
+		ParallelToolCalls: &ptc,
+	}
+
+	clone := tc.Clone()
+
+	require.NotNil(t, clone.ParallelToolCalls)
+	assert.Equal(t, true, *clone.ParallelToolCalls)
+
+	// Verify deep copy
+	*clone.ParallelToolCalls = false
+	assert.NotEqual(t, *tc.ParallelToolCalls, *clone.ParallelToolCalls)
+}
+
+func TestToolsConfig_ParallelToolCalls_Clone_Nil(t *testing.T) {
+	tc := &ToolsConfig{ToolChoice: "auto"}
+
+	clone := tc.Clone()
+
+	assert.Nil(t, clone.ParallelToolCalls)
+}
+
+func TestToolsConfig_GetParallelToolCalls(t *testing.T) {
+	ptc := true
+	tc := &ToolsConfig{ParallelToolCalls: &ptc}
+
+	v, ok := tc.GetParallelToolCalls()
+	assert.True(t, ok)
+	assert.Equal(t, true, v)
+	assert.True(t, tc.HasParallelToolCalls())
+}
+
+func TestToolsConfig_GetParallelToolCalls_Nil(t *testing.T) {
+	var tc *ToolsConfig
+
+	v, ok := tc.GetParallelToolCalls()
+	assert.False(t, ok)
+	assert.Equal(t, false, v)
+	assert.False(t, tc.HasParallelToolCalls())
+}
+
+func TestToolsConfig_GetParallelToolCalls_NotSet(t *testing.T) {
+	tc := &ToolsConfig{ToolChoice: "auto"}
+
+	v, ok := tc.GetParallelToolCalls()
+	assert.False(t, ok)
+	assert.Equal(t, false, v)
+	assert.False(t, tc.HasParallelToolCalls())
+}
+
+func TestToolsConfig_GetParallelToolCalls_False(t *testing.T) {
+	ptc := false
+	tc := &ToolsConfig{ParallelToolCalls: &ptc}
+
+	v, ok := tc.GetParallelToolCalls()
+	assert.True(t, ok)
+	assert.Equal(t, false, v)
+	assert.True(t, tc.HasParallelToolCalls())
+}

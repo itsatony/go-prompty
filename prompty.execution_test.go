@@ -2424,3 +2424,638 @@ embedding:
 
 	assert.NoError(t, config.Validate())
 }
+
+// --- v2.9 LLM Parameter Alignment Tests ---
+
+func TestExecutionConfig_Validate_V29_FrequencyPenalty(t *testing.T) {
+	fp := func(v float64) *float64 { return &v }
+
+	tests := []struct {
+		name    string
+		config  *ExecutionConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{"valid zero", &ExecutionConfig{FrequencyPenalty: fp(0.0)}, false, ""},
+		{"valid positive", &ExecutionConfig{FrequencyPenalty: fp(1.5)}, false, ""},
+		{"valid negative", &ExecutionConfig{FrequencyPenalty: fp(-1.5)}, false, ""},
+		{"valid max", &ExecutionConfig{FrequencyPenalty: fp(2.0)}, false, ""},
+		{"valid min", &ExecutionConfig{FrequencyPenalty: fp(-2.0)}, false, ""},
+		{"too high", &ExecutionConfig{FrequencyPenalty: fp(2.1)}, true, ErrMsgFrequencyPenaltyOutOfRange},
+		{"too low", &ExecutionConfig{FrequencyPenalty: fp(-2.1)}, true, ErrMsgFrequencyPenaltyOutOfRange},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExecutionConfig_Validate_V29_PresencePenalty(t *testing.T) {
+	fp := func(v float64) *float64 { return &v }
+
+	tests := []struct {
+		name    string
+		config  *ExecutionConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{"valid zero", &ExecutionConfig{PresencePenalty: fp(0.0)}, false, ""},
+		{"valid max", &ExecutionConfig{PresencePenalty: fp(2.0)}, false, ""},
+		{"valid min", &ExecutionConfig{PresencePenalty: fp(-2.0)}, false, ""},
+		{"too high", &ExecutionConfig{PresencePenalty: fp(2.1)}, true, ErrMsgPresencePenaltyOutOfRange},
+		{"too low", &ExecutionConfig{PresencePenalty: fp(-2.1)}, true, ErrMsgPresencePenaltyOutOfRange},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExecutionConfig_Validate_V29_N(t *testing.T) {
+	ip := func(v int) *int { return &v }
+
+	tests := []struct {
+		name    string
+		config  *ExecutionConfig
+		wantErr bool
+	}{
+		{"valid 1", &ExecutionConfig{N: ip(1)}, false},
+		{"valid 128", &ExecutionConfig{N: ip(NMax)}, false},
+		{"valid 5", &ExecutionConfig{N: ip(5)}, false},
+		{"zero", &ExecutionConfig{N: ip(0)}, true},
+		{"negative", &ExecutionConfig{N: ip(-1)}, true},
+		{"too high", &ExecutionConfig{N: ip(NMax + 1)}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), ErrMsgNOutOfRange)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExecutionConfig_Validate_V29_MaxCompletionTokens(t *testing.T) {
+	ip := func(v int) *int { return &v }
+
+	tests := []struct {
+		name    string
+		config  *ExecutionConfig
+		wantErr bool
+	}{
+		{"valid", &ExecutionConfig{MaxCompletionTokens: ip(1000)}, false},
+		{"valid 1", &ExecutionConfig{MaxCompletionTokens: ip(1)}, false},
+		{"zero", &ExecutionConfig{MaxCompletionTokens: ip(0)}, true},
+		{"negative", &ExecutionConfig{MaxCompletionTokens: ip(-1)}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), ErrMsgMaxCompletionTokensInvalid)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExecutionConfig_Validate_V29_ReasoningEffort(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *ExecutionConfig
+		wantErr bool
+	}{
+		{"low", &ExecutionConfig{ReasoningEffort: ReasoningEffortLow}, false},
+		{"medium", &ExecutionConfig{ReasoningEffort: ReasoningEffortMedium}, false},
+		{"high", &ExecutionConfig{ReasoningEffort: ReasoningEffortHigh}, false},
+		{"max", &ExecutionConfig{ReasoningEffort: ReasoningEffortMax}, false},
+		{"empty", &ExecutionConfig{ReasoningEffort: ""}, false},
+		{"invalid", &ExecutionConfig{ReasoningEffort: "ultra"}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), ErrMsgReasoningEffortInvalid)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExecutionConfig_Validate_V29_TopA(t *testing.T) {
+	fp := func(v float64) *float64 { return &v }
+
+	tests := []struct {
+		name    string
+		config  *ExecutionConfig
+		wantErr bool
+	}{
+		{"valid zero", &ExecutionConfig{TopA: fp(0.0)}, false},
+		{"valid 1", &ExecutionConfig{TopA: fp(1.0)}, false},
+		{"valid mid", &ExecutionConfig{TopA: fp(0.5)}, false},
+		{"too high", &ExecutionConfig{TopA: fp(1.1)}, true},
+		{"too low", &ExecutionConfig{TopA: fp(-0.1)}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), ErrMsgTopAOutOfRange)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExecutionConfig_Validate_V29_ServiceTier(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *ExecutionConfig
+		wantErr bool
+	}{
+		{"auto", &ExecutionConfig{ServiceTier: ServiceTierAuto}, false},
+		{"default", &ExecutionConfig{ServiceTier: ServiceTierDefault}, false},
+		{"empty", &ExecutionConfig{ServiceTier: ""}, false},
+		{"invalid", &ExecutionConfig{ServiceTier: "premium"}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), ErrMsgServiceTierInvalid)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestExecutionConfig_Clone_V29(t *testing.T) {
+	fp := 0.5
+	pp := -0.3
+	n := 3
+	mct := 4096
+	ta := 0.8
+	store := true
+
+	original := &ExecutionConfig{
+		FrequencyPenalty:    &fp,
+		PresencePenalty:     &pp,
+		N:                   &n,
+		MaxCompletionTokens: &mct,
+		ReasoningEffort:     ReasoningEffortHigh,
+		TopA:                &ta,
+		User:                "test-user",
+		ServiceTier:         ServiceTierAuto,
+		Store:               &store,
+	}
+
+	clone := original.Clone()
+
+	// Verify values match
+	assert.Equal(t, *original.FrequencyPenalty, *clone.FrequencyPenalty)
+	assert.Equal(t, *original.PresencePenalty, *clone.PresencePenalty)
+	assert.Equal(t, *original.N, *clone.N)
+	assert.Equal(t, *original.MaxCompletionTokens, *clone.MaxCompletionTokens)
+	assert.Equal(t, original.ReasoningEffort, clone.ReasoningEffort)
+	assert.Equal(t, *original.TopA, *clone.TopA)
+	assert.Equal(t, original.User, clone.User)
+	assert.Equal(t, original.ServiceTier, clone.ServiceTier)
+	assert.Equal(t, *original.Store, *clone.Store)
+
+	// Verify deep copy — mutating clone does not affect original
+	*clone.FrequencyPenalty = 1.0
+	assert.NotEqual(t, *original.FrequencyPenalty, *clone.FrequencyPenalty)
+	*clone.PresencePenalty = 1.0
+	assert.NotEqual(t, *original.PresencePenalty, *clone.PresencePenalty)
+	*clone.N = 10
+	assert.NotEqual(t, *original.N, *clone.N)
+	*clone.MaxCompletionTokens = 8192
+	assert.NotEqual(t, *original.MaxCompletionTokens, *clone.MaxCompletionTokens)
+	*clone.TopA = 0.1
+	assert.NotEqual(t, *original.TopA, *clone.TopA)
+	*clone.Store = false
+	assert.NotEqual(t, *original.Store, *clone.Store)
+}
+
+func TestExecutionConfig_Merge_V29(t *testing.T) {
+	fp := func(v float64) *float64 { return &v }
+	ip := func(v int) *int { return &v }
+	bp := func(v bool) *bool { return &v }
+
+	t.Run("override pointer fields", func(t *testing.T) {
+		base := &ExecutionConfig{
+			FrequencyPenalty: fp(0.5),
+			PresencePenalty:  fp(0.3),
+			N:                ip(1),
+			TopA:             fp(0.2),
+		}
+		other := &ExecutionConfig{
+			FrequencyPenalty:    fp(1.0),
+			N:                   ip(5),
+			MaxCompletionTokens: ip(4096),
+			Store:               bp(true),
+		}
+
+		merged := base.Merge(other)
+
+		assert.Equal(t, 1.0, *merged.FrequencyPenalty)
+		assert.Equal(t, 0.3, *merged.PresencePenalty) // preserved from base
+		assert.Equal(t, 5, *merged.N)
+		assert.Equal(t, 4096, *merged.MaxCompletionTokens)
+		assert.Equal(t, 0.2, *merged.TopA) // preserved from base
+		assert.Equal(t, true, *merged.Store)
+	})
+
+	t.Run("override string fields", func(t *testing.T) {
+		base := &ExecutionConfig{
+			ReasoningEffort: ReasoningEffortLow,
+			User:            "base-user",
+			ServiceTier:     ServiceTierDefault,
+		}
+		other := &ExecutionConfig{
+			ReasoningEffort: ReasoningEffortHigh,
+			User:            "override-user",
+		}
+
+		merged := base.Merge(other)
+
+		assert.Equal(t, ReasoningEffortHigh, merged.ReasoningEffort)
+		assert.Equal(t, "override-user", merged.User)
+		assert.Equal(t, ServiceTierDefault, merged.ServiceTier) // preserved from base
+	})
+
+	t.Run("nil other preserves base", func(t *testing.T) {
+		base := &ExecutionConfig{
+			FrequencyPenalty: fp(0.5),
+			ReasoningEffort:  ReasoningEffortMedium,
+			Store:            bp(false),
+		}
+
+		merged := base.Merge(nil)
+
+		assert.Equal(t, 0.5, *merged.FrequencyPenalty)
+		assert.Equal(t, ReasoningEffortMedium, merged.ReasoningEffort)
+		assert.Equal(t, false, *merged.Store)
+	})
+
+	t.Run("coalesceBoolPtr override", func(t *testing.T) {
+		base := &ExecutionConfig{Store: bp(true)}
+		other := &ExecutionConfig{Store: bp(false)}
+
+		merged := base.Merge(other)
+		assert.Equal(t, false, *merged.Store) // other wins
+	})
+}
+
+func TestExecutionConfig_Getters_V29(t *testing.T) {
+	fp := func(v float64) *float64 { return &v }
+	ip := func(v int) *int { return &v }
+	bp := func(v bool) *bool { return &v }
+
+	config := &ExecutionConfig{
+		FrequencyPenalty:    fp(0.5),
+		PresencePenalty:     fp(-0.3),
+		N:                   ip(3),
+		MaxCompletionTokens: ip(4096),
+		ReasoningEffort:     ReasoningEffortHigh,
+		TopA:                fp(0.8),
+		User:                "test-user",
+		ServiceTier:         ServiceTierAuto,
+		Store:               bp(true),
+	}
+
+	// Get + Has for pointer fields
+	v, ok := config.GetFrequencyPenalty()
+	assert.True(t, ok)
+	assert.Equal(t, 0.5, v)
+	assert.True(t, config.HasFrequencyPenalty())
+
+	v, ok = config.GetPresencePenalty()
+	assert.True(t, ok)
+	assert.Equal(t, -0.3, v)
+	assert.True(t, config.HasPresencePenalty())
+
+	n, ok := config.GetN()
+	assert.True(t, ok)
+	assert.Equal(t, 3, n)
+	assert.True(t, config.HasN())
+
+	mct, ok := config.GetMaxCompletionTokens()
+	assert.True(t, ok)
+	assert.Equal(t, 4096, mct)
+	assert.True(t, config.HasMaxCompletionTokens())
+
+	ta, ok := config.GetTopA()
+	assert.True(t, ok)
+	assert.Equal(t, 0.8, ta)
+	assert.True(t, config.HasTopA())
+
+	st, ok := config.GetStore()
+	assert.True(t, ok)
+	assert.Equal(t, true, st)
+	assert.True(t, config.HasStore())
+
+	// Get + Has for string fields
+	assert.Equal(t, ReasoningEffortHigh, config.GetReasoningEffort())
+	assert.True(t, config.HasReasoningEffort())
+	assert.Equal(t, "test-user", config.GetUser())
+	assert.True(t, config.HasUser())
+	assert.Equal(t, ServiceTierAuto, config.GetServiceTier())
+	assert.True(t, config.HasServiceTier())
+}
+
+func TestExecutionConfig_Getters_V29_Nil(t *testing.T) {
+	var config *ExecutionConfig
+
+	v, ok := config.GetFrequencyPenalty()
+	assert.False(t, ok)
+	assert.Equal(t, float64(0), v)
+	assert.False(t, config.HasFrequencyPenalty())
+
+	v, ok = config.GetPresencePenalty()
+	assert.False(t, ok)
+	assert.Equal(t, float64(0), v)
+	assert.False(t, config.HasPresencePenalty())
+
+	n, ok := config.GetN()
+	assert.False(t, ok)
+	assert.Equal(t, 0, n)
+	assert.False(t, config.HasN())
+
+	mct, ok := config.GetMaxCompletionTokens()
+	assert.False(t, ok)
+	assert.Equal(t, 0, mct)
+	assert.False(t, config.HasMaxCompletionTokens())
+
+	ta, ok := config.GetTopA()
+	assert.False(t, ok)
+	assert.Equal(t, float64(0), ta)
+	assert.False(t, config.HasTopA())
+
+	st, ok := config.GetStore()
+	assert.False(t, ok)
+	assert.Equal(t, false, st)
+	assert.False(t, config.HasStore())
+
+	assert.Equal(t, "", config.GetReasoningEffort())
+	assert.False(t, config.HasReasoningEffort())
+	assert.Equal(t, "", config.GetUser())
+	assert.False(t, config.HasUser())
+	assert.Equal(t, "", config.GetServiceTier())
+	assert.False(t, config.HasServiceTier())
+}
+
+func TestExecutionConfig_ToOpenAI_V29(t *testing.T) {
+	fp := func(v float64) *float64 { return &v }
+	ip := func(v int) *int { return &v }
+	bp := func(v bool) *bool { return &v }
+
+	config := &ExecutionConfig{
+		Model:               "gpt-4o",
+		FrequencyPenalty:    fp(0.5),
+		PresencePenalty:     fp(-0.3),
+		N:                   ip(3),
+		MaxCompletionTokens: ip(4096),
+		ReasoningEffort:     ReasoningEffortHigh,
+		TopA:                fp(0.8), // should NOT appear in OpenAI output
+		User:                "test-user",
+		ServiceTier:         ServiceTierAuto,
+		Store:               bp(true),
+	}
+
+	result := config.ToOpenAI()
+
+	assert.Equal(t, 0.5, result[ParamKeyFrequencyPenalty])
+	assert.Equal(t, -0.3, result[ParamKeyPresencePenalty])
+	assert.Equal(t, 3, result[ParamKeyN])
+	assert.Equal(t, 4096, result[ParamKeyMaxCompletionTokens])
+	assert.Equal(t, ReasoningEffortHigh, result[ParamKeyReasoningEffort])
+	assert.Equal(t, "test-user", result[ParamKeyUser])
+	assert.Equal(t, ServiceTierAuto, result[ParamKeyServiceTier])
+	assert.Equal(t, true, result[ParamKeyStore])
+
+	// TopA should NOT be in OpenAI output
+	_, hasTopA := result[ParamKeyTopA]
+	assert.False(t, hasTopA)
+}
+
+func TestExecutionConfig_ToAnthropic_V29(t *testing.T) {
+	config := &ExecutionConfig{
+		Model:           "claude-sonnet-4-5",
+		ReasoningEffort: ReasoningEffortMedium,
+		User:            "test-user",
+	}
+
+	result := config.ToAnthropic()
+
+	assert.Equal(t, ReasoningEffortMedium, result[ParamKeyReasoningEffort])
+	assert.Equal(t, "test-user", result[ParamKeyUser])
+
+	// These should NOT be in Anthropic output
+	_, hasFP := result[ParamKeyFrequencyPenalty]
+	assert.False(t, hasFP)
+	_, hasPP := result[ParamKeyPresencePenalty]
+	assert.False(t, hasPP)
+	_, hasN := result[ParamKeyN]
+	assert.False(t, hasN)
+}
+
+func TestExecutionConfig_ToGemini_V29(t *testing.T) {
+	fp := func(v float64) *float64 { return &v }
+
+	config := &ExecutionConfig{
+		Model:            "gemini-pro",
+		FrequencyPenalty: fp(0.5),
+		ReasoningEffort:  ReasoningEffortHigh,
+	}
+
+	result := config.ToGemini()
+
+	// v2.9 params should NOT appear in Gemini output
+	_, hasFP := result[ParamKeyFrequencyPenalty]
+	assert.False(t, hasFP)
+	_, hasRE := result[ParamKeyReasoningEffort]
+	assert.False(t, hasRE)
+}
+
+func TestExecutionConfig_ToVLLM_V29(t *testing.T) {
+	fp := func(v float64) *float64 { return &v }
+	ip := func(v int) *int { return &v }
+
+	config := &ExecutionConfig{
+		Model:            "meta-llama/Llama-2-7b-hf",
+		FrequencyPenalty: fp(0.5),
+		PresencePenalty:  fp(-0.3),
+		N:                ip(3),
+		ReasoningEffort:  ReasoningEffortHigh, // should NOT appear in vLLM output
+	}
+
+	result := config.ToVLLM()
+
+	assert.Equal(t, 0.5, result[ParamKeyFrequencyPenalty])
+	assert.Equal(t, -0.3, result[ParamKeyPresencePenalty])
+	assert.Equal(t, 3, result[ParamKeyN])
+
+	// ReasoningEffort should NOT be in vLLM output
+	_, hasRE := result[ParamKeyReasoningEffort]
+	assert.False(t, hasRE)
+}
+
+func TestExecutionConfig_ToMistral_V29(t *testing.T) {
+	fp := func(v float64) *float64 { return &v }
+
+	config := &ExecutionConfig{
+		Model:            "mistral-large-latest",
+		FrequencyPenalty: fp(0.5),
+		PresencePenalty:  fp(-0.3),
+		ReasoningEffort:  ReasoningEffortHigh, // should NOT appear in Mistral output
+	}
+
+	result := config.ToMistral()
+
+	assert.Equal(t, 0.5, result[ParamKeyFrequencyPenalty])
+	assert.Equal(t, -0.3, result[ParamKeyPresencePenalty])
+
+	// ReasoningEffort should NOT be in Mistral output
+	_, hasRE := result[ParamKeyReasoningEffort]
+	assert.False(t, hasRE)
+}
+
+func TestExecutionConfig_ToCohere_V29(t *testing.T) {
+	fp := func(v float64) *float64 { return &v }
+
+	config := &ExecutionConfig{
+		Model:            "command-r-plus",
+		FrequencyPenalty: fp(0.5),
+		ReasoningEffort:  ReasoningEffortHigh,
+	}
+
+	result := config.ToCohere()
+
+	// v2.9 params should NOT appear in Cohere output
+	_, hasFP := result[ParamKeyFrequencyPenalty]
+	assert.False(t, hasFP)
+	_, hasRE := result[ParamKeyReasoningEffort]
+	assert.False(t, hasRE)
+}
+
+func TestExecutionConfig_ToMap_V29(t *testing.T) {
+	fp := func(v float64) *float64 { return &v }
+	ip := func(v int) *int { return &v }
+	bp := func(v bool) *bool { return &v }
+
+	config := &ExecutionConfig{
+		FrequencyPenalty:    fp(0.5),
+		PresencePenalty:     fp(-0.3),
+		N:                   ip(3),
+		MaxCompletionTokens: ip(4096),
+		ReasoningEffort:     ReasoningEffortHigh,
+		TopA:                fp(0.8),
+		User:                "test-user",
+		ServiceTier:         ServiceTierAuto,
+		Store:               bp(true),
+	}
+
+	result := config.ToMap()
+
+	assert.Equal(t, 0.5, result[ParamKeyFrequencyPenalty])
+	assert.Equal(t, -0.3, result[ParamKeyPresencePenalty])
+	assert.Equal(t, 3, result[ParamKeyN])
+	assert.Equal(t, 4096, result[ParamKeyMaxCompletionTokens])
+	assert.Equal(t, ReasoningEffortHigh, result[ParamKeyReasoningEffort])
+	assert.Equal(t, 0.8, result[ParamKeyTopA])
+	assert.Equal(t, "test-user", result[ParamKeyUser])
+	assert.Equal(t, ServiceTierAuto, result[ParamKeyServiceTier])
+	assert.Equal(t, true, result[ParamKeyStore])
+}
+
+func TestExecutionConfig_GetEffectiveProvider_V29_NoHint(t *testing.T) {
+	fp := func(v float64) *float64 { return &v }
+	ip := func(v int) *int { return &v }
+	bp := func(v bool) *bool { return &v }
+
+	// None of the v2.9 params should hint a provider
+	tests := []struct {
+		name   string
+		config *ExecutionConfig
+	}{
+		{"frequency_penalty", &ExecutionConfig{FrequencyPenalty: fp(0.5)}},
+		{"presence_penalty", &ExecutionConfig{PresencePenalty: fp(0.3)}},
+		{"n", &ExecutionConfig{N: ip(3)}},
+		{"max_completion_tokens", &ExecutionConfig{MaxCompletionTokens: ip(4096)}},
+		{"reasoning_effort", &ExecutionConfig{ReasoningEffort: ReasoningEffortHigh}},
+		{"top_a", &ExecutionConfig{TopA: fp(0.5)}},
+		{"user", &ExecutionConfig{User: "test-user"}},
+		{"service_tier", &ExecutionConfig{ServiceTier: ServiceTierAuto}},
+		{"store", &ExecutionConfig{Store: bp(true)}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, "", tt.config.GetEffectiveProvider())
+		})
+	}
+}
+
+func TestExecutionConfig_YAML_V29_Roundtrip(t *testing.T) {
+	yamlStr := `
+frequency_penalty: 0.5
+presence_penalty: -0.3
+n: 3
+max_completion_tokens: 4096
+reasoning_effort: high
+top_a: 0.8
+user: test-user
+service_tier: auto
+store: true
+`
+	var config ExecutionConfig
+	err := parseYAMLConfig(yamlStr, &config)
+	require.NoError(t, err)
+
+	assert.Equal(t, 0.5, *config.FrequencyPenalty)
+	assert.Equal(t, -0.3, *config.PresencePenalty)
+	assert.Equal(t, 3, *config.N)
+	assert.Equal(t, 4096, *config.MaxCompletionTokens)
+	assert.Equal(t, ReasoningEffortHigh, config.ReasoningEffort)
+	assert.Equal(t, 0.8, *config.TopA)
+	assert.Equal(t, "test-user", config.User)
+	assert.Equal(t, ServiceTierAuto, config.ServiceTier)
+	assert.Equal(t, true, *config.Store)
+
+	assert.NoError(t, config.Validate())
+}

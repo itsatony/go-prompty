@@ -156,6 +156,15 @@ const (
 	ErrMsgStopTokenIDNegative         = "stop_token_ids values must be non-negative"
 	ErrMsgLogitBiasValueOutOfRange    = "logit_bias values must be between -100.0 and 100.0"
 
+	// v2.9 LLM parameter alignment validation messages
+	ErrMsgFrequencyPenaltyOutOfRange = "frequency_penalty must be between -2.0 and 2.0"
+	ErrMsgPresencePenaltyOutOfRange  = "presence_penalty must be between -2.0 and 2.0"
+	ErrMsgNOutOfRange                = "n must be between 1 and 128"
+	ErrMsgMaxCompletionTokensInvalid = "max_completion_tokens must be positive"
+	ErrMsgReasoningEffortInvalid     = "reasoning_effort must be low, medium, high, or max"
+	ErrMsgTopAOutOfRange             = "top_a must be between 0.0 and 1.0"
+	ErrMsgServiceTierInvalid         = "service_tier must be auto or default"
+
 	// v2.5 Media generation validation messages
 	ErrMsgInvalidModality               = "invalid modality value"
 	ErrMsgImageWidthOutOfRange          = "image width must be between 1 and 8192"
