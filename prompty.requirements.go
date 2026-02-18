@@ -28,11 +28,11 @@ func (r *ExecutionRequirements) Validate() error {
 	}
 
 	if r.ProviderBinding != "" && !isValidProviderBinding(r.ProviderBinding) {
-		return NewCredentialValidationError(ErrMsgInvalidProviderBinding, "")
+		return NewPromptValidationError(ErrMsgInvalidProviderBinding, "")
 	}
 
 	if r.EstimatedLatencyMs < 0 {
-		return NewCredentialValidationError(ErrMsgEstimatedLatencyNegative, "")
+		return NewPromptValidationError(ErrMsgEstimatedLatencyNegative, "")
 	}
 
 	if r.Modality != "" && !isValidModality(r.Modality) {

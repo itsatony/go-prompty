@@ -58,6 +58,9 @@ github.com/itsatony/go-prompty/v2/
 ├── prompty.types.shared.go       # v2.1: ResponseFormat, GuidedDecoding, InputDef
 ├── prompty.types.tools.go        # v2.1: FunctionDef, ModelParameters
 ├── prompty.types.media.go        # v2.5: ImageConfig, AudioConfig, EmbeddingConfig, AsyncConfig
+├── prompty.credentials.go        # v2.10: CredentialRef type with Validate/Clone/getters
+├── prompty.requirements.go       # v2.10: ExecutionRequirements with Validate/Clone/getters
+├── prompty.manifest.go           # v2.10: ExecutionManifest + CompileExecutionManifest
 ├── prompty.compile.go            # v2.1: CompileAgent, ActivateSkill, Compile, AgentDryRun
 ├── prompty.catalog.go            # v2.1: Catalog generation (skills, tools)
 ├── prompty.document.resolver.go  # v2.1: DocumentResolver interface + impls
@@ -338,12 +341,15 @@ messages:
 ```
 
 **Key v2.1 Types:**
-- `Prompt`: Full prompt configuration with document type, skills, tools, context, constraints, messages
+- `Prompt`: Full prompt configuration with document type, skills, tools, context, constraints, messages, credentials, requirements
 - `ExecutionConfig`: LLM execution parameters with `Merge()` for 3-layer precedence. Extended in v2.3 with `MinP`, `RepetitionPenalty`, `Seed`, `Logprobs`, `StopTokenIDs`, `LogitBias`. Extended in v2.9 with `FrequencyPenalty`, `PresencePenalty`, `N`, `MaxCompletionTokens`, `ReasoningEffort`, `TopA`, `User`, `ServiceTier`, `Store`
 - `Extensions map[string]any`: Captures non-standard YAML frontmatter fields (round-trip preserving)
-- `SkillRef`: Skill reference with injection mode and execution overrides
+- `SkillRef`: Skill reference with injection mode, execution overrides, credential label, and requirements
 - `ToolsConfig`: Tool definitions with function defs and MCP servers. `FunctionDef` has `ToGenericTool()` (flat format), `ToOpenAITool()` (OpenAI envelope), `ToAnthropicTool()` (input_schema format)
 - `CompiledPrompt`: Result of `CompileAgent()` — messages, execution config, tools, constraints
+- `CredentialRef`: Credential declaration (provider, label, ref, scopes) — go-prompty stores but does NOT resolve
+- `ExecutionRequirements`: Declarative metadata (modality, provider binding, capabilities, cost/latency hints)
+- `ExecutionManifest`: Compiled introspection of all providers, credentials, and modalities an agent needs
 
 **Agent Compilation:**
 ```go
@@ -366,6 +372,58 @@ compiled, _ := prompt.CompileAgent(ctx, input, &prompty.CompileOptions{
 {~prompty.ref slug="my-prompt" version="v2" /~}
 {~prompty.ref slug="my-prompt@v2" /~}
 ```
+
+### Multi-Model Credentials (v2.10)
+
+Agents can declare multiple credential references for multi-provider execution:
+
+```yaml
+---
+name: multi-model-agent
+type: agent
+credentials:
+  anthropic-main:
+    provider: anthropic
+    ref: "${ANTHROPIC_API_KEY}"
+  openai-images:
+    provider: openai
+    ref: "${OPENAI_IMAGES_KEY}"
+    scopes: [images]
+credential: anthropic-main
+execution:
+  provider: anthropic
+  model: claude-sonnet-4-5
+requirements:
+  modality: text
+  provider_binding: required
+skills:
+  - slug: image-gen
+    credential: openai-images
+    execution:
+      provider: openai
+      model: dall-e-3
+      modality: image
+    requirements:
+      modality: image
+      provider_binding: required
+      capabilities: [image_generation]
+      estimated_cost: "$0.04"
+      estimated_latency_ms: 8000
+---
+```
+
+**Execution Manifest Introspection:**
+```go
+agent, _ := prompty.ParseFile("multi-model-agent.prompty")
+manifest, _ := agent.CompileExecutionManifest()
+// manifest.Providers   → ["anthropic", "openai"]
+// manifest.Credentials → ["anthropic-main", "openai-images"]
+// manifest.Modalities  → ["image", "text"]
+```
+
+**Provider Binding Modes:** `required` | `preferred` | `any`
+
+**Serialization Safety:** Credentials are excluded from `Serialize()` by default. Use `FullExportWithCredentials()` to include them.
 
 ### Nested Templates
 

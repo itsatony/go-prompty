@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/itsatony/go-prompty)](https://goreportcard.com/report/github.com/itsatony/go-prompty)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Test Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen.svg)](https://github.com/itsatony/go-prompty)
-[![Version](https://img.shields.io/badge/version-2.9.0-blue.svg)](https://github.com/itsatony/go-prompty/releases/tag/v2.9.0)
+[![Version](https://img.shields.io/badge/version-2.10.0-blue.svg)](https://github.com/itsatony/go-prompty/releases/tag/v2.10.0)
 
 ```yaml
 ---
@@ -42,6 +42,7 @@ You are assisting {~prompty.var name="user.name" default="a user" /~}.
 | **Environment aware** | Access env vars with `prompty.env` |
 | **Conversation support** | Message tags for chat/LLM API integration |
 | **Agent definitions** | Skills, tools, constraints, and catalog generation |
+| **Multi-model credentials** | Declare per-skill providers, credentials, and execution requirements |
 | **Actionable errors** | Error messages include solution hints (e.g., "use default=") |
 | **Production ready** | Access control, multi-tenancy, audit logging |
 

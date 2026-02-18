@@ -478,6 +478,11 @@ const (
 	PromptFieldContext     = "context"
 	PromptFieldConstraints = "constraints"
 	PromptFieldMessages    = "messages"
+
+	// v2.10 credential/requirements fields
+	PromptFieldCredentials  = "credentials"
+	PromptFieldCredential   = "credential"
+	PromptFieldRequirements = "requirements"
 )
 
 // v2.0 Reference resolution constants
@@ -862,12 +867,6 @@ const (
 	ProviderBindingAny       = "any"
 )
 
-// v2.10 Prompt field name constants for credentials/requirements serialization
-const (
-	PromptFieldCredentials  = "credentials"
-	PromptFieldCredential   = "credential"
-	PromptFieldRequirements = "requirements"
-)
 
 // v2.10 Metadata keys for credential context
 const (

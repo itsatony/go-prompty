@@ -277,6 +277,57 @@ func TestCompileExecutionManifest_CredentialsDeclaredButNotReferenced(t *testing
 	assert.Equal(t, []string{"main", "unused-key"}, manifest.Credentials)
 }
 
+func TestCompileExecutionManifest_DefaultModalityText(t *testing.T) {
+	// When no explicit modality is declared anywhere, default to text
+	p := &Prompt{
+		Name:        "no-modality",
+		Description: "No modality set",
+	}
+	manifest, err := p.CompileExecutionManifest()
+	require.NoError(t, err)
+	assert.Equal(t, []string{ModalityText}, manifest.Modalities)
+}
+
+func TestCompileExecutionManifest_NoProviderInExecution(t *testing.T) {
+	// Execution present but provider not set — Providers should be empty
+	p := &Prompt{
+		Name:        "no-provider",
+		Description: "Execution without provider",
+		Execution:   &ExecutionConfig{Model: "custom-model"},
+	}
+	manifest, err := p.CompileExecutionManifest()
+	require.NoError(t, err)
+	assert.Nil(t, manifest.Providers)
+}
+
+func TestCompileExecutionManifest_PointerIsolation(t *testing.T) {
+	// Verify manifest pointers are clones, not shared references
+	temp := 0.7
+	p := &Prompt{
+		Name:        "isolation-test",
+		Description: "Pointer isolation",
+		Execution: &ExecutionConfig{
+			Provider:    ProviderOpenAI,
+			Model:       "gpt-4",
+			Temperature: &temp,
+		},
+		Requirements: &ExecutionRequirements{
+			ProviderBinding: ProviderBindingRequired,
+			Capabilities:    []string{"function_calling"},
+		},
+	}
+	manifest, err := p.CompileExecutionManifest()
+	require.NoError(t, err)
+
+	// Mutate manifest — should NOT affect original prompt
+	newTemp := 0.9
+	manifest.Primary.Execution.Temperature = &newTemp
+	manifest.Primary.Requirements.Capabilities[0] = "modified"
+
+	assert.Equal(t, 0.7, *p.Execution.Temperature)
+	assert.Equal(t, "function_calling", p.Requirements.Capabilities[0])
+}
+
 func TestSortedKeys(t *testing.T) {
 	t.Run("nil map", func(t *testing.T) {
 		assert.Nil(t, sortedKeys(nil))

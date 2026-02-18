@@ -164,6 +164,51 @@ func TestPrompt_ValidateCredentialRefs(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), ErrMsgCredentialNotFound)
 	})
+
+	t.Run("skill credential label found", func(t *testing.T) {
+		p := &Prompt{
+			Name:        "test",
+			Description: "test",
+			Credentials: map[string]*CredentialRef{
+				"main":   {Provider: ProviderAnthropic},
+				"images": {Provider: ProviderOpenAI},
+			},
+			Skills: []SkillRef{
+				{Slug: "img-gen", Credential: "images"},
+			},
+		}
+		assert.NoError(t, p.ValidateCredentialRefs())
+	})
+
+	t.Run("skill credential label not found", func(t *testing.T) {
+		p := &Prompt{
+			Name:        "test",
+			Description: "test",
+			Credentials: map[string]*CredentialRef{
+				"main": {Provider: ProviderAnthropic},
+			},
+			Skills: []SkillRef{
+				{Slug: "img-gen", Credential: "missing-images"},
+			},
+		}
+		err := p.ValidateCredentialRefs()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), ErrMsgCredentialNotFound)
+	})
+
+	t.Run("skill without credential is valid", func(t *testing.T) {
+		p := &Prompt{
+			Name:        "test",
+			Description: "test",
+			Credentials: map[string]*CredentialRef{
+				"main": {Provider: ProviderAnthropic},
+			},
+			Skills: []SkillRef{
+				{Slug: "no-cred-skill"},
+			},
+		}
+		assert.NoError(t, p.ValidateCredentialRefs())
+	})
 }
 
 func TestPrompt_GetCredentialRef(t *testing.T) {

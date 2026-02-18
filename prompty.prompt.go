@@ -584,6 +584,15 @@ func (p *Prompt) ValidateCredentialRefs() error {
 		}
 	}
 
+	// Validate skill credential labels reference declared credentials
+	for i := range p.Skills {
+		if label := p.Skills[i].Credential; label != "" {
+			if _, exists := p.Credentials[label]; !exists {
+				return NewCredentialValidationError(ErrMsgCredentialNotFound, label)
+			}
+		}
+	}
+
 	return nil
 }
 

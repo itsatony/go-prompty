@@ -78,6 +78,10 @@ func (m *ExecutionManifest) SkillsForProvider(provider string) []string {
 // This is a pure metadata operation — no template execution occurs.
 // It inspects the primary execution config, all skill refs, and credential declarations
 // to produce a complete picture of what providers, credentials, and modalities are needed.
+//
+// Modalities always contains at least ModalityText when no explicit modality is declared
+// by any execution slot or requirements. All pointer fields (Execution, Requirements)
+// are cloned into the manifest to prevent mutation of the source prompt.
 func (p *Prompt) CompileExecutionManifest() (*ExecutionManifest, error) {
 	if p == nil {
 		return nil, NewManifestError(ErrMsgManifestNilPrompt, nil)
@@ -87,12 +91,12 @@ func (p *Prompt) CompileExecutionManifest() (*ExecutionManifest, error) {
 	credentialSet := make(map[string]bool)
 	modalitySet := make(map[string]bool)
 
-	// Primary slot
+	// Primary slot (clone pointers to prevent caller mutation of source prompt)
 	primary := ExecutionSlot{
 		Slug:         p.Name,
-		Execution:    p.Execution,
+		Execution:    p.Execution.Clone(),
 		Credential:   p.Credential,
-		Requirements: p.Requirements,
+		Requirements: p.Requirements.Clone(),
 	}
 
 	// Collect from primary
@@ -126,9 +130,9 @@ func (p *Prompt) CompileExecutionManifest() (*ExecutionManifest, error) {
 
 			slot := ExecutionSlot{
 				Slug:         slug,
-				Execution:    skill.Execution,
+				Execution:    skill.Execution.Clone(),
 				Credential:   skill.Credential,
-				Requirements: skill.Requirements,
+				Requirements: skill.Requirements.Clone(),
 			}
 
 			// Collect provider from skill execution

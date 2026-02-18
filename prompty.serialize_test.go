@@ -223,6 +223,33 @@ func TestFullExportWithCredentials(t *testing.T) {
 	assert.True(t, opts.IncludeCredentials)
 }
 
+func TestPrompt_Serialize_RequirementsWithCredentialsFlag(t *testing.T) {
+	// Requirements should also appear when IncludeCredentials is true
+	// (even if IncludeAgentFields is false)
+	p := &Prompt{
+		Name:        "req-cred-test",
+		Description: "Requirements via credentials flag",
+		Requirements: &ExecutionRequirements{
+			Modality:        ModalityEmbedding,
+			ProviderBinding: ProviderBindingPreferred,
+		},
+		Body: "body",
+	}
+
+	opts := &SerializeOptions{
+		IncludeExecution:   false,
+		IncludeExtensions:  false,
+		IncludeAgentFields: false,
+		IncludeContext:     false,
+		IncludeCredentials: true,
+	}
+	data, err := p.Serialize(opts)
+	require.NoError(t, err)
+	content := string(data)
+	assert.Contains(t, content, "requirements")
+	assert.Contains(t, content, ProviderBindingPreferred)
+}
+
 func TestPrompt_Serialize_CredentialExtensionKeyConflict(t *testing.T) {
 	// Extension keys matching credential field names should be skipped
 	p := &Prompt{

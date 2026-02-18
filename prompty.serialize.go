@@ -85,7 +85,8 @@ func (p *Prompt) ExportAgentSkill() ([]byte, error) {
 	return p.Serialize(AgentSkillsExportOptions())
 }
 
-// ExportFull serializes the prompt with all fields included (except credentials).
+// ExportFull serializes the prompt with all standard fields.
+// Credentials are excluded for safety; use FullExportWithCredentials() to include them.
 func (p *Prompt) ExportFull() ([]byte, error) {
 	return p.Serialize(DefaultSerializeOptions())
 }
@@ -216,8 +217,8 @@ func (p *Prompt) buildSerializeMap(opts *SerializeOptions) map[string]any {
 		}
 	}
 
-	// Requirements (gated by IncludeAgentFields)
-	if opts.IncludeAgentFields && p.Requirements != nil {
+	// Requirements (included when agent fields OR credentials are included)
+	if (opts.IncludeAgentFields || opts.IncludeCredentials) && p.Requirements != nil {
 		m[PromptFieldRequirements] = p.Requirements
 	}
 
