@@ -423,8 +423,8 @@ const (
 
 // Tool format keys
 const (
-	ToolKeyFunction   = "function"
-	ToolKeyParameters = "parameters"
+	ToolKeyFunction    = "function"
+	ToolKeyParameters  = "parameters"
 	ToolKeyInputSchema = "input_schema"
 )
 
@@ -866,7 +866,6 @@ const (
 	ProviderBindingPreferred = "preferred"
 	ProviderBindingAny       = "any"
 )
-
 
 // v2.10 Metadata keys for credential context
 const (

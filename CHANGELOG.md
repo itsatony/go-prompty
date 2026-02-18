@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] - 2026-02-18
+
+### Added
+
+#### Multi-Model Credentials
+- **`CredentialRef`** type (`prompty.credentials.go`): Declares API credentials for multi-provider execution with `Provider`, `Label`, `Ref`, and `Scopes` fields
+- **`Prompt.Credentials`** field: Map of credential label to `CredentialRef` for declaring all credentials an agent needs
+- **`Prompt.Credential`** field: Default credential label for the primary execution slot
+- **`ValidateCredentialRefs()`**: Validates credential map entries have providers, default label exists, and skill credential labels reference declared credentials
+- **`GetCredentialRef()`**, **`HasCredentialRef()`**, **`HasCredentials()`**: Credential accessor methods on `Prompt`
+- **`SkillRef.Credential`** field: Per-skill credential label referencing the parent agent's credentials map
+
+#### Execution Requirements
+- **`ExecutionRequirements`** type (`prompty.requirements.go`): Declarative metadata with `Modality`, `ProviderBinding`, `Capabilities`, `EstimatedCost`, `EstimatedLatencyMs`
+- **`Prompt.Requirements`** field: Execution requirements metadata for the primary execution slot
+- **`SkillRef.Requirements`** field: Per-skill execution requirements
+- Provider binding modes: `ProviderBindingRequired`, `ProviderBindingPreferred`, `ProviderBindingAny`
+- 10 getter/checker methods on `ExecutionRequirements`
+
+#### Execution Manifest
+- **`ExecutionManifest`** type (`prompty.manifest.go`): Compiled introspection of all providers, credentials, and modalities
+- **`ExecutionSlot`** type: Represents a single execution point (primary or skill) with execution config, credential, and requirements
+- **`Prompt.CompileExecutionManifest()`**: Pure metadata operation — no template execution — builds manifest from prompt configuration
+- **`HasProvider()`**, **`RequiresCredential()`**, **`SkillsForProvider()`**: Manifest query methods
+- Default modality is `"text"` when no explicit modality is declared
+
+#### Serialization
+- **`SerializeOptions.IncludeCredentials`** field: Controls credential inclusion in serialization (default `false` for safety)
+- **`FullExportWithCredentials()`**: Convenience constructor for complete export including credentials
+- Requirements serialization gated by `IncludeAgentFields` OR `IncludeCredentials`
+
+#### Constants & Errors
+- `PromptFieldCredentials`, `PromptFieldCredential`, `PromptFieldRequirements` serialization key constants
+- `ProviderBindingRequired`, `ProviderBindingPreferred`, `ProviderBindingAny` constants
+- 5 error message constants: `ErrMsgCredentialNotFound`, `ErrMsgCredentialMissingProvider`, `ErrMsgInvalidProviderBinding`, `ErrMsgEstimatedLatencyNegative`, `ErrMsgManifestNilPrompt`
+- `NewCredentialValidationError()`, `NewManifestError()` error constructors
+
+### Changed
+- **`Prompt.Validate()`**: Now validates credential refs and requirements
+- **`Prompt.ValidateOptional()`**: Triggers full validation when credentials are present
+- **`Prompt.Clone()`**: Deep copies credentials map, credential string, and requirements
+- **`SkillRef.Validate()`**: Now validates requirements if present
+- **`SkillRef.Clone()`**: Copies credential string and clones requirements
+- **`IsAgentSkillsCompatible()`**: Returns false when credentials, credential, or requirements are set
+- **`GetPromptyFields()`**: Includes credentials, credential, and requirements
+- **`AgentDryRun`**: Added Step 3 — credential reference validation including skill cross-checks
+- **`knownPromptFields`** guard map: Added 3 new entries to prevent extension key conflicts
+
 ## [2.9.0] - 2026-02-15
 
 ### Added

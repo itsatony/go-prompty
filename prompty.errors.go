@@ -226,9 +226,9 @@ const (
 	ErrCodeSchema     = "PROMPTY_SCHEMA"
 	ErrCodePrompt     = "PROMPTY_PROMPT"     // v2.0: Prompt validation errors
 	ErrCodeRef        = "PROMPTY_REF"        // v2.0: Reference resolution errors
-	ErrCodeVersioning  = "PROMPTY_VERSIONING"  // Versioning operation errors
-	ErrCodeCredential  = "PROMPTY_CREDENTIAL"  // v2.10: Credential validation errors
-	ErrCodeManifest    = "PROMPTY_MANIFEST"    // v2.10: Execution manifest errors
+	ErrCodeVersioning = "PROMPTY_VERSIONING" // Versioning operation errors
+	ErrCodeCredential = "PROMPTY_CREDENTIAL" // v2.10: Credential validation errors
+	ErrCodeManifest   = "PROMPTY_MANIFEST"   // v2.10: Execution manifest errors
 )
 
 // Position represents a location in the source template
