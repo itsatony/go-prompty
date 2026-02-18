@@ -14,6 +14,10 @@ type SkillRef struct {
 	Inline *InlineSkill `yaml:"inline,omitempty" json:"inline,omitempty"`
 	// Execution overrides for this skill activation
 	Execution *ExecutionConfig `yaml:"execution,omitempty" json:"execution,omitempty"`
+	// Credential is the credential label from the parent agent's credentials map
+	Credential string `yaml:"credential,omitempty" json:"credential,omitempty"`
+	// Requirements declares execution requirements metadata for this skill
+	Requirements *ExecutionRequirements `yaml:"requirements,omitempty" json:"requirements,omitempty"`
 }
 
 // InlineSkill defines a skill inline within an agent definition.
@@ -122,6 +126,13 @@ func (s *SkillRef) Validate() error {
 		}
 	}
 
+	// Validate requirements if present
+	if s.Requirements != nil {
+		if err := s.Requirements.Validate(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -167,9 +178,10 @@ func (s *SkillRef) Clone() *SkillRef {
 	}
 
 	clone := &SkillRef{
-		Slug:      s.Slug,
-		Version:   s.Version,
-		Injection: s.Injection,
+		Slug:       s.Slug,
+		Version:    s.Version,
+		Injection:  s.Injection,
+		Credential: s.Credential,
 	}
 
 	if s.Inline != nil {
@@ -177,6 +189,9 @@ func (s *SkillRef) Clone() *SkillRef {
 	}
 	if s.Execution != nil {
 		clone.Execution = s.Execution.Clone()
+	}
+	if s.Requirements != nil {
+		clone.Requirements = s.Requirements.Clone()
 	}
 
 	return clone

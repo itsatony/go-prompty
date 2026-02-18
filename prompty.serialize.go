@@ -22,6 +22,9 @@ type SerializeOptions struct {
 	IncludeAgentFields bool
 	// IncludeContext includes the context map in output
 	IncludeContext bool
+	// IncludeCredentials includes credential references and requirements in output.
+	// Default is false (safe default — credentials are sensitive metadata).
+	IncludeCredentials bool
 }
 
 // DefaultSerializeOptions returns the default serialization options (all included).
@@ -82,9 +85,20 @@ func (p *Prompt) ExportAgentSkill() ([]byte, error) {
 	return p.Serialize(AgentSkillsExportOptions())
 }
 
-// ExportFull serializes the prompt with all fields included.
+// ExportFull serializes the prompt with all fields included (except credentials).
 func (p *Prompt) ExportFull() ([]byte, error) {
 	return p.Serialize(DefaultSerializeOptions())
+}
+
+// FullExportWithCredentials returns serialization options with all fields including credentials.
+func FullExportWithCredentials() *SerializeOptions {
+	return &SerializeOptions{
+		IncludeExecution:   true,
+		IncludeExtensions:  true,
+		IncludeAgentFields: true,
+		IncludeContext:     true,
+		IncludeCredentials: true,
+	}
 }
 
 // knownPromptFields is the set of all known Prompt struct YAML field names.
@@ -107,6 +121,9 @@ var knownPromptFields = map[string]bool{
 	PromptFieldContext:       true,
 	PromptFieldConstraints:   true,
 	PromptFieldMessages:      true,
+	PromptFieldCredentials:   true,
+	PromptFieldCredential:    true,
+	PromptFieldRequirements:  true,
 }
 
 // buildSerializeMap creates an ordered map for YAML serialization.
@@ -187,6 +204,21 @@ func (p *Prompt) buildSerializeMap(opts *SerializeOptions) map[string]any {
 	// Context
 	if opts.IncludeContext && len(p.Context) > 0 {
 		m[PromptFieldContext] = p.Context
+	}
+
+	// Credentials (gated by IncludeCredentials — safe default is off)
+	if opts.IncludeCredentials {
+		if len(p.Credentials) > 0 {
+			m[PromptFieldCredentials] = p.Credentials
+		}
+		if p.Credential != "" {
+			m[PromptFieldCredential] = p.Credential
+		}
+	}
+
+	// Requirements (gated by IncludeAgentFields)
+	if opts.IncludeAgentFields && p.Requirements != nil {
+		m[PromptFieldRequirements] = p.Requirements
 	}
 
 	return m

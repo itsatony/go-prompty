@@ -710,6 +710,8 @@ const (
 	ModalityMusic              = "music"
 	ModalitySoundEffects       = "sound_effects"
 	ModalityEmbedding          = "embedding"
+	ModalityVideo              = "video"
+	ModalityImageEdit          = "image_edit"
 )
 
 // v2.5 Streaming method constants
@@ -851,6 +853,25 @@ const (
 	CohereTruncateNone  = "NONE"
 	CohereTruncateStart = "START"
 	CohereTruncateEnd   = "END"
+)
+
+// v2.10 Provider binding modes for ExecutionRequirements
+const (
+	ProviderBindingRequired  = "required"
+	ProviderBindingPreferred = "preferred"
+	ProviderBindingAny       = "any"
+)
+
+// v2.10 Prompt field name constants for credentials/requirements serialization
+const (
+	PromptFieldCredentials  = "credentials"
+	PromptFieldCredential   = "credential"
+	PromptFieldRequirements = "requirements"
+)
+
+// v2.10 Metadata keys for credential context
+const (
+	MetaKeyCredentialLabel = "credential_label"
 )
 
 // v2.9 ReasoningEffort enum constants

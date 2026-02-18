@@ -576,6 +576,33 @@ func TestPrompt_IsAgentSkillsCompatible(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "has credentials",
+			prompt: &Prompt{
+				Name:        "test",
+				Description: "test",
+				Credentials: map[string]*CredentialRef{"main": {Provider: ProviderOpenAI}},
+			},
+			want: false,
+		},
+		{
+			name: "has credential label",
+			prompt: &Prompt{
+				Name:        "test",
+				Description: "test",
+				Credential:  "main",
+			},
+			want: false,
+		},
+		{
+			name: "has requirements",
+			prompt: &Prompt{
+				Name:         "test",
+				Description:  "test",
+				Requirements: &ExecutionRequirements{Modality: ModalityImage},
+			},
+			want: false,
+		},
 	}
 
 	for _, tt := range tests {

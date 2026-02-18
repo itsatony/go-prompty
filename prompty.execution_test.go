@@ -1262,7 +1262,9 @@ func TestExecutionConfig_Validate_Modality(t *testing.T) {
 		{name: "valid audio_speech", config: &ExecutionConfig{Modality: ModalityAudioSpeech}, wantErr: false},
 		{name: "valid embedding", config: &ExecutionConfig{Modality: ModalityEmbedding}, wantErr: false},
 		{name: "empty modality", config: &ExecutionConfig{}, wantErr: false},
-		{name: "invalid modality", config: &ExecutionConfig{Modality: "video"}, wantErr: true},
+		{name: "valid video", config: &ExecutionConfig{Modality: ModalityVideo}, wantErr: false},
+		{name: "valid image_edit", config: &ExecutionConfig{Modality: ModalityImageEdit}, wantErr: false},
+		{name: "invalid modality", config: &ExecutionConfig{Modality: "hologram"}, wantErr: true},
 	}
 
 	for _, tt := range tests {

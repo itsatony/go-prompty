@@ -189,6 +189,13 @@ const (
 	ErrMsgAsyncPollTimeoutInvalid       = "async poll timeout must be positive"
 	ErrMsgAsyncPollTimeoutTooSmall      = "async poll timeout must be greater than or equal to poll interval"
 
+	// v2.10 Credential and manifest validation messages
+	ErrMsgCredentialNotFound        = "credential label not found in credentials map"
+	ErrMsgCredentialMissingProvider = "credential must specify a provider"
+	ErrMsgInvalidProviderBinding    = "provider binding must be required, preferred, or any"
+	ErrMsgEstimatedLatencyNegative  = "estimated latency must be non-negative"
+	ErrMsgManifestNilPrompt         = "cannot compile manifest from nil prompt"
+
 	// v2.0 Prompt validation messages
 	ErrMsgPromptNameRequired        = "prompt name is required"
 	ErrMsgPromptNameTooLong         = "prompt name exceeds maximum length"
@@ -219,7 +226,9 @@ const (
 	ErrCodeSchema     = "PROMPTY_SCHEMA"
 	ErrCodePrompt     = "PROMPTY_PROMPT"     // v2.0: Prompt validation errors
 	ErrCodeRef        = "PROMPTY_REF"        // v2.0: Reference resolution errors
-	ErrCodeVersioning = "PROMPTY_VERSIONING" // Versioning operation errors
+	ErrCodeVersioning  = "PROMPTY_VERSIONING"  // Versioning operation errors
+	ErrCodeCredential  = "PROMPTY_CREDENTIAL"  // v2.10: Credential validation errors
+	ErrCodeManifest    = "PROMPTY_MANIFEST"    // v2.10: Execution manifest errors
 )
 
 // Position represents a location in the source template
@@ -672,4 +681,20 @@ func NewVersionGetError(version int, cause error) error {
 func NewVersionTemplateExistsError(name string) error {
 	return cuserr.NewValidationError(ErrCodeVersioning, ErrMsgVersionTemplateExists).
 		WithMetadata(MetaKeyTemplateName, name)
+}
+
+// v2.10 Credential and manifest error constructors
+
+// NewCredentialValidationError creates an error for credential validation failures.
+func NewCredentialValidationError(msg, label string) error {
+	return cuserr.NewValidationError(ErrCodeCredential, msg).
+		WithMetadata(MetaKeyCredentialLabel, label)
+}
+
+// NewManifestError creates an error for execution manifest compilation failures.
+func NewManifestError(msg string, cause error) error {
+	if cause != nil {
+		return cuserr.WrapStdError(cause, ErrCodeManifest, msg)
+	}
+	return cuserr.NewValidationError(ErrCodeManifest, msg)
 }

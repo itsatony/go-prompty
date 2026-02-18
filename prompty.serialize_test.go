@@ -154,3 +154,93 @@ func TestPrompt_Serialize_RoundTrip(t *testing.T) {
 	assert.Equal(t, original.EffectiveType(), parsed.EffectiveType())
 	assert.Equal(t, original.Body, parsed.Body)
 }
+
+func TestPrompt_Serialize_CredentialsExcludedByDefault(t *testing.T) {
+	p := &Prompt{
+		Name:        "cred-test",
+		Description: "Credential serialization test",
+		Credential:  "main",
+		Credentials: map[string]*CredentialRef{
+			"main": {Provider: ProviderAnthropic, Ref: "${ANTHROPIC_KEY}"},
+		},
+		Body: "body",
+	}
+
+	// Default options should NOT include credentials
+	data, err := p.Serialize(nil)
+	require.NoError(t, err)
+	content := string(data)
+	assert.NotContains(t, content, "credentials")
+	assert.NotContains(t, content, "${ANTHROPIC_KEY}")
+}
+
+func TestPrompt_Serialize_CredentialsWithExplicitFlag(t *testing.T) {
+	p := &Prompt{
+		Name:        "cred-test",
+		Description: "Credential serialization test",
+		Credential:  "main",
+		Credentials: map[string]*CredentialRef{
+			"main": {Provider: ProviderAnthropic, Ref: "${ANTHROPIC_KEY}"},
+		},
+		Body: "body",
+	}
+
+	// FullExportWithCredentials should include credentials
+	data, err := p.Serialize(FullExportWithCredentials())
+	require.NoError(t, err)
+	content := string(data)
+	assert.Contains(t, content, "credentials")
+	assert.Contains(t, content, "${ANTHROPIC_KEY}")
+	assert.Contains(t, content, ProviderAnthropic)
+}
+
+func TestPrompt_Serialize_RequirementsWithAgentFields(t *testing.T) {
+	p := &Prompt{
+		Name:        "req-test",
+		Description: "Requirements serialization test",
+		Type:        DocumentTypeAgent,
+		Requirements: &ExecutionRequirements{
+			Modality:        ModalityImage,
+			ProviderBinding: ProviderBindingRequired,
+		},
+		Body: "body",
+	}
+
+	// Default options include agent fields → requirements should appear
+	data, err := p.Serialize(nil)
+	require.NoError(t, err)
+	content := string(data)
+	assert.Contains(t, content, "requirements")
+	assert.Contains(t, content, ProviderBindingRequired)
+}
+
+func TestFullExportWithCredentials(t *testing.T) {
+	opts := FullExportWithCredentials()
+	assert.True(t, opts.IncludeExecution)
+	assert.True(t, opts.IncludeExtensions)
+	assert.True(t, opts.IncludeAgentFields)
+	assert.True(t, opts.IncludeContext)
+	assert.True(t, opts.IncludeCredentials)
+}
+
+func TestPrompt_Serialize_CredentialExtensionKeyConflict(t *testing.T) {
+	// Extension keys matching credential field names should be skipped
+	p := &Prompt{
+		Name:        "conflict-test",
+		Description: "Extension key conflict with credentials",
+		Extensions: map[string]any{
+			PromptFieldCredentials:  "override-creds",
+			PromptFieldCredential:   "override-cred",
+			PromptFieldRequirements: "override-reqs",
+		},
+		Body: "body",
+	}
+
+	data, err := p.Serialize(nil)
+	require.NoError(t, err)
+	content := string(data)
+	// Extension keys matching known fields should be skipped
+	assert.NotContains(t, content, "override-creds")
+	assert.NotContains(t, content, "override-cred")
+	assert.NotContains(t, content, "override-reqs")
+}

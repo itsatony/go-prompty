@@ -194,7 +194,8 @@ func (p *Prompt) IsAgentSkillsCompatible() bool {
 		return true
 	}
 	return p.Execution == nil && len(p.Extensions) == 0 && p.Type == "" &&
-		len(p.Skills) == 0 && p.Tools == nil && p.Constraints == nil && len(p.Messages) == 0
+		len(p.Skills) == 0 && p.Tools == nil && p.Constraints == nil && len(p.Messages) == 0 &&
+		len(p.Credentials) == 0 && p.Credential == "" && p.Requirements == nil
 }
 
 // StripExtensions returns a copy of the prompt with execution, extensions, and agent-specific fields removed.

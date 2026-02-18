@@ -636,8 +636,9 @@ func TestIsValidModality(t *testing.T) {
 		{ModalityMusic, true},
 		{ModalitySoundEffects, true},
 		{ModalityEmbedding, true},
+		{ModalityVideo, true},
+		{ModalityImageEdit, true},
 		{"", false},
-		{"video", false},
 		{"3d_model", false},
 	}
 

@@ -152,6 +152,15 @@ func (p *Prompt) GetPromptyFields() map[string]any {
 	if len(p.Messages) > 0 {
 		m[PromptFieldMessages] = p.Messages
 	}
+	if len(p.Credentials) > 0 {
+		m[PromptFieldCredentials] = p.Credentials
+	}
+	if p.Credential != "" {
+		m[PromptFieldCredential] = p.Credential
+	}
+	if p.Requirements != nil {
+		m[PromptFieldRequirements] = p.Requirements
+	}
 
 	return m
 }

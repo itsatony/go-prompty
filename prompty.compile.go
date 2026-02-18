@@ -725,7 +725,32 @@ func (p *Prompt) AgentDryRun(ctx context.Context, opts *CompileOptions) *AgentDr
 		}
 	}
 
-	// Step 3: Parse message templates
+	// Step 3: Validate credential references
+	if len(p.Credentials) > 0 {
+		if err := p.ValidateCredentialRefs(); err != nil {
+			result.Issues = append(result.Issues, AgentDryRunIssue{
+				Category: AgentDryRunCategoryValidation,
+				Message:  err.Error(),
+				Location: "credentials",
+				Err:      err,
+			})
+		}
+		// Check skill credential refs point to declared credentials
+		for i := range p.Skills {
+			skill := &p.Skills[i]
+			if skill.Credential != "" {
+				if _, exists := p.Credentials[skill.Credential]; !exists {
+					result.Issues = append(result.Issues, AgentDryRunIssue{
+						Category: AgentDryRunCategoryValidation,
+						Message:  ErrMsgCredentialNotFound,
+						Location: fmt.Sprintf("skill:%s", skill.GetSlug()),
+					})
+				}
+			}
+		}
+	}
+
+	// Step 4: Parse message templates
 	engine := compileEngine(opts)
 	result.MessageCount = len(p.Messages)
 	for i := range p.Messages {
@@ -743,7 +768,7 @@ func (p *Prompt) AgentDryRun(ctx context.Context, opts *CompileOptions) *AgentDr
 		}
 	}
 
-	// Step 4: Parse body template
+	// Step 5: Parse body template
 	if p.Body != "" {
 		_, err := engine.Parse(p.Body)
 		if err != nil {
@@ -756,7 +781,7 @@ func (p *Prompt) AgentDryRun(ctx context.Context, opts *CompileOptions) *AgentDr
 		}
 	}
 
-	// Step 5: Count tools
+	// Step 6: Count tools
 	if p.Tools != nil && len(p.Tools.Functions) > 0 {
 		result.ToolsDefined = len(p.Tools.Functions)
 	}

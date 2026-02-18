@@ -485,7 +485,8 @@ func isValidModality(m string) bool {
 	switch m {
 	case ModalityText, ModalityImage, ModalityAudioSpeech,
 		ModalityAudioTranscription, ModalityMusic,
-		ModalitySoundEffects, ModalityEmbedding:
+		ModalitySoundEffects, ModalityEmbedding,
+		ModalityVideo, ModalityImageEdit:
 		return true
 	default:
 		return false

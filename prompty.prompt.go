@@ -51,6 +51,14 @@ type Prompt struct {
 	Constraints *ConstraintsConfig `yaml:"constraints,omitempty" json:"constraints,omitempty"`
 	Messages    []MessageTemplate  `yaml:"messages,omitempty" json:"messages,omitempty"`
 
+	// v2.10 Multi-model credential declarations
+	// Credentials maps label names to credential references for multi-provider execution.
+	Credentials map[string]*CredentialRef `yaml:"credentials,omitempty" json:"credentials,omitempty"`
+	// Credential is the default credential label for this prompt's primary execution.
+	Credential string `yaml:"credential,omitempty" json:"credential,omitempty"`
+	// Requirements declares execution requirements metadata (modality, binding, capabilities, cost/latency hints).
+	Requirements *ExecutionRequirements `yaml:"requirements,omitempty" json:"requirements,omitempty"`
+
 	// Body is the template content (not serialized to YAML, extracted separately)
 	Body string `yaml:"-" json:"-"`
 }
@@ -137,6 +145,18 @@ func (p *Prompt) Validate() error {
 		}
 	}
 
+	// Validate credentials map if present
+	if err := p.ValidateCredentialRefs(); err != nil {
+		return err
+	}
+
+	// Validate requirements if present
+	if p.Requirements != nil {
+		if err := p.Requirements.Validate(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -148,8 +168,8 @@ func (p *Prompt) ValidateOptional() error {
 	if p == nil {
 		return nil
 	}
-	// If the prompt has v2.1-specific fields, require full validation
-	if p.Execution != nil || p.Type != "" || p.Name != "" {
+	// If the prompt has v2.1+ specific fields, require full validation
+	if p.Execution != nil || p.Type != "" || p.Name != "" || len(p.Credentials) > 0 {
 		return p.Validate()
 	}
 	return nil
@@ -458,6 +478,19 @@ func (p *Prompt) Clone() *Prompt {
 		copy(clone.Messages, p.Messages)
 	}
 
+	// Clone v2.10 credential fields
+	if p.Credentials != nil {
+		clone.Credentials = make(map[string]*CredentialRef, len(p.Credentials))
+		for k, v := range p.Credentials {
+			clone.Credentials[k] = v.Clone()
+		}
+	}
+	clone.Credential = p.Credential
+
+	if p.Requirements != nil {
+		clone.Requirements = p.Requirements.Clone()
+	}
+
 	return clone
 }
 
@@ -523,4 +556,68 @@ func (p *Prompt) ValidateAsAgent() error {
 	}
 
 	return nil
+}
+
+// --- v2.10 Credential methods ---
+
+// ValidateCredentialRefs validates all credential references in the credentials map.
+// It checks that each credential has a provider and that the default credential label
+// (if set) references an existing entry in the credentials map.
+func (p *Prompt) ValidateCredentialRefs() error {
+	if p == nil || len(p.Credentials) == 0 {
+		return nil
+	}
+
+	for label, cred := range p.Credentials {
+		if cred == nil {
+			return NewCredentialValidationError(ErrMsgCredentialMissingProvider, label)
+		}
+		if err := cred.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Validate default credential label references an existing entry
+	if p.Credential != "" {
+		if _, exists := p.Credentials[p.Credential]; !exists {
+			return NewCredentialValidationError(ErrMsgCredentialNotFound, p.Credential)
+		}
+	}
+
+	return nil
+}
+
+// GetCredentialRef returns the CredentialRef for the given label, or nil if not found.
+func (p *Prompt) GetCredentialRef(label string) *CredentialRef {
+	if p == nil || p.Credentials == nil {
+		return nil
+	}
+	return p.Credentials[label]
+}
+
+// HasCredentialRef returns true if a credential with the given label exists.
+func (p *Prompt) HasCredentialRef(label string) bool {
+	if p == nil || p.Credentials == nil {
+		return false
+	}
+	_, exists := p.Credentials[label]
+	return exists
+}
+
+// HasCredentials returns true if any credentials are declared.
+func (p *Prompt) HasCredentials() bool {
+	return p != nil && len(p.Credentials) > 0
+}
+
+// HasRequirements returns true if execution requirements are set.
+func (p *Prompt) HasRequirements() bool {
+	return p != nil && p.Requirements != nil
+}
+
+// GetRequirements returns the execution requirements or nil.
+func (p *Prompt) GetRequirements() *ExecutionRequirements {
+	if p == nil {
+		return nil
+	}
+	return p.Requirements
 }
