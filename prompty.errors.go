@@ -189,6 +189,11 @@ const (
 	ErrMsgAsyncPollTimeoutInvalid       = "async poll timeout must be positive"
 	ErrMsgAsyncPollTimeoutTooSmall      = "async poll timeout must be greater than or equal to poll interval"
 
+	// v2.11 A2A Agent Card compilation messages
+	ErrMsgA2ACardNilPrompt   = "cannot compile agent card from nil prompt"
+	ErrMsgA2ACardMissingURL  = "agent card requires a service URL in options"
+	ErrMsgA2ACardMissingName = "agent card requires a prompt name"
+
 	// v2.10 Credential and manifest validation messages
 	ErrMsgCredentialNotFound        = "credential label not found in credentials map"
 	ErrMsgCredentialMissingProvider = "credential must specify a provider"
@@ -229,6 +234,7 @@ const (
 	ErrCodeVersioning = "PROMPTY_VERSIONING" // Versioning operation errors
 	ErrCodeCredential = "PROMPTY_CREDENTIAL" // v2.10: Credential validation errors
 	ErrCodeManifest   = "PROMPTY_MANIFEST"   // v2.10: Execution manifest errors
+	ErrCodeA2A        = "PROMPTY_A2A"        // v2.11: A2A Agent Card errors
 )
 
 // Position represents a location in the source template
@@ -697,4 +703,14 @@ func NewManifestError(msg string, cause error) error {
 		return cuserr.WrapStdError(cause, ErrCodeManifest, msg)
 	}
 	return cuserr.NewValidationError(ErrCodeManifest, msg)
+}
+
+// v2.11 A2A Agent Card error constructors
+
+// NewA2AError creates an error for A2A Agent Card compilation failures.
+func NewA2AError(msg string, cause error) error {
+	if cause != nil {
+		return cuserr.WrapStdError(cause, ErrCodeA2A, msg)
+	}
+	return cuserr.NewValidationError(ErrCodeA2A, msg)
 }

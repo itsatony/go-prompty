@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2026-02-25
+
+### Added
+
+#### A2A Agent Card Generation
+- **`A2AAgentCard`** type (`prompty.a2a.go`): Google A2A protocol Agent Card (v0.3) with name, URL, skills, capabilities, security schemes, and metadata
+- **`A2AProvider`** type: Organization identifier for the Agent Card's provider field
+- **`A2ACapabilities`** type: Protocol feature advertisements (streaming, push notifications)
+- **`A2ASkill`** type: Skill advertisement with ID, name, description, tags, and per-skill input/output modes
+- **`A2AAgentCardOptions`** type: Configuration for card generation — URL (required), provider info, version overrides, security, capabilities override, and `DocumentResolver` for skill descriptions
+- **`Prompt.CompileAgentCard(ctx, opts)`**: Pure metadata transformation from Prompt configuration to A2A Agent Card — no template execution or network communication
+- **`A2AAgentCard.ToJSON()`**: Compact JSON serialization
+- **`A2AAgentCard.ToJSONPretty()`**: Indented JSON serialization
+
+#### Auto-Detection
+- Skills mapped from `SkillRef` entries; descriptions and names resolved via `DocumentResolver` (non-fatal fallback)
+- Streaming capability auto-detected from `ExecutionConfig.Streaming.Enabled` (overridable via `opts.Capabilities`)
+- Input modes inferred from `Prompt.Inputs` types: string→`text/plain`, object/array→`application/json`
+- Output modes inferred from modality: text→`text/plain`, image→`image/png`, audio→`audio/mpeg`, embedding/video→`application/json`
+- A2A-prefixed extensions (`a2a.*`) merged into card metadata alongside `Prompt.Metadata`
+
+#### Constants & Errors
+- A2A protocol constants: `A2AProtocolVersionDefault` ("0.3.0"), `A2AVersionDefault` ("1.0.0")
+- A2A MIME type constants: `A2AMIMETextPlain`, `A2AMIMEApplicationJSON`, `A2AMIMEImagePNG`, `A2AMIMEAudioMPEG`, `A2AMIMETextMarkdown`
+- Extension prefix: `ExtensionPrefixA2A` ("a2a.")
+- JSON formatting: `JSONIndentDefault` ("  ")
+- 3 error message constants: `ErrMsgA2ACardNilPrompt`, `ErrMsgA2ACardMissingURL`, `ErrMsgA2ACardMissingName`
+- `NewA2AError()` error constructor with `ErrCodeA2A` ("PROMPTY_A2A")
+
+### Changed
+- **Package structure**: Added `prompty.a2a.go` (types + CompileAgentCard + helpers) and `prompty.a2a_test.go` (25 tests)
+
 ## [2.10.0] - 2026-02-18
 
 ### Added

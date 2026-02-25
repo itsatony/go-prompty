@@ -872,6 +872,33 @@ const (
 	MetaKeyCredentialLabel = "credential_label"
 )
 
+// v2.11 A2A (Agent-to-Agent) protocol constants
+const (
+	// A2AProtocolVersionDefault is the default A2A protocol version
+	A2AProtocolVersionDefault = "0.3.0"
+	// A2AVersionDefault is the default agent version when not specified
+	A2AVersionDefault = "1.0.0"
+)
+
+// A2A MIME type constants for input/output modes
+const (
+	A2AMIMETextPlain       = "text/plain"
+	A2AMIMEApplicationJSON = "application/json"
+	A2AMIMEImagePNG        = "image/png"
+	A2AMIMEAudioMPEG       = "audio/mpeg"
+	A2AMIMETextMarkdown    = "text/markdown"
+)
+
+// A2A extension key prefix
+const (
+	ExtensionPrefixA2A = "a2a."
+)
+
+// JSON formatting constants
+const (
+	JSONIndentDefault = "  "
+)
+
 // v2.9 ReasoningEffort enum constants
 const (
 	ReasoningEffortLow    = "low"

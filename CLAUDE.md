@@ -61,6 +61,7 @@ github.com/itsatony/go-prompty/v2/
 ├── prompty.credentials.go        # v2.10: CredentialRef type with Validate/Clone/getters
 ├── prompty.requirements.go       # v2.10: ExecutionRequirements with Validate/Clone/getters
 ├── prompty.manifest.go           # v2.10: ExecutionManifest + CompileExecutionManifest
+├── prompty.a2a.go                # v2.11: A2A Agent Card generation (CompileAgentCard)
 ├── prompty.compile.go            # v2.1: CompileAgent, ActivateSkill, Compile, AgentDryRun
 ├── prompty.catalog.go            # v2.1: Catalog generation (skills, tools)
 ├── prompty.document.resolver.go  # v2.1: DocumentResolver interface + impls
@@ -424,6 +425,34 @@ manifest, _ := agent.CompileExecutionManifest()
 **Provider Binding Modes:** `required` | `preferred` | `any`
 
 **Serialization Safety:** Credentials are excluded from `Serialize()` by default. Use `FullExportWithCredentials()` to include them.
+
+### A2A Agent Card Generation (v2.11)
+
+go-prompty can generate [Google A2A protocol](https://github.com/google/a2a-spec) Agent Cards from Prompt configuration. This is a pure metadata transformation — no template execution or network communication occurs.
+
+```go
+agent, _ := prompty.ParseFile("multi-model-agent.prompty")
+card, _ := agent.CompileAgentCard(ctx, &prompty.A2AAgentCardOptions{
+    URL:                  "https://agents.example.com/research",
+    ProviderOrganization: "Acme Corp",
+    ProviderURL:          "https://acme.example.com",
+    Resolver:             myDocumentResolver,
+})
+// card.Name, card.Skills, card.Capabilities, card.DefaultInputModes, etc.
+cardJSON, _ := card.ToJSONPretty()
+```
+
+**Key types:**
+- `A2AAgentCard`: Full Agent Card (v0.3 spec) with name, URL, skills, capabilities, security, metadata
+- `A2AAgentCardOptions`: Configuration for card generation (URL required, provider info, overrides)
+- `A2ASkill`: Skill advertisement with ID, name, description, input/output modes
+
+**Auto-detection:**
+- Skills mapped from `SkillRef` entries; descriptions resolved via `DocumentResolver` (non-fatal fallback)
+- Streaming capability detected from `ExecutionConfig.Streaming.Enabled`
+- Input modes inferred from `Prompt.Inputs` types (string->"text/plain", object->"application/json")
+- Output modes inferred from modality (text->"text/plain", image->"image/png", audio->"audio/mpeg")
+- A2A-prefixed extensions (`a2a.*`) merged into card metadata
 
 ### Nested Templates
 
